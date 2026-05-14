@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
+  TextInput,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -16,13 +17,48 @@ import { useReservations } from '../../hooks/useReservations';
 import ReservationCard from '../../components/ReservationCard';
 import DateSelector from '../../components/DateSelector';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
+import type { ReservationWithJoins } from '../../types/reservations';
+import { getReservationStatusLabel } from '../../utils/reservationStatus';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationList'>;
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
+// Supprime les accents et met en minuscule pour une comparaison insensible aux diacritiques.
+function normalizeSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+}
+
+function buildSearchableString(r: ReservationWithJoins): string {
+  return normalizeSearchText(
+    [
+      r.guests?.first_name ?? '',
+      r.guests?.last_name  ?? '',
+      r.guests?.phone      ?? '',
+      r.guests?.email      ?? '',
+      r.tables?.label      ?? '',
+      getReservationStatusLabel(r.status),
+      r.time_slot.substring(0, 5),
+      String(r.party_size),
+    ].join(' '),
+  );
+}
+
 export default function ReservationListScreen({ navigation }: Props): React.JSX.Element {
   const { loading, error, reservations, selectedDate, setSelectedDate, refresh } = useReservations();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isFocused, setIsFocused]     = useState(false);
+
+  const filteredReservations = useMemo(() => {
+    const q = normalizeSearchText(searchQuery.trim());
+    if (!q) return reservations;
+    return reservations.filter((r) => buildSearchableString(r).includes(q));
+  }, [reservations, searchQuery]);
+
+  const handleClear = () => setSearchQuery('');
 
   if (loading) {
     return (
@@ -51,12 +87,27 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
     );
   }
 
+  const isSearching       = searchQuery.trim().length > 0;
+  const hasReservations   = reservations.length > 0;
+  const hasResults        = filteredReservations.length > 0;
+
+  const countLabel = (() => {
+    if (!hasReservations) return 'Aucune réservation';
+    if (isSearching) {
+      return filteredReservations.length === 0
+        ? 'Aucun résultat'
+        : `${filteredReservations.length} résultat${filteredReservations.length > 1 ? 's' : ''}`;
+    }
+    return `${reservations.length} réservation${reservations.length > 1 ? 's' : ''}`;
+  })();
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.gold} />
         }
@@ -82,22 +133,57 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
           {/* ── Sélecteur de date ── */}
           <DateSelector value={selectedDate} onChange={setSelectedDate} showQuickActions />
 
-          {/* ── Liste ── */}
-          <Text style={styles.listCount}>
-            {reservations.length === 0
-              ? 'Aucune réservation'
-              : `${reservations.length} réservation${reservations.length > 1 ? 's' : ''}`}
-          </Text>
+          {/* ── Barre de recherche ── */}
+          <View style={[styles.searchBar, isFocused && styles.searchBarFocused]}>
+            <Ionicons
+              name={'search-outline' as IoniconsName}
+              size={16}
+              color={isFocused ? colors.gold : colors.textMuted}
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher nom, téléphone, table, heure..."
+              placeholderTextColor={colors.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {isSearching ? (
+              <TouchableOpacity onPress={handleClear} style={styles.clearBtn} activeOpacity={0.7}>
+                <Text style={styles.clearBtnText}>Effacer</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
 
-          {reservations.length === 0 ? (
+          {/* ── Compteur ── */}
+          <Text style={styles.listCount}>{countLabel}</Text>
+
+          {/* ── Pas de réservations sur cette date ── */}
+          {!hasReservations ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>Aucune réservation</Text>
               <Text style={styles.emptySubtitle}>
                 Créez une réservation téléphone pour ce service.
               </Text>
             </View>
+
+          /* ── Recherche sans résultat ── */
+          ) : isSearching && !hasResults ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>Aucune réservation trouvée</Text>
+              <Text style={styles.emptySubtitle}>
+                Essayez avec un autre nom, téléphone ou horaire.
+              </Text>
+            </View>
+
+          /* ── Liste filtrée ── */
           ) : (
-            reservations.map((r) => (
+            filteredReservations.map((r) => (
               <ReservationCard
                 key={r.id}
                 reservation={r}
@@ -153,8 +239,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  errorTitle: { ...typography.h2, color: colors.textPrimary, marginBottom: spacing.sm },
-  errorMessage: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.xl },
+  errorTitle:   { ...typography.h2,        color: colors.textPrimary,   marginBottom: spacing.sm },
+  errorMessage: { ...typography.body,      color: colors.textSecondary, marginBottom: spacing.xl },
   retryButton: {
     backgroundColor: colors.cta,
     borderRadius: radius.md,
@@ -182,6 +268,44 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   newButtonText: { ...typography.bodyMedium, color: colors.textOnDark },
+
+  // Search bar
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  searchBarFocused: {
+    borderColor: colors.gold,
+  },
+  searchIcon: {
+    marginRight: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.textPrimary,
+    paddingVertical: spacing.md,
+  },
+  clearBtn: {
+    marginLeft: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  clearBtnText: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
 
   // List
   listCount: {
