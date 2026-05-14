@@ -22,7 +22,7 @@ export type CreateReservationInput = {
   guest?: {
     firstName?: string;
     lastName?: string;
-    phone: string;
+    phone?: string;
     email?: string;
     notes?: string;
     vip?: boolean;
@@ -97,9 +97,6 @@ export function useCreateReservation() {
         throw new Error('Date, service et créneau sont obligatoires.');
       }
       if (input.partySize <= 0) throw new Error('Nombre de couverts invalide.');
-      if (!input.guestId && !input.guest?.phone) {
-        throw new Error('Téléphone client obligatoire pour un nouveau client.');
-      }
       if (input.status !== 'confirmed' && input.status !== 'pending') {
         throw new Error('Statut invalide.');
       }
@@ -137,7 +134,7 @@ export function useCreateReservation() {
             restaurant_id: resId,
             first_name:    input.guest.firstName ?? null,
             last_name:     input.guest.lastName  ?? null,
-            phone:         input.guest.phone,
+            phone:         input.guest.phone     ?? null,
             email:         input.guest.email     ?? null,
             notes:         input.guest.notes     ?? null,
             vip:           input.guest.vip       ?? false,

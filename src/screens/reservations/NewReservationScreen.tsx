@@ -137,30 +137,28 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
 
     if (!form.selectedShiftId) { setValidationError('Choisissez un service.'); return; }
     if (!form.selectedTimeSlot) { setValidationError('Choisissez un créneau.'); return; }
-    if (!form.selectedGuest && !form.guestPhone.trim()) {
-      setValidationError('Téléphone client obligatoire.');
-      return;
-    }
 
     try {
+      const firstName = form.guestFirstName.trim() || undefined;
+      const lastName  = form.guestLastName.trim()  || undefined;
+      const phone     = form.guestPhone.trim()     || undefined;
+      const email     = form.guestEmail.trim()     || undefined;
+      const hasAnyGuestInfo = Boolean(firstName ?? lastName ?? phone ?? email);
+
       const id = await createReservation({
-        date:        form.date,
-        timeSlot:    form.selectedTimeSlot,
-        partySize:   form.partySize,
-        shiftId:     form.selectedShiftId,
-        notes:       form.notes.trim() || undefined,
-        status:      form.status,
-        tableId:     form.selectedTableId ?? undefined,
-        guestId:     form.selectedGuest?.id,
+        date:      form.date,
+        timeSlot:  form.selectedTimeSlot,
+        partySize: form.partySize,
+        shiftId:   form.selectedShiftId,
+        notes:     form.notes.trim() || undefined,
+        status:    form.status,
+        tableId:   form.selectedTableId ?? undefined,
+        guestId:   form.selectedGuest?.id,
         guest: form.selectedGuest
           ? undefined
-          : {
-              firstName: form.guestFirstName.trim() || undefined,
-              lastName:  form.guestLastName.trim()  || undefined,
-              phone:     form.guestPhone.trim(),
-              email:     form.guestEmail.trim()     || undefined,
-              vip:       form.guestVip,
-            },
+          : hasAnyGuestInfo
+            ? { firstName, lastName, phone, email, vip: form.guestVip }
+            : undefined,
       });
       navigation.replace('ReservationDetail', { reservationId: id });
     } catch (e) {
@@ -322,6 +320,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
 
                   {/* Nouveau client */}
                   <Text style={styles.newClientLabel}>Nouveau client</Text>
+                  <Text style={styles.guestHint}>Client optionnel — à compléter plus tard si besoin.</Text>
                   <View style={styles.formRow}>
                     <TextInput
                       style={[styles.input, styles.inputHalf]}
@@ -342,7 +341,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                   </View>
                   <TextInput
                     style={styles.input}
-                    placeholder="Téléphone *"
+                    placeholder="Téléphone (optionnel)"
                     placeholderTextColor={colors.textMuted}
                     value={form.guestPhone}
                     onChangeText={(t) => setForm((prev) => ({ ...prev, guestPhone: t }))}
@@ -595,6 +594,11 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.textMuted,
     marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  guestHint: {
+    ...typography.small,
+    color: colors.textMuted,
     marginBottom: spacing.sm,
   },
   formRow: { flexDirection: 'row', gap: spacing.sm },
