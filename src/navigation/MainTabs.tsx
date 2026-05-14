@@ -6,7 +6,7 @@ import { colors, spacing } from '../theme';
 import DashboardScreen from '../screens/dashboard/DashboardScreen';
 import FloorPlanScreen from '../screens/floor/FloorPlanScreen';
 import ReservationsNavigator from './ReservationsNavigator';
-import GuestListScreen from '../screens/guests/GuestListScreen';
+import GuestsNavigator from './GuestsNavigator';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 
 export type MainTabsParamList = {
@@ -91,7 +91,7 @@ export default function MainTabs(): React.JSX.Element {
       />
       <Tab.Screen
         name="Guests"
-        component={GuestListScreen}
+        component={GuestsNavigator}
         options={{
           tabBarLabel: 'Clients',
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (

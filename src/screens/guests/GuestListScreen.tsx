@@ -1,19 +1,177 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useCallback } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+  RefreshControl,
+  StyleSheet,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, layout, radius, spacing, typography } from '../../theme';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { colors, typography, spacing, radius, layout } from '../../theme';
+import { useGuests } from '../../hooks/useGuests';
+import { formatGuestName, formatPhone, formatDateShort, formatRating } from '../../utils/format';
+import type { GuestsStackParamList } from '../../navigation/GuestsNavigator';
+import type { Database } from '../../types/database';
 
-export default function GuestListScreen(): React.JSX.Element {
+type GuestRow = Database['public']['Tables']['guests']['Row'];
+type Props = NativeStackScreenProps<GuestsStackParamList, 'GuestList'>;
+
+export default function GuestListScreen({ navigation }: Props): React.JSX.Element {
+  const { loading, error, guests, query, setQuery, search, refresh } = useGuests();
+
+  const handleSearch = () => { void search(); };
+
+  const handleClear = () => {
+    setQuery('');
+    void refresh();
+  };
+
+  const handleRefresh = useCallback(() => { void refresh(); }, [refresh]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: GuestRow }) => (
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.75}
+        onPress={() => navigation.navigate('GuestDetail', { guestId: item.id })}
+        accessibilityRole="button"
+        accessibilityLabel={formatGuestName(item.first_name, item.last_name)}
+      >
+        <View style={styles.cardTop}>
+          <View style={styles.cardLeft}>
+            <Text style={styles.guestName} numberOfLines={1}>
+              {formatGuestName(item.first_name, item.last_name)}
+            </Text>
+            <Text style={styles.guestPhone}>{formatPhone(item.phone)}</Text>
+            {item.email ? (
+              <Text style={styles.guestEmail} numberOfLines={1}>{item.email}</Text>
+            ) : null}
+          </View>
+          <View style={styles.cardRight}>
+            {item.vip ? (
+              <View style={styles.vipBadge}>
+                <Text style={styles.vipText}>VIP</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.cardStats}>
+          {item.visit_count > 0 ? (
+            <Text style={styles.statChip}>{item.visit_count} visite{item.visit_count > 1 ? 's' : ''}</Text>
+          ) : null}
+          {item.avg_rating !== null ? (
+            <Text style={styles.statChip}>{formatRating(item.avg_rating)} / 5</Text>
+          ) : null}
+          {item.last_visit ? (
+            <Text style={styles.statChip}>{formatDateShort(item.last_visit)}</Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+    ),
+    [navigation],
+  );
+
+  const keyExtractor = useCallback((item: GuestRow) => item.id, []);
+
+  if (loading && guests.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.centered}>
+          <ActivityIndicator color={colors.gold} size="large" />
+          <Text style={styles.loadingText}>Chargement des clients…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error && guests.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.centered}>
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={handleRefresh}>
+              <Text style={styles.retryBtnText}>Réessayer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Clients</Text>
-        <View style={styles.card}>
-          <Text style={styles.cardText}>
-            Le module Clients arrive dans la prochaine étape.
-          </Text>
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* ── En-tête ── */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerLabel}>CRM</Text>
+          <Text style={styles.headerTitle}>Clients</Text>
+          <Text style={styles.headerSubtitle}>Recherche par téléphone, nom ou email</Text>
         </View>
       </View>
+
+      {/* ── Barre de recherche ── */}
+      <View style={styles.searchBar}>
+        <View style={styles.searchBarContent}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Téléphone, nom ou email"
+            placeholderTextColor={colors.textMuted}
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {query.length > 0 ? (
+            <TouchableOpacity style={styles.clearBtn} onPress={handleClear}>
+              <Text style={styles.clearBtnText}>Effacer</Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
+            {loading
+              ? <ActivityIndicator color={colors.textOnDark} size="small" />
+              : <Text style={styles.searchBtnText}>Rechercher</Text>}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* ── Liste ── */}
+      <FlatList
+        data={guests}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        contentContainerStyle={[
+          styles.list,
+          guests.length === 0 && styles.listEmpty,
+        ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading && guests.length > 0}
+            onRefresh={handleRefresh}
+            tintColor={colors.gold}
+          />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>
+              {query.length > 0 ? 'Aucun client trouvé' : 'Aucun client pour le moment'}
+            </Text>
+            {query.length > 0 ? (
+              <Text style={styles.emptySubtitle}>
+                Essayez avec un autre téléphone, prénom ou email.
+              </Text>
+            ) : null}
+          </View>
+        }
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 }
@@ -23,30 +181,216 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  container: {
+  centered: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: spacing.xl,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textMuted,
+    marginTop: spacing.md,
+    textAlign: 'center',
+  },
+
+  // Header
+  header: {
+    backgroundColor: colors.background,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  headerContent: {
+    paddingHorizontal: spacing.xl,
     maxWidth: layout.contentMaxWidth,
     width: '100%',
     alignSelf: 'center',
   },
-  title: {
+  headerLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
+  },
+  headerTitle: {
     ...typography.h1,
     color: colors.textPrimary,
-    marginBottom: spacing.xl,
   },
+  headerSubtitle: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+
+  // Search
+  searchBar: {
+    backgroundColor: colors.background,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  searchBarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    maxWidth: layout.contentMaxWidth,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  searchInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  clearBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  clearBtnText: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  searchBtn: {
+    backgroundColor: colors.cta,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 96,
+    minHeight: 36,
+  },
+  searchBtnText: {
+    ...typography.small,
+    color: colors.textOnDark,
+    fontFamily: typography.bodyMedium.fontFamily,
+  },
+
+  // List
+  list: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.xl,
+    maxWidth: layout.contentMaxWidth,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  listEmpty: {
+    flex: 1,
+  },
+
+  // Guest card
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-    padding: spacing.xl,
-    elevation: 1,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
+    elevation: 1,
   },
-  cardText: {
-    ...typography.body,
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  cardLeft: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  cardRight: {
+    alignItems: 'flex-end',
+  },
+  guestName: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
+  },
+  guestPhone: {
+    ...typography.small,
     color: colors.textSecondary,
+  },
+  guestEmail: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  vipBadge: {
+    backgroundColor: colors.goldLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  vipText: {
+    ...typography.label,
+    color: colors.gold,
+  },
+  cardStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  statChip: {
+    ...typography.small,
+    color: colors.textMuted,
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+
+  // Empty state
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: spacing.xxl * 2,
+  },
+  emptyTitle: {
+    ...typography.bodyMedium,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    ...typography.small,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+
+  // Error state
+  errorCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  errorText: {
+    ...typography.body,
+    color: colors.cta,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    backgroundColor: colors.cta,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  retryBtnText: {
+    ...typography.bodyMedium,
+    color: colors.textOnDark,
   },
 });
