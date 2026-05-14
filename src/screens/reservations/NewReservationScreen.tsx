@@ -15,10 +15,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useCreateReservation } from '../../hooks/useCreateReservation';
-import { addDaysToDateString, formatReadableDate, getTodayDateString } from '../../utils/date';
+import { getTodayDateString } from '../../utils/date';
 import { isDateAllowedForShift, generateTimeSlots } from '../../utils/reservationSlots';
 import SectionCard from '../../components/SectionCard';
 import PrimaryButton from '../../components/PrimaryButton';
+import DateSelector from '../../components/DateSelector';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { GuestRow } from '../../hooks/useCreateReservation';
 
@@ -76,9 +77,6 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
 
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [validationError, setValidationError] = useState<string | null>(null);
-
-  const today    = getTodayDateString();
-  const tomorrow = addDaysToDateString(today, 1);
 
   const availableShifts = useMemo(
     () => shifts.filter((s) => isDateAllowedForShift(form.date, s.days_of_week)),
@@ -196,33 +194,17 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
           <View style={styles.container}>
             <Text style={styles.subtitle}>Saisie téléphone</Text>
 
-            {/* ── Date & Service ── */}
-            <SectionCard title="Date & Service">
-              {/* Date rapide */}
-              <View style={styles.quickDates}>
-                {[today, tomorrow].map((d) => (
-                  <TouchableOpacity
-                    key={d}
-                    style={[styles.quickDateBtn, form.date === d && styles.quickDateBtnActive]}
-                    onPress={() => setDate(d)}
-                  >
-                    <Text style={[styles.quickDateText, form.date === d && styles.quickDateTextActive]}>
-                      {d === today ? "Aujourd'hui" : 'Demain'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                <TouchableOpacity style={styles.quickDateBtn} onPress={() => setDate(addDaysToDateString(form.date, -1))}>
-                  <Text style={styles.quickDateText}>◀</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.quickDateBtn} onPress={() => setDate(addDaysToDateString(form.date, 1))}>
-                  <Text style={styles.quickDateText}>▶</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.dateLabel}>
-                {formatReadableDate(new Date(`${form.date}T12:00:00`))}
-              </Text>
+            {/* ── Date ── */}
+            <DateSelector
+              label="Date"
+              value={form.date}
+              onChange={setDate}
+              showQuickActions
+              allowManualInput
+            />
 
-              {/* Shifts */}
+            {/* ── Service ── */}
+            <SectionCard title="Service">
               {availableShifts.length === 0 ? (
                 <Text style={styles.infoText}>Aucun service disponible ce jour.</Text>
               ) : (
@@ -497,22 +479,6 @@ const styles = StyleSheet.create({
   },
   loadingText: { ...typography.body, color: colors.textMuted, marginTop: spacing.md, textAlign: 'center' },
   subtitle: { ...typography.body, color: colors.textMuted, marginBottom: spacing.xl },
-
-  // Date selector
-  quickDates: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
-  quickDateBtn: {
-    flex: 1,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  quickDateBtnActive: { backgroundColor: colors.goldLight, borderColor: colors.gold },
-  quickDateText: { ...typography.small, color: colors.textMuted },
-  quickDateTextActive: { color: colors.gold, fontFamily: typography.bodyMedium.fontFamily },
-  dateLabel: { ...typography.bodyMedium, color: colors.textPrimary, marginBottom: spacing.md, textAlign: 'center' },
 
   // Shifts
   shiftRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },

@@ -13,8 +13,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useReservations } from '../../hooks/useReservations';
-import { addDaysToDateString, formatReadableDate, getTodayDateString, getTomorrowDateString } from '../../utils/date';
 import ReservationCard from '../../components/ReservationCard';
+import DateSelector from '../../components/DateSelector';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationList'>;
@@ -23,11 +23,6 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 export default function ReservationListScreen({ navigation }: Props): React.JSX.Element {
   const { loading, error, reservations, selectedDate, setSelectedDate, refresh } = useReservations();
-  const today    = getTodayDateString();
-  const tomorrow = getTomorrowDateString();
-
-  const handlePrev = () => setSelectedDate(addDaysToDateString(selectedDate, -1));
-  const handleNext = () => setSelectedDate(addDaysToDateString(selectedDate, 1));
 
   if (loading) {
     return (
@@ -85,35 +80,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
           </View>
 
           {/* ── Sélecteur de date ── */}
-          <View style={styles.dateCard}>
-            <View style={styles.dateNavRow}>
-              <TouchableOpacity style={styles.navArrow} onPress={handlePrev}>
-                <Ionicons name={'chevron-back' as IoniconsName} size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <Text style={styles.dateDisplay}>{formatReadableDate(new Date(`${selectedDate}T12:00:00`))}</Text>
-              <TouchableOpacity style={styles.navArrow} onPress={handleNext}>
-                <Ionicons name={'chevron-forward' as IoniconsName} size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.quickDates}>
-              <TouchableOpacity
-                style={[styles.quickDateBtn, selectedDate === today && styles.quickDateBtnActive]}
-                onPress={() => setSelectedDate(today)}
-              >
-                <Text style={[styles.quickDateText, selectedDate === today && styles.quickDateTextActive]}>
-                  Aujourd'hui
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.quickDateBtn, selectedDate === tomorrow && styles.quickDateBtnActive]}
-                onPress={() => setSelectedDate(tomorrow)}
-              >
-                <Text style={[styles.quickDateText, selectedDate === tomorrow && styles.quickDateTextActive]}>
-                  Demain
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <DateSelector value={selectedDate} onChange={setSelectedDate} showQuickActions />
 
           {/* ── Liste ── */}
           <Text style={styles.listCount}>
@@ -215,51 +182,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   newButtonText: { ...typography.bodyMedium, color: colors.textOnDark },
-
-  // Date selector
-  dateCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  dateNavRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  navArrow: { padding: spacing.xs },
-  dateDisplay: {
-    ...typography.bodyMedium,
-    color: colors.textPrimary,
-    flex: 1,
-    textAlign: 'center',
-  },
-  quickDates: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  quickDateBtn: {
-    flex: 1,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  quickDateBtnActive: {
-    backgroundColor: colors.goldLight,
-    borderColor: colors.gold,
-  },
-  quickDateText: { ...typography.small, color: colors.textMuted },
-  quickDateTextActive: { color: colors.gold, fontFamily: typography.bodyMedium.fontFamily },
 
   // List
   listCount: {
