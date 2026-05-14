@@ -1,13 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // FICHIER TEMPORAIRE — types manuels alignés sur 001_initial_schema.sql
 //
-// À remplacer par les types auto-générés après avoir appliqué la migration :
+// Pour remplacer par les types auto-générés, se connecter d'abord au CLI :
+//   npx supabase login
+// Puis générer :
 //   npx supabase gen types typescript \
 //     --project-id nosflczsevtrxnyienyn \
 //     --schema public \
 //     > src/types/database.ts
 //
-// Ne pas modifier ce fichier à la main si la migration a déjà été générée.
+// ⚠️  La redirection `>` vide le fichier si la commande échoue.
+//     Vérifier que la commande s'exécute SANS erreur avant de rediriger.
+//     En cas de doute, générer d'abord dans un fichier temporaire :
+//       npx supabase gen types typescript ... > /tmp/db_types.ts
+//     Puis vérifier qu'il n'est pas vide avant de copier.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type Json =
@@ -18,7 +24,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-// ─── Enums métier (unions de chaînes) ────────────────────────────────────────
+// ─── Enums métier ─────────────────────────────────────────────────────────────
 
 export type UserRole = 'admin' | 'manager' | 'host' | 'waiter';
 export type TableShape = 'round' | 'square' | 'rectangle';
@@ -88,7 +94,7 @@ export interface Database {
           updated_at: string;
         };
         Insert: {
-          id: string; // fourni par auth.users — pas de default
+          id: string;
           restaurant_id: string;
           full_name: string;
           role: UserRole;
@@ -191,12 +197,12 @@ export interface Database {
           id: string;
           restaurant_id: string;
           name: string;
-          days_of_week: number[]; // 0=dim 1=lun 2=mar 3=mer 4=jeu 5=ven 6=sam
-          start_time: string;     // "HH:MM:SS"
-          end_time: string;       // "HH:MM:SS" — "00:00:00" = minuit (J+1 si < start)
+          days_of_week: number[];
+          start_time: string;
+          end_time: string;
           slot_duration: number;
           max_covers_per_slot: number;
-          duration_rules: Json;   // {"party_size": duration_minutes}
+          duration_rules: Json;
           created_at: string;
           updated_at: string;
         };
@@ -238,7 +244,7 @@ export interface Database {
           last_name: string | null;
           email: string | null;
           phone: string | null;
-          birthday: string | null; // "YYYY-MM-DD"
+          birthday: string | null;
           notes: string | null;
           tags: string[];
           visit_count: number;
@@ -249,7 +255,7 @@ export interface Database {
           vip: boolean;
           marketing_opt_in: boolean;
           source: GuestSource;
-          last_visit: string | null; // "YYYY-MM-DD"
+          last_visit: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -308,8 +314,8 @@ export interface Database {
           guest_id: string | null;
           table_id: string | null;
           shift_id: string | null;
-          date: string;       // "YYYY-MM-DD"
-          time_slot: string;  // "HH:MM:SS"
+          date: string;
+          time_slot: string;
           party_size: number;
           status: ReservationStatus;
           notes: string | null;
@@ -359,7 +365,7 @@ export interface Database {
           id: string;
           restaurant_id: string;
           guest_id: string | null;
-          date: string;       // "YYYY-MM-DD"
+          date: string;
           party_size: number;
           status: WaitlistStatus;
           notes: string | null;
@@ -403,7 +409,6 @@ export interface Database {
           status: NotificationStatus;
           sent_at: string | null;
           created_at: string;
-          // Pas de updated_at : table immuable
         };
         Insert: {
           id?: string;
