@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
-import { colors, radius, spacing, typography } from '../../theme';
+import { colors, layout, radius, spacing, typography } from '../../theme';
 
 export default function LoginScreen(): React.JSX.Element {
   const [email, setEmail] = useState('');
@@ -133,6 +133,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
+    maxWidth: layout.cardLoginMaxWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
   title: {
     ...typography.display,

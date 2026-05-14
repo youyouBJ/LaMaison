@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, radius, spacing, typography } from '../../theme';
+import { colors, layout, radius, spacing, typography } from '../../theme';
 
 export default function GuestListScreen(): React.JSX.Element {
   return (
@@ -26,6 +26,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: spacing.xl,
+    maxWidth: layout.contentMaxWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
   title: {
     ...typography.h1,

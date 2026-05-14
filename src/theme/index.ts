@@ -56,3 +56,8 @@ export const radius = {
   lg: 12,
   xl: 20,
 };
+
+export const layout = {
+  contentMaxWidth: 900,  // max content width on wide screens (iPad landscape)
+  cardLoginMaxWidth: 480, // max width for the login card
+};

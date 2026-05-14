@@ -1,6 +1,7 @@
 import React from 'react';
+import { Platform, type PlatformIOSStatic } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing } from '../theme';
 import DashboardScreen from '../screens/dashboard/DashboardScreen';
 import FloorPlanScreen from '../screens/floor/FloorPlanScreen';
@@ -16,25 +17,14 @@ export type MainTabsParamList = {
   Settings: undefined;
 };
 
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
 const Tab = createBottomTabNavigator<MainTabsParamList>();
 
-type TabIconProps = {
-  focused: boolean;
-  label: string;
-};
-
-function TabIcon({ focused, label }: TabIconProps): React.JSX.Element {
-  return (
-    <Text
-      style={{
-        fontSize: 20,
-        opacity: focused ? 1 : 0.5,
-      }}
-    >
-      {label}
-    </Text>
-  );
-}
+const isTablet =
+  Platform.OS === 'ios' && (Platform as PlatformIOSStatic).isPad === true;
+const TAB_BAR_HEIGHT = isTablet ? 72 : 60;
+const TAB_ICON_SIZE = isTablet ? 26 : 24;
 
 export default function MainTabs(): React.JSX.Element {
   return (
@@ -47,13 +37,13 @@ export default function MainTabs(): React.JSX.Element {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          paddingBottom: spacing.sm,
+          height: TAB_BAR_HEIGHT,
           paddingTop: spacing.xs,
-          height: 60,
+          paddingBottom: spacing.sm,
         },
         tabBarLabelStyle: {
           fontFamily: 'Inter_500Medium',
-          fontSize: 11,
+          fontSize: isTablet ? 12 : 11,
         },
       }}
     >
@@ -62,7 +52,13 @@ export default function MainTabs(): React.JSX.Element {
         component={DashboardScreen}
         options={{
           tabBarLabel: 'Accueil',
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} label="🏠" />,
+          tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
+            <Ionicons
+              name={(focused ? 'home' : 'home-outline') as IoniconsName}
+              size={TAB_ICON_SIZE}
+              color={color}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -70,7 +66,13 @@ export default function MainTabs(): React.JSX.Element {
         component={FloorPlanScreen}
         options={{
           tabBarLabel: 'Plan',
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} label="🗺️" />,
+          tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
+            <Ionicons
+              name={(focused ? 'grid' : 'grid-outline') as IoniconsName}
+              size={TAB_ICON_SIZE}
+              color={color}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -78,7 +80,13 @@ export default function MainTabs(): React.JSX.Element {
         component={ReservationListScreen}
         options={{
           tabBarLabel: 'Réservations',
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} label="📅" />,
+          tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
+            <Ionicons
+              name={(focused ? 'calendar' : 'calendar-outline') as IoniconsName}
+              size={TAB_ICON_SIZE}
+              color={color}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -86,7 +94,13 @@ export default function MainTabs(): React.JSX.Element {
         component={GuestListScreen}
         options={{
           tabBarLabel: 'Clients',
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} label="👥" />,
+          tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
+            <Ionicons
+              name={(focused ? 'people' : 'people-outline') as IoniconsName}
+              size={TAB_ICON_SIZE}
+              color={color}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -94,7 +108,13 @@ export default function MainTabs(): React.JSX.Element {
         component={SettingsScreen}
         options={{
           tabBarLabel: 'Paramètres',
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} label="⚙️" />,
+          tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
+            <Ionicons
+              name={(focused ? 'settings' : 'settings-outline') as IoniconsName}
+              size={TAB_ICON_SIZE}
+              color={color}
+            />
+          ),
         }}
       />
     </Tab.Navigator>
