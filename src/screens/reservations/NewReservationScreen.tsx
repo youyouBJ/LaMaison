@@ -21,6 +21,7 @@ import SectionCard from '../../components/SectionCard';
 import PrimaryButton from '../../components/PrimaryButton';
 import DateSelector from '../../components/DateSelector';
 import CalendarPicker from '../../components/CalendarPicker';
+import TimeSlotSelector from '../../components/TimeSlotSelector';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { GuestRow } from '../../hooks/useCreateReservation';
 
@@ -232,23 +233,11 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
             {/* ── Créneau & Couverts ── */}
             {form.selectedShiftId ? (
               <SectionCard title="Créneau & Couverts">
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.slotsRow}
-                >
-                  {timeSlots.map((slot) => (
-                    <TouchableOpacity
-                      key={slot}
-                      style={[styles.slotChip, form.selectedTimeSlot === slot && styles.slotChipActive]}
-                      onPress={() => setForm((prev) => ({ ...prev, selectedTimeSlot: slot }))}
-                    >
-                      <Text style={[styles.slotText, form.selectedTimeSlot === slot && styles.slotTextActive]}>
-                        {slot}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                <TimeSlotSelector
+                  slots={timeSlots}
+                  value={form.selectedTimeSlot || undefined}
+                  onChange={(slot) => setForm((prev) => ({ ...prev, selectedTimeSlot: slot }))}
+                />
 
                 <View style={styles.stepperRow}>
                   <Text style={styles.stepperLabel}>Couverts</Text>

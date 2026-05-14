@@ -66,6 +66,16 @@ export function getShiftForDateAndTime(
   );
 }
 
+// "HH:MM:SS" ou "HH:MM" → "HH:MM" (affichage).
+export function normalizeTimeSlotForDisplay(time: string): string {
+  return time.substring(0, 5);
+}
+
+// "HH:MM" → "HH:MM:SS" (format attendu par PostgreSQL).
+export function normalizeTimeSlotForDatabase(time: string): string {
+  return `${time.substring(0, 5)}:00`;
+}
+
 // Calcule le total de couverts actifs sur un créneau (exclut cancelled et noshow).
 export function calculateCoversForSlot(
   reservations: Pick<ReservationRow, 'time_slot' | 'party_size' | 'status'>[],
