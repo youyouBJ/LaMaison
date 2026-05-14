@@ -24,6 +24,8 @@ Configuration et setup de la base de données Supabase pour le projet La Maison.
 
 La migration est **idempotente** : tu peux la relancer sans risque si nécessaire.
 
+> **Si une exécution précédente a échoué** (ex : erreur "relation does not exist"), recolle le fichier complet corrigé et relance. Les `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS` et `WHERE NOT EXISTS` sur les seeds évitent tout conflit avec ce qui a déjà été créé.
+
 Vérifie ensuite dans **Table Editor** que les tables suivantes sont créées :
 - `restaurants`
 - `users`
