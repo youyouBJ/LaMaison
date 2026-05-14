@@ -20,6 +20,7 @@ import { isDateAllowedForShift, generateTimeSlots } from '../../utils/reservatio
 import SectionCard from '../../components/SectionCard';
 import PrimaryButton from '../../components/PrimaryButton';
 import DateSelector from '../../components/DateSelector';
+import CalendarPicker from '../../components/CalendarPicker';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { GuestRow } from '../../hooks/useCreateReservation';
 
@@ -201,6 +202,10 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
               onChange={setDate}
               showQuickActions
               allowManualInput
+            />
+            <CalendarPicker
+              value={form.date}
+              onChange={setDate}
             />
 
             {/* ── Service ── */}
