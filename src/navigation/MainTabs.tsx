@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing } from '../theme';
 import DashboardScreen from '../screens/dashboard/DashboardScreen';
 import FloorPlanScreen from '../screens/floor/FloorPlanScreen';
-import ReservationListScreen from '../screens/reservations/ReservationListScreen';
+import ReservationsNavigator from './ReservationsNavigator';
 import GuestListScreen from '../screens/guests/GuestListScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 
@@ -77,7 +77,7 @@ export default function MainTabs(): React.JSX.Element {
       />
       <Tab.Screen
         name="Reservations"
-        component={ReservationListScreen}
+        component={ReservationsNavigator}
         options={{
           tabBarLabel: 'Réservations',
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
