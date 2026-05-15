@@ -195,49 +195,60 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
       </View>
 
       {/* ── Filtres ── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipsRow}
-        contentContainerStyle={styles.chipsContent}
-      >
-        {FILTER_OPTIONS.map(({ key, label }) => (
-          <FilterChip
-            key={key}
-            label={label}
-            active={filters[key]}
-            onPress={() => toggleFilter(key)}
-          />
-        ))}
-      </ScrollView>
+      <View style={styles.filterSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionLabel}>Filtres</Text>
+          {activeFilterCount > 0 ? (
+            <TouchableOpacity
+              onPress={resetFilters}
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            >
+              <Text style={styles.resetBtnText}>Tout effacer</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsContent}
+        >
+          {FILTER_OPTIONS.map(({ key, label }) => (
+            <FilterChip
+              key={key}
+              label={label}
+              active={filters[key]}
+              onPress={() => toggleFilter(key)}
+            />
+          ))}
+        </ScrollView>
+      </View>
 
       {/* ── Tri ── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipsRow}
-        contentContainerStyle={styles.chipsContent}
-      >
-        {SORT_OPTIONS.map(({ key, label }) => (
-          <FilterChip
-            key={key}
-            label={label}
-            active={sort === key}
-            onPress={() => setSort(key)}
-          />
-        ))}
-      </ScrollView>
+      <View style={styles.sortSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionLabel}>Trier par</Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsContent}
+        >
+          {SORT_OPTIONS.map(({ key, label }) => (
+            <FilterChip
+              key={key}
+              label={label}
+              active={sort === key}
+              onPress={() => setSort(key)}
+            />
+          ))}
+        </ScrollView>
+      </View>
 
-      {/* ── Compteur + réinitialiser ── */}
+      {/* ── Compteur ── */}
       <View style={styles.resultsBar}>
         <Text style={styles.resultsText}>
           {loading ? '…' : `${guests.length} client${guests.length !== 1 ? 's' : ''}`}
         </Text>
-        {activeFilterCount > 0 ? (
-          <TouchableOpacity onPress={resetFilters}>
-            <Text style={styles.resetText}>Réinitialiser les filtres</Text>
-          </TouchableOpacity>
-        ) : null}
       </View>
 
       {/* ── Liste ── */}
@@ -370,36 +381,56 @@ const styles = StyleSheet.create({
     fontFamily: typography.bodyMedium.fontFamily,
   },
 
-  // Filter / sort chip rows
-  chipsRow: {
+  // Filter section
+  filterSection: {
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
+    paddingBottom: spacing.sm,
+  },
+  sortSection: {
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+    paddingBottom: spacing.sm,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  sectionLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+  },
+  resetBtnText: {
+    ...typography.small,
+    color: colors.cta,
+    fontFamily: typography.bodyMedium.fontFamily,
   },
   chipsContent: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
 
   // Results bar
   resultsBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
   resultsText: {
     ...typography.small,
     color: colors.textMuted,
-  },
-  resetText: {
-    ...typography.small,
-    color: colors.cta,
-    fontFamily: typography.bodyMedium.fontFamily,
   },
 
   // List

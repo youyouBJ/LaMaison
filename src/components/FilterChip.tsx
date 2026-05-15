@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { Pressable, Text, StyleSheet } from 'react-native';
 import { colors, typography, spacing, radius } from '../theme';
 
 interface FilterChipProps {
@@ -10,15 +10,18 @@ interface FilterChipProps {
 
 export function FilterChip({ label, active, onPress }: FilterChipProps): React.JSX.Element {
   return (
-    <TouchableOpacity
-      style={[styles.chip, active && styles.chipActive]}
+    <Pressable
+      style={({ pressed }) => [
+        styles.chip,
+        active && styles.chipActive,
+        pressed && styles.chipPressed,
+      ]}
       onPress={onPress}
-      activeOpacity={0.75}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
     >
       <Text style={[styles.label, active && styles.labelActive]}>{label}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -28,15 +31,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   chipActive: {
     backgroundColor: colors.cta,
     borderColor: colors.cta,
   },
+  chipPressed: {
+    opacity: 0.72,
+  },
   label: {
-    ...typography.small,
+    ...typography.body,
     color: colors.textSecondary,
   },
   labelActive: {
