@@ -1,5 +1,15 @@
 import { parse } from 'csv-parse/sync';
 
+// Columns that must be present for the import to make sense
+const REQUIRED_COLUMNS = [
+  'Client Last Name',
+  'Client First Name',
+  'Phone',
+  'Email',
+  'Tags',
+  'Avg. Rating',
+] as const;
+
 // Raw row as parsed from the SevenRooms CSV export (all values are strings)
 export interface SevenRoomsRawRow {
   Salutation: string;
@@ -61,14 +71,60 @@ export interface MappedGuest {
   last_visit: string | null;
 }
 
+// Detects whether the CSV uses comma or semicolon as delimiter.
+// French/Numbers/Excel exports typically use semicolons.
+export function detectCsvDelimiter(content: string): ',' | ';' {
+  const withoutBom = content.startsWith('﻿') ? content.slice(1) : content;
+  const firstLine = withoutBom.split('\n').find(line => line.trim().length > 0) ?? '';
+  const semicolonCount = (firstLine.match(/;/g) ?? []).length;
+  const commaCount = (firstLine.match(/,/g) ?? []).length;
+  return semicolonCount > commaCount ? ';' : ',';
+}
+
 export function parseSevenRoomsCsv(content: string): SevenRoomsRawRow[] {
-  return parse(content, {
+  const delimiter = detectCsvDelimiter(content);
+
+  // relax_quotes: tolerates stray quotes in Notes/text fields (common in Excel/Numbers exports)
+  // relax_column_count: tolerates rows with fewer columns than the header
+  const rawRows = parse(content, {
     columns: true,
     skip_empty_lines: true,
     trim: true,
     bom: true,
+    delimiter,
+    relax_quotes: true,
     relax_column_count: true,
-  }) as SevenRoomsRawRow[];
+  }) as Record<string, string>[];
+
+  if (rawRows.length === 0) {
+    throw new Error("Le fichier CSV est vide ou n'a pas pu être parsé.");
+  }
+
+  // Normalize column names: "Spend / Visit" → "Spend/Visit"
+  // Numbers/Excel sometimes adds spaces around the slash
+  const normalizedRows = rawRows.map(row => {
+    const out: Record<string, string> = {};
+    for (const [key, val] of Object.entries(row)) {
+      out[key.replace(/\s*\/\s*/g, '/')] = val ?? '';
+    }
+    return out;
+  });
+
+  // Validate that the file is actually a SevenRooms export
+  const foundColumns = Object.keys(normalizedRows[0] ?? {});
+  const missing = REQUIRED_COLUMNS.filter(col => !foundColumns.includes(col));
+  if (missing.length > 0) {
+    throw new Error(
+      `Colonnes SevenRooms manquantes dans le CSV.\n` +
+        `  Séparateur détecté  : "${delimiter}"\n` +
+        `  Colonnes trouvées   : ${foundColumns.slice(0, 8).join(', ')}${foundColumns.length > 8 ? ', ...' : ''}\n` +
+        `  Colonnes manquantes : ${missing.join(', ')}\n` +
+        `→ Vérifiez que le fichier est bien un export SevenRooms en CSV UTF-8.\n` +
+        `→ Voir docs/import-sevenrooms.md`
+    );
+  }
+
+  return normalizedRows as unknown as SevenRoomsRawRow[];
 }
 
 export function normalizePhone(value?: string): string | null {

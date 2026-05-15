@@ -15,6 +15,11 @@ donnée n'est écrite sans le flag `--apply`.
 
 > Si l'export est en `.xlsx` (Excel), l'ouvrir et enregistrer sous → **CSV UTF-8**.
 > Dans Excel : Fichier → Enregistrer sous → Format : CSV UTF-8 (avec BOM).
+> Dans Numbers (Mac) : Fichier → Exporter → CSV.
+
+> **Note sur le séparateur** : les exports en français (Numbers, Excel FR) utilisent souvent
+> le point-virgule `;` comme séparateur au lieu de la virgule `,`. Le script détecte
+> automatiquement le séparateur — aucune configuration manuelle nécessaire.
 
 ---
 
@@ -173,4 +178,19 @@ et conserve le `+` international.
 | `Fichier CSV introuvable` | Vérifier `SEVENROOMS_CSV_PATH` dans `.env.import` |
 | `SUPABASE_SERVICE_ROLE_KEY manquante` | Vérifier `.env.import` |
 | `Restaurant "X" introuvable` | Vérifier `RESTAURANT_NAME` dans `.env.import` |
-| Erreurs de parsing en masse | Vérifier que le CSV est bien encodé en UTF-8 |
+| `Colonnes SevenRooms manquantes` | Le CSV n'est pas un export SevenRooms, ou le séparateur n'a pas été détecté — vérifier l'encodage UTF-8 |
+| `Invalid Opening Quote` | Mettre à jour le script (support `;` ajouté — relancer après `git pull`) |
+| Erreurs de parsing en masse | Vérifier que le fichier est bien en CSV UTF-8 (pas ANSI, pas UTF-16) |
+
+### Séparateurs CSV supportés
+
+Le script détecte automatiquement le délimiteur à partir de la première ligne :
+- `,` (virgule) — exports SevenRooms anglais, standard
+- `;` (point-virgule) — exports Numbers/Excel en français
+
+Le délimiteur détecté est affiché au démarrage :
+```
+Séparateur CSV : ";"
+```
+
+Si le fichier s'ouvre mal, vérifier dans un éditeur texte (VS Code, TextEdit) que les colonnes sont bien séparées par `;` ou `,` et non par des tabulations.

@@ -20,6 +20,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseAdmin } from './lib/supabaseAdmin';
 import {
   MappedGuest,
+  detectCsvDelimiter,
   mapSevenRoomsRowToGuest,
   normalizeEmail,
   normalizePhone,
@@ -192,7 +193,9 @@ async function runImport(options: ImportOptions): Promise<void> {
     );
   }
 
-  // Parse CSV
+  // Detect delimiter and parse CSV
+  const delimiter = detectCsvDelimiter(content);
+  console.log(`Séparateur CSV : "${delimiter}"`);
   const allRows = parseSevenRoomsCsv(content);
   const rows = options.limit !== null ? allRows.slice(0, options.limit) : allRows;
   console.log(`${allRows.length} lignes dans le fichier${options.limit !== null ? `, traitement limité à ${rows.length}` : ''}`);
