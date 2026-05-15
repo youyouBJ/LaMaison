@@ -16,15 +16,22 @@ import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useReservations } from '../../hooks/useReservations';
 import ReservationCard from '../../components/ReservationCard';
 import DateSelector from '../../components/DateSelector';
+import { FilterChip } from '../../components/FilterChip';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { ReservationWithJoins } from '../../types/reservations';
 import { getReservationStatusLabel } from '../../utils/reservationStatus';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationList'>;
-
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+type ReservationServiceFilter = 'all' | 'lunch' | 'dinner';
 
-// Supprime les accents et met en minuscule pour une comparaison insensible aux diacritiques.
+const SERVICE_OPTIONS: { key: ReservationServiceFilter; label: string }[] = [
+  { key: 'all',    label: 'Tous' },
+  { key: 'lunch',  label: 'Déjeuner' },
+  { key: 'dinner', label: 'Dîner' },
+];
+
+// Normalise pour une recherche insensible aux diacritiques.
 function normalizeSearchText(value: string): string {
   return value
     .toLowerCase()
@@ -40,6 +47,7 @@ function buildSearchableString(r: ReservationWithJoins): string {
       r.guests?.phone      ?? '',
       r.guests?.email      ?? '',
       r.tables?.label      ?? '',
+      r.shifts?.name       ?? '',
       getReservationStatusLabel(r.status),
       r.time_slot.substring(0, 5),
       String(r.party_size),
@@ -47,16 +55,47 @@ function buildSearchableString(r: ReservationWithJoins): string {
   );
 }
 
+function timeSlotToMinutes(timeSlot: string): number {
+  const [h, m] = timeSlot.substring(0, 5).split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+function matchesService(r: ReservationWithJoins, service: ReservationServiceFilter): boolean {
+  if (service === 'all') return true;
+
+  // Priorité : nom du shift
+  if (r.shifts?.name) {
+    const name = r.shifts.name.toLowerCase();
+    if (service === 'lunch') {
+      return name.includes('déjeuner') || name.includes('dejeuner') || name.includes('lunch') || name.includes('midi');
+    }
+    return name.includes('dîner') || name.includes('diner') || name.includes('dinner') || name.includes('soir');
+  }
+
+  // Fallback : créneau horaire
+  const minutes = timeSlotToMinutes(r.time_slot);
+  if (service === 'lunch') return minutes >= 12 * 60 && minutes <= 16 * 60 + 45;
+  return minutes >= 17 * 60 && minutes <= 23 * 60 + 45;
+}
+
 export default function ReservationListScreen({ navigation }: Props): React.JSX.Element {
   const { loading, error, reservations, selectedDate, setSelectedDate, refresh } = useReservations();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isFocused, setIsFocused]     = useState(false);
+  const [searchQuery, setSearchQuery]       = useState('');
+  const [isFocused, setIsFocused]           = useState(false);
+  const [serviceFilter, setServiceFilter]   = useState<ReservationServiceFilter>('all');
 
+  // Étape 1 : filtrage par service
+  const reservationsForService = useMemo(() => {
+    if (serviceFilter === 'all') return reservations;
+    return reservations.filter(r => matchesService(r, serviceFilter));
+  }, [reservations, serviceFilter]);
+
+  // Étape 2 : filtrage par recherche (sur le résultat du service)
   const filteredReservations = useMemo(() => {
     const q = normalizeSearchText(searchQuery.trim());
-    if (!q) return reservations;
-    return reservations.filter((r) => buildSearchableString(r).includes(q));
-  }, [reservations, searchQuery]);
+    if (!q) return reservationsForService;
+    return reservationsForService.filter(r => buildSearchableString(r).includes(q));
+  }, [reservationsForService, searchQuery]);
 
   const handleClear = () => setSearchQuery('');
 
@@ -87,18 +126,22 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
     );
   }
 
-  const isSearching       = searchQuery.trim().length > 0;
-  const hasReservations   = reservations.length > 0;
-  const hasResults        = filteredReservations.length > 0;
+  const isSearching        = searchQuery.trim().length > 0;
+  const hasReservations    = reservations.length > 0;
+  const hasServiceResults  = reservationsForService.length > 0;
+  const hasResults         = filteredReservations.length > 0;
 
   const countLabel = (() => {
-    if (!hasReservations) return 'Aucune réservation';
     if (isSearching) {
-      return filteredReservations.length === 0
-        ? 'Aucun résultat'
-        : `${filteredReservations.length} résultat${filteredReservations.length > 1 ? 's' : ''}`;
+      const n = filteredReservations.length;
+      return `${n} résultat${n !== 1 ? 's' : ''}`;
     }
-    return `${reservations.length} réservation${reservations.length > 1 ? 's' : ''}`;
+    const n = filteredReservations.length;
+    if (n === 0) return 'Aucune réservation';
+    const s = n > 1 ? 's' : '';
+    if (serviceFilter === 'lunch')  return `${n} réservation${s} déjeuner`;
+    if (serviceFilter === 'dinner') return `${n} réservation${s} dîner`;
+    return `${n} réservation${s}`;
   })();
 
   return (
@@ -133,6 +176,21 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
           {/* ── Sélecteur de date ── */}
           <DateSelector value={selectedDate} onChange={setSelectedDate} showQuickActions />
 
+          {/* ── Filtre service ── */}
+          <View style={styles.serviceSection}>
+            <Text style={styles.serviceSectionLabel}>Service</Text>
+            <View style={styles.serviceChips}>
+              {SERVICE_OPTIONS.map(({ key, label }) => (
+                <FilterChip
+                  key={key}
+                  label={label}
+                  active={serviceFilter === key}
+                  onPress={() => setServiceFilter(key)}
+                />
+              ))}
+            </View>
+          </View>
+
           {/* ── Barre de recherche ── */}
           <View style={[styles.searchBar, isFocused && styles.searchBarFocused]}>
             <Ionicons
@@ -163,12 +221,23 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
           {/* ── Compteur ── */}
           <Text style={styles.listCount}>{countLabel}</Text>
 
-          {/* ── Pas de réservations sur cette date ── */}
+          {/* ── Aucune réservation sur cette date ── */}
           {!hasReservations ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>Aucune réservation</Text>
               <Text style={styles.emptySubtitle}>
-                Créez une réservation téléphone pour ce service.
+                Aucune réservation n'est prévue pour cette date.
+              </Text>
+            </View>
+
+          /* ── Aucune réservation pour ce service ── */
+          ) : !hasServiceResults ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>Aucune réservation pour ce service</Text>
+              <Text style={styles.emptySubtitle}>
+                {serviceFilter === 'lunch'
+                  ? 'Aucune réservation déjeuner pour cette date.'
+                  : 'Aucune réservation dîner pour cette date.'}
               </Text>
             </View>
 
@@ -177,7 +246,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>Aucune réservation trouvée</Text>
               <Text style={styles.emptySubtitle}>
-                Essayez avec un autre nom, téléphone ou horaire.
+                Essayez un autre nom, téléphone, horaire ou service.
               </Text>
             </View>
 
@@ -268,6 +337,21 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   newButtonText: { ...typography.bodyMedium, color: colors.textOnDark },
+
+  // Service filter
+  serviceSection: {
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  serviceSectionLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  serviceChips: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
 
   // Search bar
   searchBar: {
