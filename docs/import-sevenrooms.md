@@ -126,6 +126,11 @@ npm run import:sevenrooms -- --apply
 ```
 
 > L'import est **idempotent** : relancer n'importe pas en double.
+
+> **Tags déjà importés** : si des clients ont été importés avec des tags bruts
+> (ex : `GROUP ALL GUESTS:GROUP ALL GUESTS`), relancer l'import avec `--apply`
+> les mettra à jour automatiquement — les clients sont reconnus par téléphone/email
+> et leurs tags sont nettoyés au passage. Aucune migration SQL nécessaire.
 > Si un client avec le même téléphone existe déjà, il est mis à jour.
 > Si seulement l'email correspond, il est mis à jour.
 > Sinon, il est inséré.

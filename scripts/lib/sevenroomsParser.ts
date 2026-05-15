@@ -226,12 +226,31 @@ export function parseBoolean(value?: string): boolean {
   return ['yes', 'true', '1', 'vip', 'y', 'oui', 'opted in', 'opt in', 'opted-in'].includes(normalized);
 }
 
+// Tags dont la valeur (partie après ':') ne présente aucun intérêt métier
+const IMPORT_BLOCKED_TAG_VALUES = new Set([
+  'group all guests',
+]);
+
+// Normalise un tag SevenRooms avant import.
+// Retourne null si le tag doit être ignoré.
+export function normalizeSevenRoomsTag(tag: string): string | null {
+  const trimmed = tag.trim();
+  if (!trimmed) return null;
+
+  const colonIdx = trimmed.indexOf(':');
+  const value = (colonIdx >= 0 ? trimmed.slice(colonIdx + 1).trim() : trimmed).toLowerCase();
+
+  if (IMPORT_BLOCKED_TAG_VALUES.has(value)) return null;
+
+  return trimmed;
+}
+
 export function parseTags(value?: string): string[] {
   if (!value || value.trim() === '') return [];
   const tags = value
     .split(',')
-    .map(tag => tag.trim())
-    .filter(tag => tag.length > 0);
+    .map(tag => normalizeSevenRoomsTag(tag))
+    .filter((tag): tag is string => tag !== null);
   return [...new Set(tags)];
 }
 

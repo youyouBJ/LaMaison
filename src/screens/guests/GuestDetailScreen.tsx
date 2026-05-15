@@ -24,6 +24,7 @@ import {
   formatRating,
   formatCurrencyTND,
   formatDateShort,
+  getDisplayableGuestTags,
 } from '../../utils/format';
 import { formatTimeSlot } from '../../utils/date';
 import type { GuestsStackParamList } from '../../navigation/GuestsNavigator';
@@ -303,17 +304,21 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
 
             {/* ── Tags ── */}
             <SectionCard title="Tags">
-              {guest?.tags && guest.tags.length > 0 ? (
-                <View style={styles.tagsRow}>
-                  {guest.tags.map((tag) => (
-                    <View key={tag} style={styles.tagBadge}>
-                      <Text style={styles.tagText}>{tag}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.tagsEmpty}>Aucun tag</Text>
-              )}
+              {(() => {
+                const displayTags = getDisplayableGuestTags(guest?.tags);
+                if (displayTags.length === 0) {
+                  return <Text style={styles.tagsEmpty}>Aucun tag utile</Text>;
+                }
+                return (
+                  <View style={styles.tagsRow}>
+                    {displayTags.map((tag) => (
+                      <View key={tag} style={styles.tagBadge}>
+                        <Text style={styles.tagText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })()}
             </SectionCard>
 
             {/* ── Historique réservations ── */}
@@ -516,6 +521,8 @@ const styles = StyleSheet.create({
   },
   tagText: {
     ...typography.label,
+    textTransform: 'none' as const,
+    letterSpacing: 0.2,
     color: colors.cta,
   },
   tagsEmpty: {
