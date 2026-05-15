@@ -1,47 +1,115 @@
-// Recherche côté Supabase via ilike — suffisant pour le MVP.
-// Lors de l'import SevenRooms (22 682 clients), envisager :
-//   - index pg_trgm (trigram) sur phone, first_name, last_name, email
-//   - full-text search via tsvector
-//   - pagination avec curseur
+// Search via Supabase ilike. Tag-based filters are applied client-side after
+// fetching a larger batch (TAG_FILTER_LIMIT) to avoid building complex SQL.
+// Never loads the full 22 682-row dataset — always capped at STANDARD_LIMIT or TAG_FILTER_LIMIT.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/database';
+import type { GuestSortOption, GuestFilterState } from '../types/guests';
+import { DEFAULT_SORT, DEFAULT_FILTERS } from '../types/guests';
 
 type GuestRow = Database['public']['Tables']['guests']['Row'];
 
-const PAGE_SIZE = 50;
+const STANDARD_LIMIT = 150;
+const TAG_FILTER_LIMIT = 300;
+
+function hasTagFilter(filters: GuestFilterState): boolean {
+  return filters.reengagementOnly || filters.positiveFeedbackOnly || filters.negativeFeedbackOnly;
+}
+
+function applyTagFilters(rows: GuestRow[], filters: GuestFilterState): GuestRow[] {
+  return rows.filter(guest => {
+    const tags = (guest.tags ?? []).map(t => t.toLowerCase());
+    if (filters.reengagementOnly) {
+      if (!tags.some(t => t.includes('re-engagement') || t.includes('re engagement'))) return false;
+    }
+    if (filters.positiveFeedbackOnly) {
+      if (!tags.some(t => t.includes('positive'))) return false;
+    }
+    if (filters.negativeFeedbackOnly) {
+      if (!tags.some(t => t.includes('negative'))) return false;
+    }
+    return true;
+  });
+}
 
 export function useGuests() {
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState<string | null>(null);
-  const [guests, setGuests]           = useState<GuestRow[]>([]);
-  const [query, setQuery]             = useState('');
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+  const [guests, setGuests]       = useState<GuestRow[]>([]);
+  const [query, setQuery]         = useState('');
+  const [sort, setSort]           = useState<GuestSortOption>(DEFAULT_SORT);
+  const [filters, setFilters]     = useState<GuestFilterState>(DEFAULT_FILTERS);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
-  const restaurantIdRef               = useRef<string | null>(null);
 
-  const fetchGuests = useCallback(async (resId: string, searchQuery: string): Promise<void> => {
-    const q = searchQuery.trim();
+  const restaurantIdRef   = useRef<string | null>(null);
+  const queryRef          = useRef<string>('');
+  const initialLoadedRef  = useRef(false);
 
-    const { data, error: fetchError } = q.length >= 2
-      ? await supabase
-          .from('guests')
-          .select('*')
-          .eq('restaurant_id', resId)
-          .or(`phone.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`)
-          .order('last_visit', { ascending: false })
-          .limit(PAGE_SIZE)
-      : await supabase
-          .from('guests')
-          .select('*')
-          .eq('restaurant_id', resId)
-          .order('created_at', { ascending: false })
-          .limit(PAGE_SIZE);
+  const fetchGuests = useCallback(
+    async (
+      resId: string,
+      searchQuery: string,
+      currentSort: GuestSortOption,
+      currentFilters: GuestFilterState,
+    ): Promise<void> => {
+      const q = searchQuery.trim();
+      const useTagLimit = hasTagFilter(currentFilters);
+      const limit = useTagLimit ? TAG_FILTER_LIMIT : STANDARD_LIMIT;
 
-    if (fetchError) { setError(fetchError.message); return; }
-    setGuests(data ?? []);
-    setError(null);
-  }, []);
+      let dbQuery = supabase
+        .from('guests')
+        .select('*')
+        .eq('restaurant_id', resId);
+
+      if (q.length >= 2) {
+        dbQuery = dbQuery.or(
+          `phone.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`,
+        );
+      }
+
+      if (currentFilters.vipOnly) dbQuery = dbQuery.eq('vip', true);
+      if (currentFilters.withPhoneOnly) dbQuery = dbQuery.not('phone', 'is', null);
+      if (currentFilters.withEmailOnly) dbQuery = dbQuery.not('email', 'is', null);
+      if (currentFilters.withRatingOnly) dbQuery = dbQuery.not('avg_rating', 'is', null);
+
+      switch (currentSort) {
+        case 'last_visit_desc':
+          dbQuery = dbQuery.order('last_visit', { ascending: false });
+          break;
+        case 'created_at_desc':
+          dbQuery = dbQuery.order('created_at', { ascending: false });
+          break;
+        case 'visit_count_desc':
+          dbQuery = dbQuery.order('visit_count', { ascending: false });
+          break;
+        case 'avg_rating_desc':
+          dbQuery = dbQuery.order('avg_rating', { ascending: false });
+          break;
+        case 'name_asc':
+          dbQuery = dbQuery
+            .order('last_name', { ascending: true })
+            .order('first_name', { ascending: true });
+          break;
+      }
+
+      dbQuery = dbQuery.limit(limit);
+
+      const { data, error: fetchError } = await dbQuery;
+
+      if (fetchError) {
+        setError(fetchError.message);
+        return;
+      }
+
+      let results = data ?? [];
+      if (useTagLimit) results = applyTagFilters(results, currentFilters);
+
+      setGuests(results);
+      setError(null);
+    },
+    [],
+  );
 
   const loadInitial = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -58,29 +126,76 @@ export function useGuests() {
 
       restaurantIdRef.current = profile.restaurant_id;
       setRestaurantId(profile.restaurant_id);
-      await fetchGuests(profile.restaurant_id, '');
+      initialLoadedRef.current = true;
+      await fetchGuests(profile.restaurant_id, '', DEFAULT_SORT, DEFAULT_FILTERS);
     } finally {
       setLoading(false);
     }
   }, [fetchGuests]);
 
-  const search = useCallback(async (): Promise<void> => {
+  useEffect(() => { void loadInitial(); }, [loadInitial]);
+
+  // Auto-refetch when sort or filters change — only after the initial load
+  useEffect(() => {
+    if (!initialLoadedRef.current) return;
     const resId = restaurantIdRef.current;
     if (!resId) return;
     setLoading(true);
-    try { await fetchGuests(resId, query); }
+    void fetchGuests(resId, queryRef.current, sort, filters).finally(() => setLoading(false));
+  }, [sort, filters, fetchGuests]);
+
+  const search = useCallback(async (): Promise<void> => {
+    const resId = restaurantIdRef.current;
+    if (!resId) return;
+    queryRef.current = query;
+    setLoading(true);
+    try { await fetchGuests(resId, query, sort, filters); }
     finally { setLoading(false); }
-  }, [query, fetchGuests]);
+  }, [query, sort, filters, fetchGuests]);
+
+  const clearSearch = useCallback(async (): Promise<void> => {
+    const resId = restaurantIdRef.current;
+    setQuery('');
+    queryRef.current = '';
+    if (!resId) return;
+    setLoading(true);
+    try { await fetchGuests(resId, '', sort, filters); }
+    finally { setLoading(false); }
+  }, [sort, filters, fetchGuests]);
 
   const refresh = useCallback(async (): Promise<void> => {
     const resId = restaurantIdRef.current;
     if (!resId) return;
     setLoading(true);
-    try { await fetchGuests(resId, query); }
+    try { await fetchGuests(resId, queryRef.current, sort, filters); }
     finally { setLoading(false); }
-  }, [query, fetchGuests]);
+  }, [sort, filters, fetchGuests]);
 
-  useEffect(() => { void loadInitial(); }, [loadInitial]);
+  const toggleFilter = useCallback((key: keyof GuestFilterState): void => {
+    setFilters(prev => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
-  return { loading, error, guests, query, setQuery, search, refresh, restaurantId };
+  const resetFilters = useCallback((): void => {
+    setFilters(DEFAULT_FILTERS);
+  }, []);
+
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+
+  return {
+    loading,
+    error,
+    guests,
+    query,
+    setQuery,
+    sort,
+    setSort,
+    filters,
+    toggleFilter,
+    resetFilters,
+    activeFilterCount,
+    search,
+    clearSearch,
+    refresh,
+    restaurantId,
+  };
 }

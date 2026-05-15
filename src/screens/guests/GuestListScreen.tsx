@@ -5,6 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
+  ScrollView,
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
@@ -13,66 +14,115 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useGuests } from '../../hooks/useGuests';
-import { formatGuestName, formatPhone, formatDateShort, formatRating } from '../../utils/format';
+import { FilterChip } from '../../components/FilterChip';
+import {
+  formatGuestName,
+  formatPhone,
+  formatDateShort,
+  formatRating,
+  getDisplayableGuestTags,
+} from '../../utils/format';
 import type { GuestsStackParamList } from '../../navigation/GuestsNavigator';
 import type { Database } from '../../types/database';
+import type { GuestSortOption, GuestFilterState } from '../../types/guests';
 
 type GuestRow = Database['public']['Tables']['guests']['Row'];
 type Props = NativeStackScreenProps<GuestsStackParamList, 'GuestList'>;
 
+const SORT_OPTIONS: { key: GuestSortOption; label: string }[] = [
+  { key: 'last_visit_desc', label: 'Dernière visite' },
+  { key: 'visit_count_desc', label: 'Nb visites' },
+  { key: 'avg_rating_desc', label: 'Note' },
+  { key: 'name_asc', label: 'A → Z' },
+  { key: 'created_at_desc', label: 'Récents' },
+];
+
+const FILTER_OPTIONS: { key: keyof GuestFilterState; label: string }[] = [
+  { key: 'vipOnly', label: 'VIP' },
+  { key: 'withPhoneOnly', label: 'Avec tél.' },
+  { key: 'withEmailOnly', label: 'Avec email' },
+  { key: 'withRatingOnly', label: 'Avec note' },
+  { key: 'reengagementOnly', label: 'Ré-engagement' },
+  { key: 'positiveFeedbackOnly', label: 'Feedback +' },
+  { key: 'negativeFeedbackOnly', label: 'Feedback −' },
+];
+
 export default function GuestListScreen({ navigation }: Props): React.JSX.Element {
-  const { loading, error, guests, query, setQuery, search, refresh } = useGuests();
+  const {
+    loading,
+    error,
+    guests,
+    query,
+    setQuery,
+    sort,
+    setSort,
+    filters,
+    toggleFilter,
+    resetFilters,
+    activeFilterCount,
+    search,
+    clearSearch,
+    refresh,
+  } = useGuests();
 
-  const handleSearch = () => { void search(); };
-
-  const handleClear = () => {
-    setQuery('');
-    void refresh();
-  };
-
-  const handleRefresh = useCallback(() => { void refresh(); }, [refresh]);
+  const handleSearch = (): void => { void search(); };
+  const handleClear = (): void => { void clearSearch(); };
+  const handleRefresh = useCallback((): void => { void refresh(); }, [refresh]);
 
   const renderItem = useCallback(
-    ({ item }: { item: GuestRow }) => (
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.75}
-        onPress={() => navigation.navigate('GuestDetail', { guestId: item.id })}
-        accessibilityRole="button"
-        accessibilityLabel={formatGuestName(item.first_name, item.last_name)}
-      >
-        <View style={styles.cardTop}>
-          <View style={styles.cardLeft}>
-            <Text style={styles.guestName} numberOfLines={1}>
-              {formatGuestName(item.first_name, item.last_name)}
-            </Text>
-            <Text style={styles.guestPhone}>{formatPhone(item.phone)}</Text>
-            {item.email ? (
-              <Text style={styles.guestEmail} numberOfLines={1}>{item.email}</Text>
-            ) : null}
+    ({ item }: { item: GuestRow }) => {
+      const displayTags = getDisplayableGuestTags(item.tags).slice(0, 2);
+      return (
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.75}
+          onPress={() => navigation.navigate('GuestDetail', { guestId: item.id })}
+          accessibilityRole="button"
+          accessibilityLabel={formatGuestName(item.first_name, item.last_name)}
+        >
+          <View style={styles.cardTop}>
+            <View style={styles.cardLeft}>
+              <Text style={styles.guestName} numberOfLines={1}>
+                {formatGuestName(item.first_name, item.last_name)}
+              </Text>
+              <Text style={styles.guestPhone}>{formatPhone(item.phone)}</Text>
+              {item.email ? (
+                <Text style={styles.guestEmail} numberOfLines={1}>{item.email}</Text>
+              ) : null}
+            </View>
+            <View style={styles.cardRight}>
+              {item.vip ? (
+                <View style={styles.vipBadge}>
+                  <Text style={styles.vipText}>VIP</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
-          <View style={styles.cardRight}>
-            {item.vip ? (
-              <View style={styles.vipBadge}>
-                <Text style={styles.vipText}>VIP</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
 
-        <View style={styles.cardStats}>
-          {item.visit_count > 0 ? (
-            <Text style={styles.statChip}>{item.visit_count} visite{item.visit_count > 1 ? 's' : ''}</Text>
+          <View style={styles.cardStats}>
+            {item.visit_count > 0 ? (
+              <Text style={styles.statChip}>{item.visit_count} visite{item.visit_count > 1 ? 's' : ''}</Text>
+            ) : null}
+            {item.avg_rating !== null ? (
+              <Text style={styles.statChip}>{formatRating(item.avg_rating)} / 5</Text>
+            ) : null}
+            {item.last_visit ? (
+              <Text style={styles.statChip}>{formatDateShort(item.last_visit)}</Text>
+            ) : null}
+          </View>
+
+          {displayTags.length > 0 ? (
+            <View style={styles.cardTags}>
+              {displayTags.map((tag, idx) => (
+                <View key={idx} style={styles.tagChip}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
           ) : null}
-          {item.avg_rating !== null ? (
-            <Text style={styles.statChip}>{formatRating(item.avg_rating)} / 5</Text>
-          ) : null}
-          {item.last_visit ? (
-            <Text style={styles.statChip}>{formatDateShort(item.last_visit)}</Text>
-          ) : null}
-        </View>
-      </TouchableOpacity>
-    ),
+        </TouchableOpacity>
+      );
+    },
     [navigation],
   );
 
@@ -103,6 +153,8 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
       </SafeAreaView>
     );
   }
+
+  const hasActiveState = query.length > 0 || activeFilterCount > 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -142,6 +194,52 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
         </View>
       </View>
 
+      {/* ── Filtres ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsRow}
+        contentContainerStyle={styles.chipsContent}
+      >
+        {FILTER_OPTIONS.map(({ key, label }) => (
+          <FilterChip
+            key={key}
+            label={label}
+            active={filters[key]}
+            onPress={() => toggleFilter(key)}
+          />
+        ))}
+      </ScrollView>
+
+      {/* ── Tri ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsRow}
+        contentContainerStyle={styles.chipsContent}
+      >
+        {SORT_OPTIONS.map(({ key, label }) => (
+          <FilterChip
+            key={key}
+            label={label}
+            active={sort === key}
+            onPress={() => setSort(key)}
+          />
+        ))}
+      </ScrollView>
+
+      {/* ── Compteur + réinitialiser ── */}
+      <View style={styles.resultsBar}>
+        <Text style={styles.resultsText}>
+          {loading ? '…' : `${guests.length} client${guests.length !== 1 ? 's' : ''}`}
+        </Text>
+        {activeFilterCount > 0 ? (
+          <TouchableOpacity onPress={resetFilters}>
+            <Text style={styles.resetText}>Réinitialiser les filtres</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
       {/* ── Liste ── */}
       <FlatList
         data={guests}
@@ -161,11 +259,11 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>
-              {query.length > 0 ? 'Aucun client trouvé' : 'Aucun client pour le moment'}
+              {hasActiveState ? 'Aucun client trouvé' : 'Aucun client pour le moment'}
             </Text>
-            {query.length > 0 ? (
+            {hasActiveState ? (
               <Text style={styles.emptySubtitle}>
-                Essayez avec un autre téléphone, prénom ou email.
+                Essayez une autre recherche ou réinitialisez les filtres.
               </Text>
             ) : null}
           </View>
@@ -272,6 +370,38 @@ const styles = StyleSheet.create({
     fontFamily: typography.bodyMedium.fontFamily,
   },
 
+  // Filter / sort chip rows
+  chipsRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  chipsContent: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+  },
+
+  // Results bar
+  resultsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  resultsText: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  resetText: {
+    ...typography.small,
+    color: colors.cta,
+    fontFamily: typography.bodyMedium.fontFamily,
+  },
+
   // List
   list: {
     paddingTop: spacing.md,
@@ -344,6 +474,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
+  },
+  cardTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  tagChip: {
+    backgroundColor: colors.ctaLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  tagText: {
+    ...typography.small,
+    color: colors.cta,
+    textTransform: 'none' as const,
+    letterSpacing: 0,
   },
 
   // Empty state
