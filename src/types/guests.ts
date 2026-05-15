@@ -13,6 +13,7 @@ export type GuestFilterState = {
   reengagementOnly: boolean;
   positiveFeedbackOnly: boolean;
   negativeFeedbackOnly: boolean;
+  upcomingReservationOnly: boolean;
 };
 
 export const DEFAULT_SORT: GuestSortOption = 'last_visit_desc';
@@ -25,4 +26,5 @@ export const DEFAULT_FILTERS: GuestFilterState = {
   reengagementOnly: false,
   positiveFeedbackOnly: false,
   negativeFeedbackOnly: false,
+  upcomingReservationOnly: false,
 };

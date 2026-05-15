@@ -4,7 +4,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Database } from '../types/database';
+import type { Database, ReservationStatus } from '../types/database';
+import { getTodayDateString } from '../utils/date';
 import type { GuestSortOption, GuestFilterState } from '../types/guests';
 import { DEFAULT_SORT, DEFAULT_FILTERS } from '../types/guests';
 
@@ -12,6 +13,10 @@ type GuestRow = Database['public']['Tables']['guests']['Row'];
 
 const STANDARD_LIMIT = 150;
 const TAG_FILTER_LIMIT = 300;
+// Fetch at most 300 upcoming reservations — after dedup the actual .in() list is smaller.
+// At ~50 reservations/day this covers ~6 days ahead, sufficient for CRM use.
+const UPCOMING_RESERVATIONS_LIMIT = 300;
+const UPCOMING_STATUSES: ReservationStatus[] = ['confirmed', 'pending', 'seated'];
 
 function hasTagFilter(filters: GuestFilterState): boolean {
   return filters.reengagementOnly || filters.positiveFeedbackOnly || filters.negativeFeedbackOnly;
@@ -57,10 +62,47 @@ export function useGuests() {
       const useTagLimit = hasTagFilter(currentFilters);
       const limit = useTagLimit ? TAG_FILTER_LIMIT : STANDARD_LIMIT;
 
+      // Upcoming reservation filter: resolve the set of guest_ids first, then filter guests.
+      // Two queries total — never loads the full guest table.
+      let upcomingGuestIds: string[] | null = null;
+      if (currentFilters.upcomingReservationOnly) {
+        const today = getTodayDateString();
+        const { data: resRows, error: resError } = await supabase
+          .from('reservations')
+          .select('guest_id')
+          .eq('restaurant_id', resId)
+          .gte('date', today)
+          .in('status', UPCOMING_STATUSES)
+          .not('guest_id', 'is', null)
+          .limit(UPCOMING_RESERVATIONS_LIMIT);
+
+        if (resError) { setError(resError.message); return; }
+
+        const ids = [
+          ...new Set(
+            (resRows ?? [])
+              .map(r => r.guest_id)
+              .filter((id): id is string => id !== null),
+          ),
+        ];
+
+        if (ids.length === 0) {
+          setGuests([]);
+          setError(null);
+          return;
+        }
+
+        upcomingGuestIds = ids;
+      }
+
       let dbQuery = supabase
         .from('guests')
         .select('*')
         .eq('restaurant_id', resId);
+
+      if (upcomingGuestIds !== null) {
+        dbQuery = dbQuery.in('id', upcomingGuestIds);
+      }
 
       if (q.length >= 2) {
         dbQuery = dbQuery.or(

@@ -38,6 +38,7 @@ const SORT_OPTIONS: { key: GuestSortOption; label: string }[] = [
 ];
 
 const FILTER_OPTIONS: { key: keyof GuestFilterState; label: string }[] = [
+  { key: 'upcomingReservationOnly', label: 'Réservation à venir' },
   { key: 'vipOnly', label: 'VIP' },
   { key: 'withPhoneOnly', label: 'Avec tél.' },
   { key: 'withEmailOnly', label: 'Avec email' },
@@ -270,11 +271,17 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>
-              {hasActiveState ? 'Aucun client trouvé' : 'Aucun client pour le moment'}
+              {!hasActiveState
+                ? 'Aucun client pour le moment'
+                : filters.upcomingReservationOnly
+                  ? 'Aucun client avec réservation à venir'
+                  : 'Aucun client trouvé'}
             </Text>
             {hasActiveState ? (
               <Text style={styles.emptySubtitle}>
-                Essayez une autre recherche ou réinitialisez les filtres.
+                {filters.upcomingReservationOnly && query.length === 0 && activeFilterCount === 1
+                  ? 'Les clients avec une réservation confirmée ou en attente apparaîtront ici.'
+                  : 'Essayez une autre recherche ou réinitialisez les filtres.'}
               </Text>
             ) : null}
           </View>
