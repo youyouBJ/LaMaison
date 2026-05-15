@@ -44,9 +44,22 @@ Editer `.env.import` :
 ```env
 SUPABASE_URL=https://nosflczsevtrxnyienyn.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJhb...  # voir ci-dessous
-RESTAURANT_NAME=La Maison
+
+# Recommandé : identifiant exact du restaurant
+RESTAURANT_ID=75ace9a5-97af-4588-87d9-d375c350f81b
+# RESTAURANT_NAME=La Maison  # utilisé seulement si RESTAURANT_ID est vide
+
 SEVENROOMS_CSV_PATH=./data/sevenrooms-guests.csv
 ```
+
+### RESTAURANT_ID vs RESTAURANT_NAME
+
+**`RESTAURANT_ID` est recommandé** : il pointe directement sur la bonne ligne en base,
+sans risque d'ambiguïté sur la casse ou les accents.
+
+- Récupérer l'UUID dans Supabase → Table Editor → `restaurants` → colonne `id`
+- Si `RESTAURANT_ID` est renseigné, `RESTAURANT_NAME` est ignoré
+- Si `RESTAURANT_ID` est vide, le script cherche par nom avec `RESTAURANT_NAME`
 
 ### Récupérer la Service Role Key
 

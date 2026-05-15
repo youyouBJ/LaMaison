@@ -95,20 +95,42 @@ function chunk<T>(arr: T[], size: number): T[][] {
 
 // ─── Supabase helpers ─────────────────────────────────────────────────────────
 
-async function findRestaurant(
+async function findRestaurantById(
+  supabase: SupabaseClient,
+  id: string
+): Promise<string> {
+  const { data, error } = await supabase
+    .from('restaurants')
+    .select('id, name')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    throw new Error(
+      `Restaurant avec l'id "${id}" introuvable dans Supabase.\n→ Vérifiez RESTAURANT_ID dans .env.import`
+    );
+  }
+  const row = data as RestaurantRow;
+  console.log(`Restaurant trouvé : ${row.name} (${row.id})`);
+  return row.id;
+}
+
+async function findRestaurantByName(
   supabase: SupabaseClient,
   name: string
 ): Promise<string> {
   const { data, error } = await supabase
     .from('restaurants')
     .select('id, name')
-    .ilike('name', name)
+    .ilike('name', name.trim())
     .limit(1)
     .single();
 
   if (error || !data) {
     throw new Error(
-      `Restaurant "${name}" introuvable dans Supabase.\n→ Vérifiez RESTAURANT_NAME dans .env.import`
+      `Restaurant "${name}" introuvable dans Supabase.\n` +
+        `→ Vérifiez RESTAURANT_NAME dans .env.import\n` +
+        `→ Ou définissez RESTAURANT_ID directement (plus fiable)`
     );
   }
   const row = data as RestaurantRow;
@@ -164,13 +186,17 @@ async function loadExistingGuests(
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function runImport(options: ImportOptions): Promise<void> {
-  const csvPath = process.env.SEVENROOMS_CSV_PATH;
-  const restaurantName = process.env.RESTAURANT_NAME;
+  const csvPath = process.env.SEVENROOMS_CSV_PATH?.trim();
+  const restaurantIdEnv = process.env.RESTAURANT_ID?.trim() || null;
+  const restaurantNameEnv = process.env.RESTAURANT_NAME?.trim() || null;
 
   if (!csvPath)
     throw new Error('SEVENROOMS_CSV_PATH non défini dans .env.import');
-  if (!restaurantName)
-    throw new Error('RESTAURANT_NAME non défini dans .env.import');
+  if (!restaurantIdEnv && !restaurantNameEnv)
+    throw new Error(
+      'RESTAURANT_ID ou RESTAURANT_NAME doit être défini dans .env.import\n' +
+        '→ Recommandé : définir RESTAURANT_ID (plus fiable que la recherche par nom)'
+    );
 
   const resolvedPath = resolve(process.cwd(), csvPath);
 
@@ -216,8 +242,10 @@ async function runImport(options: ImportOptions): Promise<void> {
   // Init Supabase (après dotenvConfig)
   const supabase = createSupabaseAdmin();
 
-  // Find restaurant
-  const restaurantId = await findRestaurant(supabase, restaurantName);
+  // Find restaurant — by ID if set (recommended), by name as fallback
+  const restaurantId = restaurantIdEnv
+    ? await findRestaurantById(supabase, restaurantIdEnv)
+    : await findRestaurantByName(supabase, restaurantNameEnv!);
 
   // Load existing guests for deduplication
   const { phoneMap, emailMap } = await loadExistingGuests(supabase, restaurantId);
