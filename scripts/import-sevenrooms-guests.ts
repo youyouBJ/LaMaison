@@ -93,7 +93,30 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
+// ─── Diagnostics ─────────────────────────────────────────────────────────────
+
+function detectKeyType(key: string): string {
+  if (key.startsWith('sb_secret_')) return 'sb_secret (nouvelle clé Supabase)';
+  if (key.startsWith('eyJ')) return 'jwt (ancienne clé Supabase)';
+  if (key.length > 0) return `autre (longueur ${key.length})`;
+  return '(vide — clé manquante)';
+}
+
 // ─── Supabase helpers ─────────────────────────────────────────────────────────
+
+function formatSupabaseError(error: {
+  message: string;
+  code: string;
+  details: string;
+  hint: string;
+}): string {
+  return (
+    `  code    : ${error.code || '—'}\n` +
+    `  message : ${error.message || '—'}\n` +
+    `  details : ${error.details || '—'}\n` +
+    `  hint    : ${error.hint || '—'}`
+  );
+}
 
 async function findRestaurantById(
   supabase: SupabaseClient,
@@ -105,9 +128,17 @@ async function findRestaurantById(
     .eq('id', id)
     .single();
 
-  if (error || !data) {
+  if (error) {
     throw new Error(
-      `Restaurant avec l'id "${id}" introuvable dans Supabase.\n→ Vérifiez RESTAURANT_ID dans .env.import`
+      `Erreur Supabase lors de la recherche du restaurant (par id).\n` +
+        formatSupabaseError(error) +
+        `\n→ RESTAURANT_ID utilisé : ${id}`
+    );
+  }
+  if (!data) {
+    throw new Error(
+      `Restaurant introuvable : aucune ligne retournée pour l'id "${id}".\n` +
+        `→ Vérifiez RESTAURANT_ID dans .env.import`
     );
   }
   const row = data as RestaurantRow;
@@ -126,11 +157,19 @@ async function findRestaurantByName(
     .limit(1)
     .single();
 
-  if (error || !data) {
+  if (error) {
     throw new Error(
-      `Restaurant "${name}" introuvable dans Supabase.\n` +
-        `→ Vérifiez RESTAURANT_NAME dans .env.import\n` +
+      `Erreur Supabase lors de la recherche du restaurant (par nom).\n` +
+        formatSupabaseError(error) +
+        `\n→ RESTAURANT_NAME utilisé : "${name}"\n` +
         `→ Ou définissez RESTAURANT_ID directement (plus fiable)`
+    );
+  }
+  if (!data) {
+    throw new Error(
+      `Restaurant introuvable : aucune ligne retournée pour le nom "${name}".\n` +
+        `→ Vérifiez RESTAURANT_NAME dans .env.import\n` +
+        `→ Ou définissez RESTAURANT_ID directement`
     );
   }
   const row = data as RestaurantRow;
@@ -205,7 +244,14 @@ async function runImport(options: ImportOptions): Promise<void> {
     `Mode    : ${options.apply ? '✅ APPLY (écriture réelle)' : '🔍 DRY-RUN (aucune écriture)'}`
   );
   if (options.limit !== null) console.log(`Limite  : ${options.limit} lignes`);
-  console.log(`Fichier : ${resolvedPath}\n`);
+  console.log(`Fichier : ${resolvedPath}`);
+
+  console.log('\n─── Diagnostic connexion ──────────────────────────────');
+  console.log(`SUPABASE_URL    : ${process.env.SUPABASE_URL?.trim() ?? '(non défini)'}`);
+  console.log(`RESTAURANT_ID   : ${restaurantIdEnv ?? '(non défini)'}`);
+  console.log(`RESTAURANT_NAME : ${restaurantNameEnv ?? '(non défini)'}`);
+  console.log(`Type clé        : ${detectKeyType(process.env.SUPABASE_SERVICE_ROLE_KEY ?? '')}`);
+  console.log('──────────────────────────────────────────────────────\n');
 
   // Read CSV
   let content: string;

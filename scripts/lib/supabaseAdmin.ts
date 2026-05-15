@@ -24,6 +24,7 @@ export function createSupabaseAdmin(): SupabaseClient {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+      detectSessionInUrl: false,
     },
   });
 }
