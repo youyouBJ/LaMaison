@@ -8,6 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "import:sevenrooms": "tsx scripts/import-sevenrooms-guests.ts",
+    "seed:floor": "tsx scripts/seed-floor-plan.ts",
     "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit"
   },
   "dependencies": {

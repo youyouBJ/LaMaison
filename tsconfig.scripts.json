@@ -11,9 +11,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["node"],
-    "outDir": ".build/scripts",
-    "rootDir": "scripts"
+    "outDir": ".build/scripts"
   },
-  "include": ["scripts/**/*.ts"],
+  "include": ["scripts/**/*.ts", "src/**/*.ts"],
   "exclude": ["node_modules"]
 }
