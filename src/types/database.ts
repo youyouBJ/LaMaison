@@ -397,6 +397,33 @@ export interface Database {
         Relationships: [];
       };
 
+      // ── reservation_tables ───────────────────────────────────────────────
+      // Ajouté dans 002_reservation_tables.sql — régénérer database.ts après migration.
+      reservation_tables: {
+        Row: {
+          id:             string;
+          reservation_id: string;
+          table_id:       string;
+          restaurant_id:  string;
+          created_at:     string;
+        };
+        Insert: {
+          id?:            string;
+          reservation_id: string;
+          table_id:       string;
+          restaurant_id:  string;
+          created_at?:    string;
+        };
+        Update: {
+          id?:             string;
+          reservation_id?: string;
+          table_id?:       string;
+          restaurant_id?:  string;
+          created_at?:     string;
+        };
+        Relationships: [];
+      };
+
       // ── notifications_log ────────────────────────────────────────────────
       notifications_log: {
         Row: {

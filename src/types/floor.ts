@@ -67,7 +67,8 @@ export interface FloorTableWithState extends FloorTableLayout {
   dbId: string | null;      // UUID from the tables table
   dbStatus: Database['public']['Tables']['tables']['Row']['status'];
   computedStatus: FloorTableStatus;
-  reservation: FloorPlanReservation | null;
+  reservation: FloorPlanReservation | null;   // first/best for visual hint on canvas
+  reservations: FloorPlanReservation[];        // all active reservations for detail panel
 }
 
 // ─── Reservation summary used by the floor plan ──────────────────────────────
@@ -77,6 +78,9 @@ export interface FloorPlanReservation {
   timeSlot: string;
   partySize: number;
   status: Database['public']['Tables']['reservations']['Row']['status'];
+  source: Database['public']['Tables']['reservations']['Row']['source'];
   guestName: string | null;
   shiftName: string | null;
+  notes: string | null;
+  tableLabels: string[];
 }

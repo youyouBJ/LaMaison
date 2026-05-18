@@ -10,7 +10,7 @@ import type {
   FloorPlanReservation,
   FloorTableStatus,
 } from '../types/floor';
-import type { Database } from '../types/database';
+import type { Database, ReservationStatus } from '../types/database';
 
 type TableRow       = Database['public']['Tables']['tables']['Row'];
 type ReservationRow = Database['public']['Tables']['reservations']['Row'];
@@ -33,10 +33,7 @@ function timeInRange(time: string, start: string, end: string): boolean {
   return time >= start && time <= end;
 }
 
-function matchesService(
-  res: ReservationWithJoins,
-  filter: FloorServiceFilter,
-): boolean {
+function matchesService(res: ReservationWithJoins, filter: FloorServiceFilter): boolean {
   if (filter === 'all') return true;
   const shiftName = res.shifts?.name?.toLowerCase() ?? '';
   if (filter === 'lunch') {
@@ -47,24 +44,30 @@ function matchesService(
   return timeInRange(res.time_slot, DINNER_START, DINNER_END);
 }
 
-// ─── Status computation ───────────────────────────────────────────────────────
+// ─── Status helpers ───────────────────────────────────────────────────────────
 
-function computeStatus(
+// Priority for picking the "best" reservation to determine visual table status.
+// seated > confirmed > pending (higher = wins).
+const STATUS_PRIORITY: Record<string, number> = { seated: 3, confirmed: 2, pending: 1 };
+
+function computeTableStatus(
   tableRow: TableRow | undefined,
-  reservation: ReservationWithJoins | undefined,
+  reservationStatus: string | undefined,
 ): FloorTableStatus {
   if (!tableRow || tableRow.status === 'unavailable') return 'unavailable';
-  if (!reservation) return 'free';
-  if (reservation.status === 'seated') return 'occupied';
-  if (reservation.status === 'confirmed' || reservation.status === 'pending') return 'reserved';
+  if (!reservationStatus) return 'free';
+  if (reservationStatus === 'seated') return 'occupied';
+  if (reservationStatus === 'confirmed' || reservationStatus === 'pending') return 'reserved';
   return 'free';
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// ─── Hook interface ───────────────────────────────────────────────────────────
 
 export interface UseFloorPlanResult {
   loading: boolean;
   error: string | null;
+  actionError: string | null;
+  updatingReservationId: string | null;
   tables: FloorTableWithState[];
   labels: FloorLabelLayout[];
   reservations: ReservationWithJoins[];
@@ -76,26 +79,40 @@ export interface UseFloorPlanResult {
   setSelectedTable: (t: FloorTableWithState | null) => void;
   refresh: () => void;
   assignReservationToTable: (reservationId: string, tableId: string) => Promise<void>;
+  updateReservationStatus: (reservationId: string, status: ReservationStatus) => Promise<boolean>;
+  seatReservation: (reservationId: string) => Promise<boolean>;
+  completeReservation: (reservationId: string) => Promise<boolean>;
+  markNoShow: (reservationId: string) => Promise<boolean>;
+  cancelReservation: (reservationId: string) => Promise<boolean>;
+  clearActionError: () => void;
 }
 
-export function useFloorPlan(): UseFloorPlanResult {
-  const [loading, setLoading]               = useState(true);
-  const [error, setError]                   = useState<string | null>(null);
-  const [dbTables, setDbTables]             = useState<TableRow[]>([]);
-  const [reservations, setReservations]     = useState<ReservationWithJoins[]>([]);
-  const [selectedDate, setSelectedDate]     = useState(getTodayDateString());
-  const [serviceFilter, setServiceFilter]   = useState<FloorServiceFilter>('all');
-  const [selectedTable, setSelectedTable]   = useState<FloorTableWithState | null>(null);
-  const [restaurantId, setRestaurantId]     = useState<string | null>(null);
+type RtEntry = { reservation_id: string; table_id: string };
 
-  const restaurantIdRef  = useRef<string | null>(null);
-  const selectedDateRef  = useRef(selectedDate);
-  const channelResRef    = useRef<RealtimeChannel | null>(null);
-  const channelTabRef    = useRef<RealtimeChannel | null>(null);
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useFloorPlan(): UseFloorPlanResult {
+  const [loading, setLoading]                           = useState(true);
+  const [error, setError]                               = useState<string | null>(null);
+  const [actionError, setActionError]                   = useState<string | null>(null);
+  const [updatingReservationId, setUpdatingReservationId] = useState<string | null>(null);
+  const [dbTables, setDbTables]                         = useState<TableRow[]>([]);
+  const [reservations, setReservations]                 = useState<ReservationWithJoins[]>([]);
+  const [rtEntries, setRtEntries]                       = useState<RtEntry[]>([]);
+  const [selectedDate, setSelectedDate]                 = useState(getTodayDateString());
+  const [serviceFilter, setServiceFilter]               = useState<FloorServiceFilter>('all');
+  // Store layout id (number) instead of full object — selectedTable derived freshly each render.
+  const [selectedTableLayoutId, setSelectedTableLayoutId] = useState<number | null>(null);
+  const [restaurantId, setRestaurantId]                 = useState<string | null>(null);
+
+  const restaurantIdRef = useRef<string | null>(null);
+  const selectedDateRef = useRef(selectedDate);
+  const channelResRef   = useRef<RealtimeChannel | null>(null);
+  const channelTabRef   = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
 
-  // ── Fetch tables from DB ─────────────────────────────────────────────────
+  // ── Fetch tables ──────────────────────────────────────────────────────────
 
   const fetchTables = useCallback(async (resId: string): Promise<void> => {
     const { data, error: e } = await supabase
@@ -106,7 +123,7 @@ export function useFloorPlan(): UseFloorPlanResult {
     setDbTables(data ?? []);
   }, []);
 
-  // ── Fetch reservations for date ──────────────────────────────────────────
+  // ── Fetch reservations + reservation_tables ───────────────────────────────
 
   const fetchReservations = useCallback(async (resId: string, date: string): Promise<void> => {
     const { data, error: e } = await supabase
@@ -117,8 +134,21 @@ export function useFloorPlan(): UseFloorPlanResult {
       .not('status', 'in', '("cancelled","noshow","completed")')
       .order('time_slot', { ascending: true });
     if (e) { setError(e.message); return; }
-    setReservations((data as unknown as ReservationWithJoins[] | null) ?? []);
+    const rows = (data as unknown as ReservationWithJoins[] | null) ?? [];
+    setReservations(rows);
     setError(null);
+
+    // Enrich with secondary tables (silently ignore pre-migration)
+    const ids = rows.map((r) => r.id);
+    if (ids.length > 0) {
+      const { data: rtData } = await supabase
+        .from('reservation_tables')
+        .select('reservation_id, table_id')
+        .in('reservation_id', ids);
+      setRtEntries((rtData as RtEntry[] | null) ?? []);
+    } else {
+      setRtEntries([]);
+    }
   }, []);
 
   const refresh = useCallback((): void => {
@@ -127,7 +157,7 @@ export function useFloorPlan(): UseFloorPlanResult {
     void fetchReservations(restaurantIdRef.current, selectedDateRef.current);
   }, [fetchTables, fetchReservations]);
 
-  // ── Initial load ─────────────────────────────────────────────────────────
+  // ── Initial load ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     const init = async () => {
@@ -154,7 +184,7 @@ export function useFloorPlan(): UseFloorPlanResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Reload reservations when date changes ────────────────────────────────
+  // ── Reload on date change ─────────────────────────────────────────────────
 
   useEffect(() => {
     if (restaurantIdRef.current) {
@@ -162,7 +192,7 @@ export function useFloorPlan(): UseFloorPlanResult {
     }
   }, [selectedDate, fetchReservations]);
 
-  // ── Realtime ─────────────────────────────────────────────────────────────
+  // ── Realtime ──────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -190,7 +220,7 @@ export function useFloorPlan(): UseFloorPlanResult {
     return cleanup;
   }, [restaurantId, fetchReservations, fetchTables]);
 
-  // ── Assign reservation to table ──────────────────────────────────────────
+  // ── Assign reservation to table ───────────────────────────────────────────
 
   const assignReservationToTable = useCallback(async (reservationId: string, tableId: string): Promise<void> => {
     const { error: e } = await supabase
@@ -201,49 +231,151 @@ export function useFloorPlan(): UseFloorPlanResult {
     refresh();
   }, [refresh]);
 
-  // ── Join layout + DB state + reservations ────────────────────────────────
+  // ── Status update actions ─────────────────────────────────────────────────
+
+  const updateReservationStatus = useCallback(async (
+    reservationId: string,
+    status: ReservationStatus,
+  ): Promise<boolean> => {
+    setUpdatingReservationId(reservationId);
+    setActionError(null);
+    try {
+      const { error: e } = await supabase
+        .from('reservations')
+        .update({ status })
+        .eq('id', reservationId);
+      if (e) { setActionError(e.message); return false; }
+      refresh();
+      return true;
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Erreur inconnue.');
+      return false;
+    } finally {
+      setUpdatingReservationId(null);
+    }
+  }, [refresh]);
+
+  const seatReservation     = useCallback((id: string) => updateReservationStatus(id, 'seated'),    [updateReservationStatus]);
+  const completeReservation = useCallback((id: string) => updateReservationStatus(id, 'completed'), [updateReservationStatus]);
+  const markNoShow          = useCallback((id: string) => updateReservationStatus(id, 'noshow'),    [updateReservationStatus]);
+  const cancelReservation   = useCallback((id: string) => updateReservationStatus(id, 'cancelled'), [updateReservationStatus]);
+
+  const clearActionError = useCallback(() => setActionError(null), []);
+
+  // ── Join layout + DB state + reservations ─────────────────────────────────
 
   const filteredReservations = reservations.filter((r) => matchesService(r, serviceFilter));
+  const filteredResIds       = new Set(filteredReservations.map((r) => r.id));
+  const resById              = new Map(filteredReservations.map((r) => [r.id, r]));
+  const dbById               = new Map<string, TableRow>(dbTables.map((t) => [t.id, t]));
+  const dbByLabel            = new Map<string, TableRow>(dbTables.map((t) => [t.label, t]));
 
-  const dbByLabel = new Map<string, TableRow>(dbTables.map((t) => [t.label, t]));
-  const resByTableId = new Map<string, ReservationWithJoins>();
+  // Compute display table-labels per reservation (for multi-table display in panel)
+  const tableLabelsForRes = new Map<string, string[]>();
   for (const res of filteredReservations) {
-    if (res.table_id) resByTableId.set(res.table_id, res);
+    if (res.table_id) {
+      const t = dbById.get(res.table_id);
+      if (t) {
+        const labels = tableLabelsForRes.get(res.id) ?? [];
+        if (!labels.includes(t.label)) labels.push(t.label);
+        tableLabelsForRes.set(res.id, labels);
+      }
+    }
+  }
+  for (const rt of rtEntries) {
+    if (filteredResIds.has(rt.reservation_id)) {
+      const t = dbById.get(rt.table_id);
+      if (t) {
+        const labels = tableLabelsForRes.get(rt.reservation_id) ?? [];
+        if (!labels.includes(t.label)) labels.push(t.label);
+        tableLabelsForRes.set(rt.reservation_id, labels);
+      }
+    }
   }
 
-  const tables: FloorTableWithState[] = LA_MAISON_FLOOR_TABLES.map((layout) => {
-    const dbRow   = dbByLabel.get(String(layout.id));
-    const res     = dbRow ? resByTableId.get(dbRow.id) : undefined;
-    const status  = computeStatus(dbRow, res);
-
-    let reservation: FloorPlanReservation | null = null;
-    if (res) {
-      const guest = res.guests;
-      const guestName = guest
-        ? [guest.first_name, guest.last_name].filter(Boolean).join(' ') || null
-        : null;
-      reservation = {
-        id:        res.id,
-        timeSlot:  res.time_slot,
-        partySize: res.party_size,
-        status:    res.status,
-        guestName,
-        shiftName: res.shifts?.name ?? null,
-      };
+  // Build reservationsByTableId — multiple reservations possible per table in a day
+  const reservationsByTableId = new Map<string, ReservationWithJoins[]>();
+  for (const res of filteredReservations) {
+    if (res.table_id) {
+      const existing = reservationsByTableId.get(res.table_id) ?? [];
+      existing.push(res);
+      reservationsByTableId.set(res.table_id, existing);
     }
+  }
+  for (const rt of rtEntries) {
+    if (filteredResIds.has(rt.reservation_id)) {
+      const res = resById.get(rt.reservation_id);
+      if (res) {
+        const existing = reservationsByTableId.get(rt.table_id) ?? [];
+        if (!existing.some((r) => r.id === res.id)) {
+          existing.push(res);
+          reservationsByTableId.set(rt.table_id, existing);
+        }
+      }
+    }
+  }
+
+  // Convert DB row to FloorPlanReservation summary
+  function toFloorPlanReservation(res: ReservationWithJoins): FloorPlanReservation {
+    const guest     = res.guests;
+    const guestName = guest
+      ? [guest.first_name, guest.last_name].filter(Boolean).join(' ') || null
+      : null;
+    return {
+      id:          res.id,
+      timeSlot:    res.time_slot,
+      partySize:   res.party_size,
+      status:      res.status,
+      source:      res.source,
+      guestName,
+      shiftName:   res.shifts?.name ?? null,
+      notes:       res.notes,
+      tableLabels: tableLabelsForRes.get(res.id) ?? [],
+    };
+  }
+
+  // Build FloorTableWithState array
+  const tables: FloorTableWithState[] = LA_MAISON_FLOOR_TABLES.map((layout) => {
+    const dbRow       = dbByLabel.get(String(layout.id));
+    const resForTable = dbRow ? (reservationsByTableId.get(dbRow.id) ?? []) : [];
+
+    // Pick highest-priority reservation for visual status
+    const bestRes = resForTable.reduce<ReservationWithJoins | null>((best, r) => {
+      if (!best) return r;
+      return (STATUS_PRIORITY[r.status] ?? 0) > (STATUS_PRIORITY[best.status] ?? 0) ? r : best;
+    }, null);
+
+    const computedStatus = computeTableStatus(dbRow, bestRes?.status);
+
+    const floorReservations = resForTable
+      .slice()
+      .sort((a, b) => a.time_slot.localeCompare(b.time_slot))
+      .map(toFloorPlanReservation);
 
     return {
       ...layout,
       dbId:           dbRow?.id ?? null,
       dbStatus:       dbRow?.status ?? 'free',
-      computedStatus: status,
-      reservation,
+      computedStatus,
+      reservation:    floorReservations[0] ?? null,
+      reservations:   floorReservations,
     };
   });
+
+  // selectedTable is derived from the fresh tables array — never stale after refresh
+  const selectedTable = selectedTableLayoutId !== null
+    ? (tables.find((t) => t.id === selectedTableLayoutId) ?? null)
+    : null;
+
+  const setSelectedTable = useCallback((t: FloorTableWithState | null) => {
+    setSelectedTableLayoutId(t?.id ?? null);
+  }, []);
 
   return {
     loading,
     error,
+    actionError,
+    updatingReservationId,
     tables,
     labels: LA_MAISON_FLOOR_LABELS,
     reservations: filteredReservations,
@@ -255,5 +387,11 @@ export function useFloorPlan(): UseFloorPlanResult {
     setSelectedTable,
     refresh,
     assignReservationToTable,
+    updateReservationStatus,
+    seatReservation,
+    completeReservation,
+    markNoShow,
+    cancelReservation,
+    clearActionError,
   };
 }

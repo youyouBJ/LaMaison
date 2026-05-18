@@ -13,13 +13,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius } from '../../theme';
 import { floorPlanColors } from '../../utils/floorPlanLayout';
+import { getReservationStatusLabel, getReservationStatusColors } from '../../utils/reservationStatus';
 import DateSelector from '../../components/DateSelector';
 import FloorCanvas from '../../components/FloorCanvas';
 import CreateReservationForTableForm from '../../components/CreateReservationForTableForm';
 import { useFloorPlan } from '../../hooks/useFloorPlan';
-import type { FloorTableWithState, FloorServiceFilter } from '../../types/floor';
+import type { FloorTableWithState, FloorPlanReservation, FloorServiceFilter } from '../../types/floor';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+// ─── Service filter chips ─────────────────────────────────────────────────────
 
 const SERVICE_FILTERS: { key: FloorServiceFilter; label: string }[] = [
   { key: 'all',    label: 'Tous' },
@@ -27,12 +30,63 @@ const SERVICE_FILTERS: { key: FloorServiceFilter; label: string }[] = [
   { key: 'dinner', label: 'Dîner' },
 ];
 
+// ─── Legend ───────────────────────────────────────────────────────────────────
+
 const LEGEND: { status: string; color: string; label: string }[] = [
   { status: 'free',        color: floorPlanColors.statusFree,        label: 'Libre' },
   { status: 'reserved',    color: floorPlanColors.statusReserved,    label: 'Réservée' },
   { status: 'occupied',    color: floorPlanColors.statusOccupied,    label: 'À table' },
   { status: 'unavailable', color: floorPlanColors.statusUnavailable, label: 'Indisponible' },
 ];
+
+// ─── Action button ────────────────────────────────────────────────────────────
+
+type ActionVariant = 'seat' | 'complete' | 'confirm' | 'noshow' | 'cancel';
+
+const ACTION_COLORS: Record<ActionVariant, { bg: string; border: string; text: string }> = {
+  seat:     { bg: colors.cta,             border: colors.cta,        text: colors.textOnDark },
+  complete: { bg: colors.statusFreeLight, border: colors.statusFree, text: colors.statusFree },
+  confirm:  { bg: colors.goldLight,       border: colors.gold,       text: colors.gold },
+  noshow:   { bg: colors.surface,         border: colors.border,     text: colors.textMuted },
+  cancel:   { bg: colors.ctaLight,        border: colors.cta,        text: colors.cta },
+};
+
+function ActionButton({
+  label,
+  variant,
+  onPress,
+}: {
+  label: string;
+  variant: ActionVariant;
+  onPress: () => void;
+}): React.JSX.Element {
+  const { bg, border, text } = ACTION_COLORS[variant];
+  return (
+    <TouchableOpacity
+      style={[styles.actionBtn, { backgroundColor: bg, borderColor: border }]}
+      onPress={onPress}
+      activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Text style={[styles.actionBtnText, { color: text }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Guest label helper ───────────────────────────────────────────────────────
+
+function guestLabel(res: FloorPlanReservation): string {
+  if (res.guestName) return res.guestName;
+  if (res.source === 'walkin') return 'Client de passage';
+  return 'Client sans nom';
+}
+
+// ─── Detail panel height ──────────────────────────────────────────────────────
+
+const DETAIL_PANEL_HEIGHT = 360;
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function FloorPlanScreen(): React.JSX.Element {
   const {
@@ -47,6 +101,14 @@ export default function FloorPlanScreen(): React.JSX.Element {
     selectedTable,
     setSelectedTable,
     refresh,
+    actionError,
+    updatingReservationId,
+    clearActionError,
+    seatReservation,
+    completeReservation,
+    markNoShow,
+    cancelReservation,
+    updateReservationStatus,
   } = useFloorPlan();
 
   const [canvasLayout, setCanvasLayout] = useState<{ w: number; h: number } | null>(null);
@@ -54,30 +116,67 @@ export default function FloorPlanScreen(): React.JSX.Element {
   const [successMsg, setSuccessMsg]     = useState<string | null>(null);
   const successTimeoutRef               = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const showSuccess = useCallback((msg: string) => {
+    if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+    setSuccessMsg(msg);
+    successTimeoutRef.current = setTimeout(() => setSuccessMsg(null), 4000);
+  }, []);
+
   const handleLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     setCanvasLayout({ w: width, h: height });
   };
 
+  const handleClosePanel = useCallback(() => {
+    setSelectedTable(null);
+    setShowForm(false);
+    setSuccessMsg(null);
+    clearActionError();
+  }, [setSelectedTable, clearActionError]);
+
   const handleTablePress = (table: FloorTableWithState) => {
     if (selectedTable?.id === table.id) {
-      setSelectedTable(null);
-      setShowForm(false);
-      setSuccessMsg(null);
+      handleClosePanel();
     } else {
       setSelectedTable(table);
       setShowForm(false);
       setSuccessMsg(null);
+      clearActionError();
     }
   };
 
   const handleFormSuccess = useCallback((_reservationId: string) => {
     setShowForm(false);
     refresh();
-    if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
-    setSuccessMsg('Réservation créée avec succès.');
-    successTimeoutRef.current = setTimeout(() => setSuccessMsg(null), 4000);
-  }, [refresh]);
+    showSuccess('Réservation créée avec succès.');
+  }, [refresh, showSuccess]);
+
+  // ── Service action handlers ───────────────────────────────────────────────
+
+  const handleSeat = useCallback(async (reservationId: string) => {
+    const ok = await seatReservation(reservationId);
+    if (ok) showSuccess('Réservation mise à table.');
+  }, [seatReservation, showSuccess]);
+
+  const handleComplete = useCallback(async (reservationId: string) => {
+    const ok = await completeReservation(reservationId);
+    if (ok) showSuccess('Réservation terminée.');
+  }, [completeReservation, showSuccess]);
+
+  const handleNoShow = useCallback(async (reservationId: string) => {
+    const ok = await markNoShow(reservationId);
+    if (ok) showSuccess('No-show enregistré.');
+  }, [markNoShow, showSuccess]);
+
+  const handleCancel = useCallback(async (reservationId: string) => {
+    const ok = await cancelReservation(reservationId);
+    if (ok) showSuccess('Réservation annulée.');
+  }, [cancelReservation, showSuccess]);
+
+  const handleConfirm = useCallback(async (reservationId: string) => {
+    const ok = await updateReservationStatus(reservationId, 'confirmed');
+    if (ok) showSuccess('Réservation confirmée.');
+  }, [updateReservationStatus, showSuccess]);
 
   return (
     <>
@@ -96,15 +195,13 @@ export default function FloorPlanScreen(): React.JSX.Element {
         </TouchableOpacity>
       </View>
 
-      {/* ── Controls (date + service) ──────────────────────────────────────── */}
+      {/* ── Controls ──────────────────────────────────────────────────────── */}
       <View style={styles.controls}>
         <DateSelector
           value={selectedDate}
           onChange={setSelectedDate}
           showQuickActions
         />
-
-        {/* Service chips */}
         <View style={styles.chipRow}>
           {SERVICE_FILTERS.map(({ key, label }) => (
             <TouchableOpacity
@@ -121,8 +218,6 @@ export default function FloorPlanScreen(): React.JSX.Element {
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* Legend */}
         <View style={styles.legend}>
           {LEGEND.map(({ status, color, label }) => (
             <View key={status} style={styles.legendItem}>
@@ -133,7 +228,7 @@ export default function FloorPlanScreen(): React.JSX.Element {
         </View>
       </View>
 
-      {/* ── Canvas area ─────────────────────────────────────────────────────── */}
+      {/* ── Canvas ────────────────────────────────────────────────────────── */}
       <View style={styles.canvasArea} onLayout={handleLayout}>
         {loading ? (
           <View style={styles.center}>
@@ -155,19 +250,26 @@ export default function FloorPlanScreen(): React.JSX.Element {
         ) : null}
       </View>
 
-      {/* ── Detail panel ───────────────────────────────────────────────────── */}
+      {/* ── Detail panel ──────────────────────────────────────────────────── */}
       {selectedTable ? (
         <TableDetailPanel
           table={selectedTable}
           successMsg={successMsg}
-          onClose={() => { setSelectedTable(null); setShowForm(false); setSuccessMsg(null); }}
+          actionError={actionError}
+          updatingReservationId={updatingReservationId}
+          onClose={handleClosePanel}
           onAddReservation={() => setShowForm(true)}
+          onSeat={(id) => { void handleSeat(id); }}
+          onComplete={(id) => { void handleComplete(id); }}
+          onConfirm={(id) => { void handleConfirm(id); }}
+          onNoShow={(id) => { void handleNoShow(id); }}
+          onCancel={(id) => { void handleCancel(id); }}
         />
       ) : null}
 
     </SafeAreaView>
 
-    {/* ── Form modal ─────────────────────────────────────────────────────── */}
+    {/* ── Form modal ────────────────────────────────────────────────────── */}
     {selectedTable && selectedTable.dbId ? (
       <Modal
         visible={showForm}
@@ -193,50 +295,64 @@ export default function FloorPlanScreen(): React.JSX.Element {
   );
 }
 
-// ─── Detail panel ─────────────────────────────────────────────────────────────
-
-const DETAIL_PANEL_HEIGHT = 240;
+// ─── Table detail panel ───────────────────────────────────────────────────────
 
 function TableDetailPanel({
   table,
   successMsg,
+  actionError,
+  updatingReservationId,
   onClose,
   onAddReservation,
+  onSeat,
+  onComplete,
+  onConfirm,
+  onNoShow,
+  onCancel,
 }: {
   table: FloorTableWithState;
   successMsg: string | null;
+  actionError: string | null;
+  updatingReservationId: string | null;
   onClose: () => void;
   onAddReservation: () => void;
+  onSeat: (id: string) => void;
+  onComplete: (id: string) => void;
+  onConfirm: (id: string) => void;
+  onNoShow: (id: string) => void;
+  onCancel: (id: string) => void;
 }): React.JSX.Element {
-  const res = table.reservation;
-
-  const statusLabel: Record<string, string> = {
+  const STATUS_LABEL: Record<string, string> = {
     free:        'Libre',
     reserved:    'Réservée',
     occupied:    'À table',
     unavailable: 'Indisponible',
   };
-
-  const statusColor: Record<string, string> = {
+  const STATUS_COLOR: Record<string, string> = {
     free:        colors.statusFree,
     reserved:    colors.statusReserved,
     occupied:    colors.statusOccupied,
     unavailable: colors.statusUnavailable,
   };
 
+  const statusColor = STATUS_COLOR[table.computedStatus] ?? colors.textMuted;
+
   return (
     <View style={styles.detailPanel}>
-      {/* Panel header */}
+
+      {/* Header */}
       <View style={styles.detailHeader}>
-        <View>
+        <View style={styles.detailHeaderLeft}>
           <Text style={styles.detailTitle}>Table {table.id}</Text>
-          <Text style={styles.detailSub}>{table.zone.replace(/_/g, ' ')}</Text>
+          <Text style={styles.detailSub}>
+            {table.zone.replace(/_/g, ' ')} · {table.capacity} couvert{table.capacity > 1 ? 's' : ''}
+          </Text>
         </View>
         <View style={styles.detailHeaderRight}>
-          <View style={[styles.statusBadge, { backgroundColor: `${statusColor[table.computedStatus]}20` }]}>
-            <View style={[styles.statusDot, { backgroundColor: statusColor[table.computedStatus] }]} />
-            <Text style={[styles.statusText, { color: statusColor[table.computedStatus] }]}>
-              {statusLabel[table.computedStatus] ?? table.computedStatus}
+          <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <Text style={[styles.statusText, { color: statusColor }]}>
+              {STATUS_LABEL[table.computedStatus] ?? table.computedStatus}
             </Text>
           </View>
           <TouchableOpacity
@@ -250,15 +366,13 @@ function TableDetailPanel({
         </View>
       </View>
 
-      <View style={styles.detailMeta}>
-        <Text style={styles.metaItem}>
-          <Text style={styles.metaKey}>Capacité : </Text>
-          <Text style={styles.metaVal}>{table.capacity} couvert{table.capacity > 1 ? 's' : ''}</Text>
-        </Text>
-      </View>
-
-      {/* Reservation info + CTA */}
-      <ScrollView style={styles.detailBody} showsVerticalScrollIndicator={false}>
+      {/* Scrollable body */}
+      <ScrollView
+        style={styles.detailBody}
+        contentContainerStyle={styles.detailBodyContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Success banner */}
         {successMsg ? (
           <View style={styles.successBanner}>
             <Ionicons name={'checkmark-circle-outline' as IoniconsName} size={15} color={colors.statusFree} />
@@ -266,30 +380,83 @@ function TableDetailPanel({
           </View>
         ) : null}
 
-        {res ? (
-          <View style={styles.resCard}>
-            <View style={styles.resRow}>
-              <Ionicons name={'time-outline' as IoniconsName} size={14} color={colors.textMuted} />
-              <Text style={styles.resText}>{res.timeSlot}</Text>
-              {res.shiftName ? (
-                <Text style={styles.resHint}> · {res.shiftName}</Text>
-              ) : null}
-            </View>
-            <View style={styles.resRow}>
-              <Ionicons name={'person-outline' as IoniconsName} size={14} color={colors.textMuted} />
-              <Text style={styles.resText}>{res.guestName ?? 'Client non renseigné'}</Text>
-            </View>
-            <View style={styles.resRow}>
-              <Ionicons name={'people-outline' as IoniconsName} size={14} color={colors.textMuted} />
-              <Text style={styles.resText}>{res.partySize} couvert{res.partySize > 1 ? 's' : ''}</Text>
-            </View>
+        {/* Error banner */}
+        {actionError ? (
+          <View style={styles.errorBanner}>
+            <Ionicons name={'alert-circle-outline' as IoniconsName} size={15} color={colors.cta} />
+            <Text style={styles.errorBannerText}>{actionError}</Text>
           </View>
-        ) : (
+        ) : null}
+
+        {/* Reservation list */}
+        {table.reservations.length === 0 ? (
           <Text style={styles.noRes}>Aucune réservation assignée</Text>
+        ) : (
+          table.reservations.map((res) => {
+            const isUpdating = updatingReservationId === res.id;
+            const { backgroundColor: pillBg, color: pillText } = getReservationStatusColors(res.status);
+
+            return (
+              <View key={res.id} style={styles.resCard}>
+
+                {/* Top row: time chip + info block + status pill */}
+                <View style={styles.resHeaderRow}>
+                  <View style={styles.resTimeChip}>
+                    <Text style={styles.resTimeText}>{res.timeSlot.substring(0, 5)}</Text>
+                  </View>
+                  <View style={styles.resInfoBlock}>
+                    <Text style={styles.resGuestName} numberOfLines={1}>
+                      {guestLabel(res)}
+                    </Text>
+                    <Text style={styles.resMeta} numberOfLines={1}>
+                      {res.partySize} couvert{res.partySize > 1 ? 's' : ''}
+                      {res.tableLabels.length > 1 ? ` · Tables ${res.tableLabels.join(', ')}` : ''}
+                      {res.shiftName ? ` · ${res.shiftName}` : ''}
+                    </Text>
+                    {res.notes ? (
+                      <Text style={styles.resNotes} numberOfLines={2}>{res.notes}</Text>
+                    ) : null}
+                  </View>
+                  <View style={[styles.resPill, { backgroundColor: pillBg }]}>
+                    <Text style={[styles.resPillText, { color: pillText }]}>
+                      {getReservationStatusLabel(res.status)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Actions */}
+                {isUpdating ? (
+                  <View style={styles.updatingRow}>
+                    <ActivityIndicator size="small" color={colors.gold} />
+                    <Text style={styles.updatingText}>Mise à jour…</Text>
+                  </View>
+                ) : (
+                  <View style={styles.actionsRow}>
+                    {res.status === 'pending' && (
+                      <ActionButton label="Confirmer" variant="confirm" onPress={() => onConfirm(res.id)} />
+                    )}
+                    {(res.status === 'pending' || res.status === 'confirmed') && (
+                      <ActionButton label="À table" variant="seat" onPress={() => onSeat(res.id)} />
+                    )}
+                    {res.status === 'seated' && (
+                      <ActionButton label="Terminer" variant="complete" onPress={() => onComplete(res.id)} />
+                    )}
+                    {(res.status === 'pending' || res.status === 'confirmed') && (
+                      <ActionButton label="No-show" variant="noshow" onPress={() => onNoShow(res.id)} />
+                    )}
+                    {(res.status === 'pending' || res.status === 'confirmed' || res.status === 'seated') && (
+                      <ActionButton label="Annuler" variant="cancel" onPress={() => onCancel(res.id)} />
+                    )}
+                  </View>
+                )}
+
+              </View>
+            );
+          })
         )}
       </ScrollView>
 
-      {/* Add reservation CTA */}
+      {/* Footer CTA */}
       {table.dbId ? (
         <TouchableOpacity
           style={styles.addResBtn}
@@ -311,30 +478,24 @@ function TableDetailPanel({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  safe: { flex: 1, backgroundColor: colors.background },
 
   // Header
   header: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
     paddingHorizontal: spacing.xl,
-    paddingTop:     spacing.md,
-    paddingBottom:  spacing.sm,
+    paddingTop:        spacing.md,
+    paddingBottom:     spacing.sm,
   },
-  title: {
-    ...typography.h1,
-    color: colors.textPrimary,
-  },
+  title: { ...typography.h1, color: colors.textPrimary },
   refreshBtn: {
-    padding: spacing.sm,
-    borderRadius: radius.sm,
+    padding:         spacing.sm,
+    borderRadius:    radius.sm,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth:     1,
+    borderColor:     colors.border,
   },
 
   // Controls
@@ -342,11 +503,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom:     spacing.sm,
   },
-  chipRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
+  chipRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   chip: {
     paddingHorizontal: spacing.lg,
     paddingVertical:   spacing.xs,
@@ -355,189 +512,150 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  chipActive: {
-    backgroundColor: colors.cta,
-    borderColor:     colors.cta,
-  },
-  chipText: {
-    ...typography.small,
-    color: colors.textMuted,
-    fontFamily: 'Inter_500Medium',
-  },
-  chipTextActive: {
-    color: colors.textOnDark,
-  },
+  chipActive: { backgroundColor: colors.cta, borderColor: colors.cta },
+  chipText: { ...typography.small, color: colors.textMuted, fontFamily: 'Inter_500Medium' },
+  chipTextActive: { color: colors.textOnDark },
 
   // Legend
-  legend: {
-    flexDirection: 'row',
-    flexWrap:      'wrap',
-    gap:           spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.xs,
-  },
-  legendDot: {
-    width:        8,
-    height:       8,
-    borderRadius: 4,
-  },
-  legendText: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingVertical: spacing.xs },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { ...typography.small, color: colors.textMuted },
 
   // Canvas
-  canvasArea: {
-    flex: 1,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.cta,
-    textAlign: 'center',
-    paddingHorizontal: spacing.xl,
-  },
+  canvasArea: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  errorText: { ...typography.body, color: colors.cta, textAlign: 'center', paddingHorizontal: spacing.xl },
 
-  // Detail panel
+  // ── Detail panel ────────────────────────────────────────────────────────────
   detailPanel: {
-    height:          DETAIL_PANEL_HEIGHT,
-    backgroundColor: colors.surface,
-    borderTopWidth:  1,
-    borderTopColor:  colors.border,
+    height:            DETAIL_PANEL_HEIGHT,
+    backgroundColor:   colors.surface,
+    borderTopWidth:    1,
+    borderTopColor:    colors.border,
     paddingHorizontal: spacing.xl,
-    paddingTop:      spacing.md,
-    shadowColor:     colors.primary,
-    shadowOffset:    { width: 0, height: -2 },
-    shadowOpacity:   0.08,
-    shadowRadius:    8,
-    elevation:       8,
+    paddingTop:        spacing.md,
+    paddingBottom:     spacing.sm,
+    shadowColor:       colors.primary,
+    shadowOffset:      { width: 0, height: -2 },
+    shadowOpacity:     0.08,
+    shadowRadius:      8,
+    elevation:         8,
   },
   detailHeader: {
     flexDirection:  'row',
     justifyContent: 'space-between',
     alignItems:     'flex-start',
-    marginBottom:   spacing.xs,
+    marginBottom:   spacing.sm,
   },
-  detailTitle: {
-    ...typography.h2,
-    color: colors.textPrimary,
-  },
-  detailSub: {
-    ...typography.small,
-    color: colors.textMuted,
-    textTransform: 'capitalize',
-  },
-  detailHeaderRight: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.sm,
-  },
+  detailHeaderLeft: { flex: 1 },
+  detailTitle: { ...typography.h2, color: colors.textPrimary },
+  detailSub: { ...typography.small, color: colors.textMuted, textTransform: 'capitalize' },
+  detailHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   statusBadge: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             spacing.xs,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing.xs,
     paddingHorizontal: spacing.sm,
-    paddingVertical:  spacing.xs,
-    borderRadius:    radius.xl,
+    paddingVertical:   spacing.xs,
+    borderRadius:      radius.xl,
   },
-  statusDot: {
-    width:        6,
-    height:       6,
-    borderRadius: 3,
-  },
-  statusText: {
-    ...typography.small,
-    fontFamily: 'Inter_500Medium',
-  },
-  closeBtn: {
-    padding: spacing.xs,
-  },
-  detailMeta: {
-    marginBottom: spacing.xs,
-  },
-  metaItem: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  metaKey: {
-    color: colors.textMuted,
-  },
-  metaVal: {
-    color: colors.textPrimary,
-  },
-  detailBody: {
-    flex: 1,
-  },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { ...typography.small, fontFamily: 'Inter_500Medium' },
+  closeBtn: { padding: spacing.xs },
 
-  // Reservation card in panel
+  // Scrollable body
+  detailBody: { flex: 1 },
+  detailBodyContent: { paddingBottom: spacing.xs },
+
+  // No reservation
+  noRes: { ...typography.small, color: colors.textMuted, fontStyle: 'italic', paddingVertical: spacing.sm },
+
+  // Reservation card
   resCard: {
     backgroundColor: colors.surfaceWarm,
     borderRadius:    radius.md,
     borderWidth:     1,
     borderColor:     colors.borderLight,
     padding:         spacing.md,
-    gap:             spacing.xs,
+    marginBottom:    spacing.sm,
   },
-  resRow: {
+  resHeaderRow: {
     flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.xs,
+    alignItems:    'flex-start',
+    gap:           spacing.sm,
+    marginBottom:  spacing.sm,
   },
-  resText: {
-    ...typography.small,
-    color: colors.textPrimary,
-  },
-  resHint: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-  viewResBtn: {
-    marginTop:       spacing.sm,
-    paddingVertical: spacing.sm,
+  resTimeChip: {
+    backgroundColor: colors.goldLight,
     borderRadius:    radius.sm,
-    backgroundColor: colors.border,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   spacing.xs,
+    minWidth:        46,
     alignItems:      'center',
-    opacity:         0.5,
+    flexShrink:      0,
   },
-  viewResBtnText: {
-    ...typography.small,
-    color: colors.textMuted,
-    fontFamily: 'Inter_500Medium',
+  resTimeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize:   typography.small.fontSize,
+    color:      colors.gold,
   },
-  noRes: {
-    ...typography.small,
-    color: colors.textMuted,
-    fontStyle: 'italic',
-    paddingVertical: spacing.sm,
+  resInfoBlock: { flex: 1 },
+  resGuestName: { ...typography.bodyMedium, color: colors.textPrimary, marginBottom: 2 },
+  resMeta: { ...typography.small, color: colors.textMuted },
+  resNotes: { ...typography.small, color: colors.textMuted, fontStyle: 'italic', marginTop: 2 },
+  resPill: {
+    borderRadius:      radius.xl,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   2,
+    flexShrink:        0,
+    alignSelf:         'flex-start',
   },
+  resPillText: { ...typography.label },
 
-  // Success banner in detail panel
+  // Action buttons row
+  actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  actionBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical:   6,
+    borderRadius:      radius.xl,
+    borderWidth:       1,
+  },
+  actionBtnText: { ...typography.small, fontFamily: 'Inter_500Medium' },
+
+  // Updating spinner row
+  updatingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  updatingText: { ...typography.small, color: colors.textMuted },
+
+  // Success banner
   successBanner: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             spacing.xs,
-    backgroundColor: colors.statusFreeLight,
-    borderRadius:    radius.sm,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing.xs,
+    backgroundColor:   colors.statusFreeLight,
+    borderRadius:      radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical:   spacing.sm,
-    marginBottom:    spacing.sm,
-    borderWidth:     1,
-    borderColor:     colors.statusFree,
+    marginBottom:      spacing.sm,
+    borderWidth:       1,
+    borderColor:       colors.statusFree,
   },
-  successText: {
-    ...typography.small,
-    color:      colors.statusFree,
-    fontFamily: 'Inter_500Medium',
-    flex:       1,
+  successText: { ...typography.small, color: colors.statusFree, fontFamily: 'Inter_500Medium', flex: 1 },
+
+  // Error banner
+  errorBanner: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing.xs,
+    backgroundColor:   colors.ctaLight,
+    borderRadius:      radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical:   spacing.sm,
+    marginBottom:      spacing.sm,
+    borderWidth:       1,
+    borderColor:       colors.cta,
   },
+  errorBannerText: { ...typography.small, color: colors.cta, fontFamily: 'Inter_500Medium', flex: 1 },
 
   // Add reservation CTA
   addResBtn: {
@@ -548,25 +666,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cta,
     borderRadius:    radius.md,
     paddingVertical: spacing.sm,
-    marginTop:       spacing.sm,
+    marginTop:       spacing.xs,
   },
-  addResBtnText: {
-    ...typography.bodyMedium,
-    color: colors.textOnDark,
-  },
+  addResBtnText: { ...typography.bodyMedium, color: colors.textOnDark },
   noDbHint: {
     ...typography.small,
-    color:           colors.textMuted,
-    fontStyle:       'italic',
-    textAlign:       'center',
-    marginTop:       spacing.sm,
+    color:     colors.textMuted,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
 
   // Modal
-  modalSafe: {
-    flex:            1,
-    backgroundColor: colors.background,
-  },
+  modalSafe: { flex: 1, backgroundColor: colors.background },
   modalHandle: {
     width:           40,
     height:          4,
