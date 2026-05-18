@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   LayoutChangeEvent,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +15,7 @@ import { colors, typography, spacing, radius } from '../../theme';
 import { floorPlanColors } from '../../utils/floorPlanLayout';
 import DateSelector from '../../components/DateSelector';
 import FloorCanvas from '../../components/FloorCanvas';
+import CreateReservationForTableForm from '../../components/CreateReservationForTableForm';
 import { useFloorPlan } from '../../hooks/useFloorPlan';
 import type { FloorTableWithState, FloorServiceFilter } from '../../types/floor';
 
@@ -48,6 +50,9 @@ export default function FloorPlanScreen(): React.JSX.Element {
   } = useFloorPlan();
 
   const [canvasLayout, setCanvasLayout] = useState<{ w: number; h: number } | null>(null);
+  const [showForm, setShowForm]         = useState(false);
+  const [successMsg, setSuccessMsg]     = useState<string | null>(null);
+  const successTimeoutRef               = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -55,10 +60,27 @@ export default function FloorPlanScreen(): React.JSX.Element {
   };
 
   const handleTablePress = (table: FloorTableWithState) => {
-    setSelectedTable(selectedTable?.id === table.id ? null : table);
+    if (selectedTable?.id === table.id) {
+      setSelectedTable(null);
+      setShowForm(false);
+      setSuccessMsg(null);
+    } else {
+      setSelectedTable(table);
+      setShowForm(false);
+      setSuccessMsg(null);
+    }
   };
 
+  const handleFormSuccess = useCallback((_reservationId: string) => {
+    setShowForm(false);
+    refresh();
+    if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+    setSuccessMsg('Réservation créée avec succès.');
+    successTimeoutRef.current = setTimeout(() => setSuccessMsg(null), 4000);
+  }, [refresh]);
+
   return (
+    <>
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
@@ -137,24 +159,54 @@ export default function FloorPlanScreen(): React.JSX.Element {
       {selectedTable ? (
         <TableDetailPanel
           table={selectedTable}
-          onClose={() => setSelectedTable(null)}
+          successMsg={successMsg}
+          onClose={() => { setSelectedTable(null); setShowForm(false); setSuccessMsg(null); }}
+          onAddReservation={() => setShowForm(true)}
         />
       ) : null}
 
     </SafeAreaView>
+
+    {/* ── Form modal ─────────────────────────────────────────────────────── */}
+    {selectedTable && selectedTable.dbId ? (
+      <Modal
+        visible={showForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowForm(false)}
+      >
+        <SafeAreaView style={styles.modalSafe}>
+          <View style={styles.modalHandle} />
+          <CreateReservationForTableForm
+            tableId={selectedTable.dbId}
+            tableLabel={String(selectedTable.id)}
+            tableCapacity={selectedTable.capacity}
+            initialDate={selectedDate}
+            initialServiceFilter={serviceFilter}
+            onSuccess={handleFormSuccess}
+            onCancel={() => setShowForm(false)}
+          />
+        </SafeAreaView>
+      </Modal>
+    ) : null}
+    </>
   );
 }
 
 // ─── Detail panel ─────────────────────────────────────────────────────────────
 
-const DETAIL_PANEL_HEIGHT = 200;
+const DETAIL_PANEL_HEIGHT = 240;
 
 function TableDetailPanel({
   table,
+  successMsg,
   onClose,
+  onAddReservation,
 }: {
   table: FloorTableWithState;
+  successMsg: string | null;
   onClose: () => void;
+  onAddReservation: () => void;
 }): React.JSX.Element {
   const res = table.reservation;
 
@@ -205,8 +257,15 @@ function TableDetailPanel({
         </Text>
       </View>
 
-      {/* Reservation info */}
+      {/* Reservation info + CTA */}
       <ScrollView style={styles.detailBody} showsVerticalScrollIndicator={false}>
+        {successMsg ? (
+          <View style={styles.successBanner}>
+            <Ionicons name={'checkmark-circle-outline' as IoniconsName} size={15} color={colors.statusFree} />
+            <Text style={styles.successText}>{successMsg}</Text>
+          </View>
+        ) : null}
+
         {res ? (
           <View style={styles.resCard}>
             <View style={styles.resRow}>
@@ -224,15 +283,27 @@ function TableDetailPanel({
               <Ionicons name={'people-outline' as IoniconsName} size={14} color={colors.textMuted} />
               <Text style={styles.resText}>{res.partySize} couvert{res.partySize > 1 ? 's' : ''}</Text>
             </View>
-            {/* Navigation vers la réservation — à brancher lors de l'intégration du stack */}
-            <TouchableOpacity style={styles.viewResBtn} disabled>
-              <Text style={styles.viewResBtnText}>Voir la réservation</Text>
-            </TouchableOpacity>
           </View>
         ) : (
           <Text style={styles.noRes}>Aucune réservation assignée</Text>
         )}
       </ScrollView>
+
+      {/* Add reservation CTA */}
+      {table.dbId ? (
+        <TouchableOpacity
+          style={styles.addResBtn}
+          onPress={onAddReservation}
+          activeOpacity={0.80}
+          accessibilityRole="button"
+          accessibilityLabel="Ajouter une réservation"
+        >
+          <Ionicons name={'add-circle-outline' as IoniconsName} size={16} color={colors.textOnDark} />
+          <Text style={styles.addResBtnText}>Ajouter une réservation</Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.noDbHint}>Table non synchronisée avec la base.</Text>
+      )}
     </View>
   );
 }
@@ -446,5 +517,63 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontStyle: 'italic',
     paddingVertical: spacing.sm,
+  },
+
+  // Success banner in detail panel
+  successBanner: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.xs,
+    backgroundColor: colors.statusFreeLight,
+    borderRadius:    radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical:   spacing.sm,
+    marginBottom:    spacing.sm,
+    borderWidth:     1,
+    borderColor:     colors.statusFree,
+  },
+  successText: {
+    ...typography.small,
+    color:      colors.statusFree,
+    fontFamily: 'Inter_500Medium',
+    flex:       1,
+  },
+
+  // Add reservation CTA
+  addResBtn: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'center',
+    gap:             spacing.sm,
+    backgroundColor: colors.cta,
+    borderRadius:    radius.md,
+    paddingVertical: spacing.sm,
+    marginTop:       spacing.sm,
+  },
+  addResBtnText: {
+    ...typography.bodyMedium,
+    color: colors.textOnDark,
+  },
+  noDbHint: {
+    ...typography.small,
+    color:           colors.textMuted,
+    fontStyle:       'italic',
+    textAlign:       'center',
+    marginTop:       spacing.sm,
+  },
+
+  // Modal
+  modalSafe: {
+    flex:            1,
+    backgroundColor: colors.background,
+  },
+  modalHandle: {
+    width:           40,
+    height:          4,
+    borderRadius:    2,
+    backgroundColor: colors.border,
+    alignSelf:       'center',
+    marginTop:       spacing.sm,
+    marginBottom:    spacing.sm,
   },
 });
