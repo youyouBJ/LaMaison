@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Switch,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -86,13 +87,14 @@ export default function CreateReservationForTableForm({
   const [newLastName, setNewLastName]           = useState('');
   const [newPhone, setNewPhone]                 = useState('');
   const [newEmail, setNewEmail]                 = useState('');
+  const [newVip, setNewVip]                     = useState(false);
 
   const autoSelectedRef = useRef(false);
 
-  // Available shifts for the selected date
-  const availableShifts = shifts.filter((s) =>
-    isDateAllowedForShift(date, s.days_of_week),
-  );
+  // Available shifts for the selected date, sorted by start_time (Déjeuner before Dîner)
+  const availableShifts = shifts
+    .filter((s) => isDateAllowedForShift(date, s.days_of_week))
+    .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   // Pre-select shift once when shifts load
   useEffect(() => {
@@ -152,10 +154,10 @@ export default function CreateReservationForTableForm({
     setSelectedGuestName(null);
     setGuestMode('none');
     setSearchQuery('');
+    setNewVip(false);
   }, []);
 
   const canSubmit = !!date && !!selectedShiftId && !!timeSlot && partySize > 0;
-  const capacityWarning = partySize > tableCapacity && tableCapacity > 0;
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || !timeSlot || !selectedShiftId) return;
@@ -177,6 +179,7 @@ export default function CreateReservationForTableForm({
               lastName:  newLastName.trim()  || undefined,
               phone:     newPhone.trim()     || undefined,
               email:     newEmail.trim()     || undefined,
+              vip:       newVip,
             }
           : undefined,
       });
@@ -186,7 +189,7 @@ export default function CreateReservationForTableForm({
     }
   }, [
     canSubmit, timeSlot, selectedShiftId, date, partySize, notes, status,
-    tableId, selectedGuestId, newFirstName, newLastName, newPhone, newEmail,
+    tableId, selectedGuestId, newFirstName, newLastName, newPhone, newEmail, newVip,
     createReservation, setError, onSuccess,
   ]);
 
@@ -276,14 +279,6 @@ export default function CreateReservationForTableForm({
             </TouchableOpacity>
           </View>
         </View>
-        {capacityWarning ? (
-          <View style={styles.warningBanner}>
-            <Ionicons name={'warning-outline' as IoniconsName} size={14} color={colors.gold} />
-            <Text style={styles.warningText}>
-              Dépasse la capacité estimée de la table ({tableCapacity} couvert{tableCapacity > 1 ? 's' : ''}).
-            </Text>
-          </View>
-        ) : null}
       </View>
 
       {/* ── Section 3 : Client ─────────────────────────────────── */}
@@ -337,7 +332,16 @@ export default function CreateReservationForTableForm({
               autoCapitalize="none"
               returnKeyType="done"
             />
-            <TouchableOpacity onPress={() => setGuestMode('none')} style={styles.textLink}>
+            <View style={styles.vipRow}>
+              <Text style={styles.vipLabel}>Client VIP</Text>
+              <Switch
+                value={newVip}
+                onValueChange={setNewVip}
+                trackColor={{ false: colors.border, true: colors.goldLight }}
+                thumbColor={newVip ? colors.gold : colors.sand}
+              />
+            </View>
+            <TouchableOpacity onPress={() => { setGuestMode('none'); setNewVip(false); }} style={styles.textLink}>
               <Text style={styles.textLinkText}>Annuler</Text>
             </TouchableOpacity>
           </View>
@@ -473,23 +477,6 @@ const styles = StyleSheet.create({
     color: colors.cta,
     flex:  1,
   },
-  warningBanner: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             spacing.sm,
-    backgroundColor: colors.goldLight,
-    borderRadius:    radius.sm,
-    padding:         spacing.sm,
-    marginTop:       spacing.xs,
-    borderWidth:     1,
-    borderColor:     colors.gold,
-  },
-  warningText: {
-    ...typography.small,
-    color: colors.gold,
-    flex:  1,
-  },
-
   // Section card
   section: {
     backgroundColor: colors.surface,
@@ -629,6 +616,16 @@ const styles = StyleSheet.create({
   // Guest — new form
   newGuestForm: {
     gap: spacing.sm,
+  },
+  vipRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+  },
+  vipLabel: {
+    ...typography.body,
+    color: colors.textPrimary,
   },
   textLink: {
     alignSelf:       'flex-start',

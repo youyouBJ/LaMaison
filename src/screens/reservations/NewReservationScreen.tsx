@@ -23,7 +23,7 @@ import DateSelector from '../../components/DateSelector';
 import CalendarPicker from '../../components/CalendarPicker';
 import TimeSlotSelector from '../../components/TimeSlotSelector';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
-import type { GuestRow } from '../../hooks/useCreateReservation';
+import type { GuestRow, TableRow } from '../../hooks/useCreateReservation';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'NewReservation'>;
 
@@ -81,7 +81,10 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const availableShifts = useMemo(
-    () => shifts.filter((s) => isDateAllowedForShift(form.date, s.days_of_week)),
+    () =>
+      shifts
+        .filter((s) => isDateAllowedForShift(form.date, s.days_of_week))
+        .sort((a, b) => a.start_time.localeCompare(b.start_time)),
     [shifts, form.date],
   );
 
@@ -97,6 +100,22 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
         : [],
     [selectedShift],
   );
+
+  const tablesByZone = useMemo(() => {
+    const groups = new Map<string, TableRow[]>();
+    for (const t of tables) {
+      const zone = t.zone.trim() || 'Salle';
+      const existing = groups.get(zone);
+      if (existing !== undefined) {
+        existing.push(t);
+      } else {
+        groups.set(zone, [t]);
+      }
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b, 'fr'))
+      .map(([zone, items]) => ({ zone, items }));
+  }, [tables]);
 
   const setDate = (d: string) =>
     setForm((prev) => ({ ...prev, date: d, selectedShiftId: '', selectedTimeSlot: '' }));
@@ -371,37 +390,37 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
 
             {/* ── Table (optionnel) ── */}
             <SectionCard title="Table">
-              {tables.length === 0 ? (
-                <Text style={styles.infoText}>
-                  Les tables seront assignées depuis le plan de salle.
-                </Text>
-              ) : (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.slotsRow}
+              <Text style={styles.tableHint}>
+                Optionnel, peut être assignée plus tard depuis le plan.
+              </Text>
+              <View style={styles.tableChipRow}>
+                <TouchableOpacity
+                  style={[styles.tableChip, form.selectedTableId === null && styles.tableChipActive]}
+                  onPress={() => setForm((prev) => ({ ...prev, selectedTableId: null }))}
                 >
-                  <TouchableOpacity
-                    style={[styles.slotChip, form.selectedTableId === null && styles.slotChipActive]}
-                    onPress={() => setForm((prev) => ({ ...prev, selectedTableId: null }))}
-                  >
-                    <Text style={[styles.slotText, form.selectedTableId === null && styles.slotTextActive]}>
-                      Aucune
-                    </Text>
-                  </TouchableOpacity>
-                  {tables.map((t) => (
-                    <TouchableOpacity
-                      key={t.id}
-                      style={[styles.slotChip, form.selectedTableId === t.id && styles.slotChipActive]}
-                      onPress={() => setForm((prev) => ({ ...prev, selectedTableId: t.id }))}
-                    >
-                      <Text style={[styles.slotText, form.selectedTableId === t.id && styles.slotTextActive]}>
-                        {t.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
+                  <Text style={[styles.tableChipText, form.selectedTableId === null && styles.tableChipTextActive]}>
+                    Aucune
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {tablesByZone.map(({ zone, items }) => (
+                <View key={zone} style={styles.tableZoneGroup}>
+                  <Text style={styles.tableZoneLabel}>{zone}</Text>
+                  <View style={styles.tableChipRow}>
+                    {items.map((t) => (
+                      <TouchableOpacity
+                        key={t.id}
+                        style={[styles.tableChip, form.selectedTableId === t.id && styles.tableChipActive]}
+                        onPress={() => setForm((prev) => ({ ...prev, selectedTableId: t.id }))}
+                      >
+                        <Text style={[styles.tableChipText, form.selectedTableId === t.id && styles.tableChipTextActive]}>
+                          {t.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
             </SectionCard>
 
             {/* ── Statut & Notes ── */}
@@ -488,9 +507,27 @@ const styles = StyleSheet.create({
   shiftText: { ...typography.bodyMedium, color: colors.textMuted },
   shiftTextActive: { color: colors.cta },
 
-  // Slots
-  slotsRow: { gap: spacing.sm, paddingBottom: spacing.xs },
-  slotChip: {
+  // Table picker
+  tableHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+    fontStyle: 'italic',
+  },
+  tableZoneGroup: {
+    marginTop: spacing.sm,
+  },
+  tableZoneLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
+  },
+  tableChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  tableChip: {
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -498,9 +535,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  slotChipActive: { backgroundColor: colors.goldLight, borderColor: colors.gold },
-  slotText: { ...typography.small, color: colors.textMuted },
-  slotTextActive: { color: colors.gold, fontFamily: typography.bodyMedium.fontFamily },
+  tableChipActive: { backgroundColor: colors.ctaLight, borderColor: colors.cta },
+  tableChipText: { ...typography.small, color: colors.textMuted },
+  tableChipTextActive: { ...typography.small, color: colors.cta, fontFamily: typography.bodyMedium.fontFamily },
 
   // Stepper
   stepperRow: {

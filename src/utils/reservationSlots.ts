@@ -42,6 +42,7 @@ export function getDurationForPartySize(partySize: number): number {
 
 // Vérifie si une date YYYY-MM-DD est autorisée pour un shift (daysOfWeek : 0=dim, 1=lun…).
 export function isDateAllowedForShift(date: string, daysOfWeek: number[]): boolean {
+  if (daysOfWeek.length === 0) return false;
   const [year, month, day] = date.split('-').map(Number);
   const dow = new Date(year, month - 1, day).getDay();
   return daysOfWeek.includes(dow);
