@@ -10,9 +10,7 @@ import FloorTable from './FloorTable';
 import FloorZoneLabel from './FloorZoneLabel';
 import type { FloorTableWithState, FloorLabelLayout } from '../types/floor';
 
-// Ratio hauteur/largeur du canvas.
-// 100/103 ≈ 0.97 → le canvas est légèrement plus large que haut.
-const CANVAS_ASPECT = 100 / 103;
+const CANVAS_ASPECT = 100 / 103; // légèrement plus large que haut
 const MIN_CANVAS_W  = 620;
 
 interface Props {
@@ -34,14 +32,13 @@ export default function FloorCanvas({
 }: Props): React.JSX.Element {
   const [scrollW, setScrollW] = useState(availableWidth);
 
-  const canvasH  = availableHeight;
-  const canvasW  = Math.max(MIN_CANVAS_W, canvasH / CANVAS_ASPECT);
+  const canvasH    = availableHeight;
+  const canvasW    = Math.max(MIN_CANVAS_W, canvasH / CANVAS_ASPECT);
   const effectiveW = Math.max(canvasW, scrollW);
 
   return (
-    // frameShadow : porte l'ombre (pas d'overflow hidden → ombre visible sur iOS)
+    // frameShadow : porte l'ombre — séparé du clip pour iOS
     <View style={styles.frameShadow}>
-      {/* frameClip : porte le border radius + le clip du contenu */}
       <View style={styles.frameClip}>
         <ScrollView
           horizontal
@@ -57,19 +54,21 @@ export default function FloorCanvas({
             scrollEnabled={false}
             style={styles.scrollInner}
           >
-            {/* ── Canvas principal ─────────────────────────────────────── */}
             <View style={[styles.canvas, { width: effectiveW, height: canvasH }]}>
 
-              {/* 1 — Zones colorées (couche de fond) */}
+              {/* 1 — Halo chaud central : donne de la profondeur sans gradient */}
+              {renderWarmthOverlay(effectiveW, canvasH)}
+
+              {/* 2 — Zones colorées */}
               {renderZones(LA_MAISON_FLOOR_ZONES, effectiveW, canvasH)}
 
-              {/* 2 — Éléments architecturaux : comptoirs + séparateurs */}
+              {/* 3 — Éléments architecturaux */}
               {renderArchElements(LA_MAISON_ARCH_ELEMENTS, effectiveW, canvasH)}
 
-              {/* 3 — Grille très discrète */}
+              {/* 4 — Grille très discrète */}
               {renderGrid(effectiveW, canvasH)}
 
-              {/* 4 — Labels de zones (sous les tables) */}
+              {/* 5 — Labels de zones */}
               {labels.map((lbl) => (
                 <FloorZoneLabel
                   key={lbl.id}
@@ -83,7 +82,7 @@ export default function FloorCanvas({
                 />
               ))}
 
-              {/* 5 — Tables (couche interactive au premier plan) */}
+              {/* 6 — Tables interactives */}
               {tables.map((t) => (
                 <FloorTable
                   key={t.id}
@@ -103,6 +102,9 @@ export default function FloorCanvas({
                 />
               ))}
 
+              {/* 7 — Encadrement interne décoratif (dernier = par-dessus tout) */}
+              {renderInnerFrame(effectiveW, canvasH)}
+
             </View>
           </ScrollView>
         </ScrollView>
@@ -111,7 +113,27 @@ export default function FloorCanvas({
   );
 }
 
-// ─── Zones visuelles ─────────────────────────────────────────────────────────
+// ─── Halo chaud central ───────────────────────────────────────────────────────
+// Simule un léger éclairage ambiant warm en centre de plan, sans librairie gradient.
+
+function renderWarmthOverlay(cw: number, ch: number): React.ReactNode {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position:        'absolute',
+        left:            cw * 0.14,
+        top:             ch * 0.06,
+        width:           cw * 0.72,
+        height:          ch * 0.88,
+        borderRadius:    cw * 0.36,
+        backgroundColor: floorPlanColors.canvasWarmOverlay,
+      }}
+    />
+  );
+}
+
+// ─── Zones visuelles ──────────────────────────────────────────────────────────
 
 function renderZones(
   zones: FloorZoneDefinition[],
@@ -129,7 +151,7 @@ function renderZones(
         width:           (zone.w / 100) * cw,
         height:          (zone.h / 100) * ch,
         backgroundColor: zone.fillColor,
-        borderWidth:     1,
+        borderWidth:     0.5,
         borderColor:     zone.strokeColor,
         borderRadius:    zone.borderRadius,
       }}
@@ -137,7 +159,7 @@ function renderZones(
   ));
 }
 
-// ─── Éléments architecturaux ─────────────────────────────────────────────────
+// ─── Éléments architecturaux ──────────────────────────────────────────────────
 
 function renderArchElements(
   elements: FloorArchElement[],
@@ -156,15 +178,21 @@ function renderArchElements(
         height:          (el.h / 100) * ch,
         backgroundColor: el.color,
         borderRadius:    el.borderRadius ?? 0,
+        // Reflet or sur le bord supérieur des comptoirs (lumière ambiante)
+        borderTopWidth:  el.type === 'counter' ? 0.5 : 0,
+        borderTopColor:  floorPlanColors.counterHighlight,
+        borderLeftWidth:   0,
+        borderRightWidth:  0,
+        borderBottomWidth: 0,
       }}
     />
   ));
 }
 
-// ─── Grille discrète ─────────────────────────────────────────────────────────
+// ─── Grille discrète ──────────────────────────────────────────────────────────
 
 function renderGrid(width: number, height: number): React.ReactNode {
-  const step = 64; // pas en points — moins fréquente que la version précédente
+  const step = 80; // pas augmenté → moins de lignes → plus aéré
   const lines: React.ReactElement[] = [];
 
   for (let x = step; x < width; x += step) {
@@ -188,10 +216,30 @@ function renderGrid(width: number, height: number): React.ReactNode {
   return lines;
 }
 
+// ─── Encadrement interne décoratif ────────────────────────────────────────────
+// Fine ligne or à l'intérieur du canvas, comme un cadre d'oeuvre encadrée.
+
+function renderInnerFrame(cw: number, ch: number): React.ReactNode {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position:    'absolute',
+        top:         5,
+        left:        5,
+        width:       cw - 10,
+        height:      ch - 10,
+        borderWidth:  0.5,
+        borderColor:  floorPlanColors.canvasInnerBorder,
+        borderRadius: 8,
+      }}
+    />
+  );
+}
+
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  // Porte l'ombre (séparé du clip pour que l'ombre soit visible sur iOS)
   frameShadow: {
     flex:          1,
     borderRadius:  10,
@@ -201,13 +249,12 @@ const styles = StyleSheet.create({
     shadowRadius:  16,
     elevation:     12,
   },
-  // Clips le contenu au borderRadius + porte la bordure visible
   frameClip: {
-    flex:        1,
+    flex:         1,
     borderRadius: 10,
-    overflow:    'hidden',
-    borderWidth:  1,
-    borderColor:  floorPlanColors.canvasBorder,
+    overflow:     'hidden',
+    borderWidth:   1,
+    borderColor:   floorPlanColors.canvasBorder,
   },
   scrollOuter: {
     flex: 1,

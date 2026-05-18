@@ -29,18 +29,21 @@ export interface FloorArchElement {
 
 export const floorPlanColors = {
   // Canvas
-  canvasBg:      '#1F1A17',
-  canvasBorder:  'rgba(184, 151, 58, 0.28)',
-  gridLine:      'rgba(120, 100, 80, 0.06)',
+  canvasBg:          '#201B17',                    // brun très foncé chaud
+  canvasBorder:      'rgba(184, 151, 58, 0.20)',   // bordure or discrète
+  canvasWarmOverlay: 'rgba(88, 68, 42, 0.035)',    // halo chaud central, presque imperceptible
+  canvasInnerBorder: 'rgba(184, 151, 58, 0.07)',   // encadrement interne décoratif
+  gridLine:          'rgba(140, 115, 85, 0.045)',  // grille quasi-invisible
 
   // Éléments architecturaux
-  counterSurface: '#2C231C',
-  separatorColor: 'rgba(160, 130, 80, 0.22)',
+  counterSurface:  '#2E251E',                      // comptoir bar (légèrement plus clair que le fond)
+  counterHighlight: 'rgba(255, 215, 120, 0.12)',   // reflet or sur le bord supérieur du comptoir
+  separatorColor:  'rgba(160, 130, 80, 0.16)',
 
   // Labels de zones
-  labelBg:     'rgba(12, 8, 5, 0.88)',
-  labelBorder: 'rgba(212, 170, 64, 0.60)',
-  labelText:   '#DDD0B8',
+  labelBg:     'rgba(18, 12, 8, 0.72)',            // moins opaque → plus intégré au plan
+  labelBorder: 'rgba(200, 160, 60, 0.40)',
+  labelText:   '#C8BAAC',                          // légèrement plus doux que avant
 
   // Statuts tables — fonds solides sur fond sombre (lisibles sans transparence)
   statusFree:         '#3D8B68',
@@ -75,44 +78,44 @@ export const LA_MAISON_FLOOR_ZONES: FloorZoneDefinition[] = [
   {
     key:          'bar_central',
     x: 49.0, y:  1.0, w: 32.5, h: 40.5,
-    borderRadius: 10,
+    borderRadius: 14,
     fillColor:   'rgba(130, 90, 40, 0.10)',
-    strokeColor: 'rgba(184, 151, 58, 0.20)',
+    strokeColor: 'rgba(184, 151, 58, 0.10)',  // quasi-invisible
   },
   {
     key:          'bar_cigare',
     x:  9.0, y:  4.5, w: 33.5, h: 30.0,
-    borderRadius: 10,
+    borderRadius: 14,
     fillColor:   'rgba(110, 72, 35, 0.10)',
-    strokeColor: 'rgba(184, 151, 58, 0.17)',
+    strokeColor: 'rgba(184, 151, 58, 0.08)',
   },
   {
     key:          'interieur',
     x:  7.0, y: 30.5, w: 49.5, h: 35.0,
-    borderRadius: 8,
-    fillColor:   'rgba(40, 75, 58, 0.09)',
-    strokeColor: 'rgba(90, 155, 110, 0.18)',
+    borderRadius: 12,
+    fillColor:   'rgba(40, 75, 58, 0.10)',
+    strokeColor: 'rgba(90, 155, 110, 0.10)',
   },
   {
     key:          'balcon',
     x:  7.0, y: 56.5, w: 74.0, h: 28.5,
-    borderRadius: 8,
-    fillColor:   'rgba(40, 62, 100, 0.10)',
-    strokeColor: 'rgba(80, 125, 180, 0.16)',
+    borderRadius: 12,
+    fillColor:   'rgba(40, 62, 100, 0.11)',
+    strokeColor: 'rgba(80, 125, 180, 0.09)',
   },
   {
     key:          'terrasse',
     x: 12.0, y: 73.0, w: 46.0, h: 28.5,
-    borderRadius: 10,
+    borderRadius: 14,
     fillColor:   'rgba(42, 82, 58, 0.10)',
-    strokeColor: 'rgba(80, 158, 100, 0.17)',
+    strokeColor: 'rgba(80, 158, 100, 0.09)',
   },
   {
     key:          'lounge',
     x: 62.5, y: 73.0, w: 32.5, h: 28.5,
-    borderRadius: 10,
-    fillColor:   'rgba(82, 46, 88, 0.12)',
-    strokeColor: 'rgba(158, 90, 170, 0.18)',
+    borderRadius: 14,
+    fillColor:   'rgba(82, 46, 88, 0.13)',
+    strokeColor: 'rgba(158, 90, 170, 0.10)',
   },
 ];
 
@@ -127,11 +130,11 @@ export const LA_MAISON_ARCH_ELEMENTS: FloorArchElement[] = [
   // Comptoir lounge bar (à droite des tabourets 101-106)
   { type: 'counter',   x: 91.0, y: 74.0, w:  2.8, h: 26.0, borderRadius: 4, color: '#2C231C' },
   // Séparateur — zone bar → intérieur
-  { type: 'separator', x:  7.0, y: 30.2, w: 49.5, h:  0.35, color: 'rgba(165, 135, 80, 0.28)' },
+  { type: 'separator', x:  7.0, y: 30.2, w: 49.5, h:  0.30, color: 'rgba(165, 135, 80, 0.18)' },
   // Séparateur — intérieur → balcon
-  { type: 'separator', x:  7.0, y: 56.2, w: 74.0, h:  0.35, color: 'rgba(165, 135, 80, 0.28)' },
+  { type: 'separator', x:  7.0, y: 56.2, w: 74.0, h:  0.30, color: 'rgba(165, 135, 80, 0.18)' },
   // Séparateur — balcon → terrasse / lounge
-  { type: 'separator', x:  7.0, y: 72.8, w: 87.5, h:  0.35, color: 'rgba(165, 135, 80, 0.28)' },
+  { type: 'separator', x:  7.0, y: 72.8, w: 87.5, h:  0.30, color: 'rgba(165, 135, 80, 0.18)' },
 ];
 
 // ─── Zone labels ─────────────────────────────────────────────────────────────

@@ -134,8 +134,12 @@ export default function FloorTable({
           },
         ]}
       >
-        {/* Reflet subtil en haut de la table pour donner du relief */}
+        {/* Lumière haute — relief 3D subtil */}
         <View style={[styles.topSheen, { borderRadius }]} />
+        {/* Ombre basse — profondeur */}
+        <View style={[styles.bottomShade, { borderRadius }]} />
+        {/* Contour intérieur — finition premium */}
+        <View style={[styles.innerBorder, { borderRadius: Math.max(0, borderRadius - 1) }]} />
 
         <Text
           style={[
@@ -182,14 +186,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow:       'hidden',
   },
-  // Reflet très subtil sur le bord haut, comme un plan de travail éclairé
   topSheen: {
     position:        'absolute',
     top:             0,
     left:            0,
     right:           0,
-    height:          '40%',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    height:          '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+  },
+  bottomShade: {
+    position:        'absolute',
+    bottom:          0,
+    left:            0,
+    right:           0,
+    height:          '30%',
+    backgroundColor: 'rgba(0, 0, 0, 0.20)',
+  },
+  innerBorder: {
+    position:    'absolute',
+    top:         1,
+    left:        1,
+    right:       1,
+    bottom:      1,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   number: {
     fontFamily: 'Inter_600SemiBold',
