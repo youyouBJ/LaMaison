@@ -223,15 +223,19 @@ function StatPill({
   label,
   count,
   color,
+  highlight = false,
 }: {
-  label: string;
-  count: number;
-  color: string;
+  label:      string;
+  count:      number;
+  color:      string;
+  highlight?: boolean;
 }): React.JSX.Element {
   return (
-    <View style={styles.statPill}>
-      <Text style={[styles.statPillCount, { color }]}>{count}</Text>
-      <Text style={styles.statPillLabel}>{label}</Text>
+    <View style={[styles.statPill, highlight && styles.statPillHighlight]}>
+      <Text style={[styles.statPillCount, { color }, highlight && styles.statPillCountHighlight]}>
+        {count}
+      </Text>
+      <Text style={[styles.statPillLabel, highlight && styles.statPillLabelHighlight]}>{label}</Text>
     </View>
   );
 }
@@ -269,12 +273,12 @@ export default function WaitlistScreen({ navigation }: Props): React.JSX.Element
   const [convertError, setConvertError]   = useState<string | null>(null);
   const [activeConvertId, setActiveConvertId] = useState<string | null>(null);
 
-  // ── Compteurs (sur toutes les entrées non filtrées) ─────────────────────────
+  // ── Compteurs filtrés par date ET service (respectent le filtre actif) ───────
 
-  const waitingCount  = allEntries.filter((e) => e.status === 'waiting').length;
-  const notifiedCount = allEntries.filter((e) => e.status === 'notified').length;
-  const seatedCount   = allEntries.filter((e) => e.status === 'seated').length;
-  const leftCount     = allEntries.filter((e) => e.status === 'left').length;
+  const waitingCount  = entries.filter((e) => e.status === 'waiting').length;
+  const notifiedCount = entries.filter((e) => e.status === 'notified').length;
+  const seatedCount   = entries.filter((e) => e.status === 'seated').length;
+  const leftCount     = entries.filter((e) => e.status === 'left').length;
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -388,7 +392,7 @@ export default function WaitlistScreen({ navigation }: Props): React.JSX.Element
 
           {/* ── Compteurs ── */}
           <View style={styles.statsRow}>
-            <StatPill label="En attente" count={waitingCount}  color={colors.gold} />
+            <StatPill label="En attente" count={waitingCount}  color={colors.gold}             highlight />
             <StatPill label="Prévenu"    count={notifiedCount} color={colors.cta} />
             <StatPill label="Installé"   count={seatedCount}   color={colors.statusFree} />
             <StatPill label="Parti"      count={leftCount}     color={colors.statusUnavailable} />
@@ -540,7 +544,14 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   statPillCount: { ...typography.h2, marginBottom: 2 },
+  statPillCountHighlight: { fontSize: 26 },
   statPillLabel: { ...typography.label, color: colors.textMuted, fontSize: 9 },
+  statPillHighlight: {
+    backgroundColor: colors.goldLight,
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  statPillLabelHighlight: { color: colors.gold },
 
   // Action error
   actionErrorCard: {
