@@ -21,6 +21,7 @@ Dernière mise à jour : 2026-05-19
 ### Dashboard
 - [x] Vue du jour : couverts, taux occupation, réservations soir
 - [x] Hook `useTodayDashboard`
+- [x] KPI "À appeler aujourd'hui" (réservations du jour avec téléphone, statut pending/confirmed, non encore contactées)
 
 ### Réservations
 - [x] Liste par date
@@ -34,6 +35,10 @@ Dernière mise à jour : 2026-05-19
 - [x] Multi-tables (`reservation_tables`, migration 002)
 - [x] Détail réservation
 - [x] Changement de statut
+- [x] Correction de statut flexible (y compris depuis terminé / annulé / no-show)
+- [x] Badge "À appeler" sur les réservations du jour en attente de confirmation téléphonique
+- [x] Bouton "Appeler" : `tel:` link natif depuis la card de liste
+- [x] Bouton "Confirmé par téléphone" : confirme le statut + trace horodatée dans `notes`
 
 ### CRM Clients
 - [x] Liste 22 000+ clients
@@ -68,7 +73,9 @@ Dernière mise à jour : 2026-05-19
 - [x] Filtre Déjeuner / Dîner / Tous
 - [x] Ajout d'entrée (client ou walk-in)
 - [x] Statuts : en attente → notifié → installé / parti
-- [x] Conversion waitlist → réservation
+- [x] Correction de statut flexible (y compris depuis installé / parti)
+- [x] Conversion waitlist → réservation confirmée ou installée (au choix)
+- [x] Badge de compteur sur le bouton Attente dans le Planning
 - [x] Recherche client à l'ajout
 - [x] Realtime
 - [x] Migration 003 (shift_id + time_slot)

@@ -12,6 +12,7 @@ import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useTodayDashboard, type DashboardReservation } from '../../hooks/useTodayDashboard';
 import { formatReadableDate, formatTimeSlot } from '../../utils/date';
 import { getReservationStatusColors, getReservationStatusLabel } from '../../utils/reservationStatus';
+import { reservationNeedsPhoneConfirmation } from '../../utils/reservationConfirmation';
 import StatCard from '../../components/StatCard';
 import StatusBadge from '../../components/StatusBadge';
 import type { ReservationStatus } from '../../types/database';
@@ -80,7 +81,8 @@ function StatusRow({ status, count }: { status: ReservationStatus; count: number
 
 export default function DashboardScreen(): React.JSX.Element {
   const { loading, error, reservations, stats, refresh } = useTodayDashboard();
-  const readableDate = formatReadableDate(new Date());
+  const readableDate  = formatReadableDate(new Date());
+  const toCallCount   = reservations.filter(reservationNeedsPhoneConfirmation).length;
 
   if (loading) {
     return (
@@ -143,6 +145,15 @@ export default function DashboardScreen(): React.JSX.Element {
               accent={stats.cancelledAndNoshow > 0 ? colors.cta : colors.textMuted}
             />
           </View>
+          {toCallCount > 0 && (
+            <View style={[styles.kpiRow, styles.kpiRowGap]}>
+              <StatCard
+                label="À appeler aujourd'hui"
+                value={toCallCount}
+                accent={colors.cta}
+              />
+            </View>
+          )}
 
           {/* ── Prochaines arrivées ── */}
           <View style={styles.section}>

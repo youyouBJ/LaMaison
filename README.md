@@ -42,6 +42,7 @@ Stack à ne jamais changer sauf décision explicite.
 ### Dashboard
 - Vue du jour : couverts confirmés, taux d'occupation, réservations du soir
 - Statistiques via `useTodayDashboard`
+- KPI "À appeler aujourd'hui" : nombre de réservations du jour avec téléphone disponible, statut pending/confirmed, pas encore contactées
 
 ### Réservations
 - Liste par date avec sélecteur calendrier
@@ -53,6 +54,9 @@ Stack à ne jamais changer sauf décision explicite.
 - Détail réservation
 - Changement de statut (confirmé, installé, terminé, no-show, annulé)
 - Correction de statut même après terminé / annulé / no-show
+- Badge "À appeler" sur les réservations du jour en attente de confirmation téléphonique
+- Bouton "Appeler" : ouvre l'app téléphone directement depuis la liste (`tel:` link natif)
+- Bouton "Confirmé par téléphone" dans le détail : passe en `confirmed` si pending, ajoute une trace horodatée dans les notes
 
 ### CRM Clients
 - 22 000+ clients importés depuis SevenRooms

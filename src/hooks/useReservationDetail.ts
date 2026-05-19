@@ -3,6 +3,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { ReservationStatus, Database } from '../types/database';
 import type { ReservationWithJoins, ReservationTableEntry } from '../types/reservations';
+import { buildConfirmationNote } from '../utils/reservationConfirmation';
 
 type TableRow = Database['public']['Tables']['tables']['Row'];
 type RtQueryRow = { id: string; reservation_id: string; table_id: string; tables: TableRow | null };
@@ -61,6 +62,26 @@ export function useReservationDetail(reservationId: string) {
     await updateStatus('cancelled');
   }, [updateStatus]);
 
+  const confirmByPhone = useCallback(async (): Promise<void> => {
+    if (!reservation) return;
+    setUpdating(true);
+    setError(null);
+    try {
+      const note       = buildConfirmationNote();
+      const newNotes   = reservation.notes ? `${reservation.notes}\n${note}` : note;
+      const newStatus: ReservationStatus =
+        reservation.status === 'pending' ? 'confirmed' : reservation.status;
+      const { error: updateError } = await supabase
+        .from('reservations')
+        .update({ notes: newNotes, status: newStatus })
+        .eq('id', reservationId);
+      if (updateError) { setError(updateError.message); return; }
+      await fetchDetail();
+    } finally {
+      setUpdating(false);
+    }
+  }, [reservation, reservationId, fetchDetail]);
+
   const refresh = useCallback(() => { void fetchDetail(); }, [fetchDetail]);
 
   // Realtime sur la réservation courante
@@ -92,5 +113,5 @@ export function useReservationDetail(reservationId: string) {
     void init();
   }, [fetchDetail]);
 
-  return { loading, updating, error, reservation, refresh, updateStatus, cancelReservation };
+  return { loading, updating, error, reservation, refresh, updateStatus, cancelReservation, confirmByPhone };
 }

@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { colors, typography, spacing, radius } from '../theme';
 import { formatTimeSlot } from '../utils/date';
 import { formatReservationTables } from '../utils/reservationTables';
+import { reservationNeedsPhoneConfirmation } from '../utils/reservationConfirmation';
 import StatusBadge from './StatusBadge';
 import type { ReservationWithJoins } from '../types/reservations';
 
@@ -18,7 +19,13 @@ function guestDisplayName(r: ReservationWithJoins): string {
 }
 
 export default function ReservationCard({ reservation: r, onPress }: Props): React.JSX.Element {
-  const isVip = r.guests?.vip === true;
+  const isVip      = r.guests?.vip === true;
+  const needsCall  = reservationNeedsPhoneConfirmation(r);
+  const phone      = r.guests?.phone ?? null;
+
+  const handleCall = () => {
+    if (phone) { void Linking.openURL(`tel:${phone}`); }
+  };
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
@@ -33,13 +40,25 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
               <Text style={styles.vipText}>VIP</Text>
             </View>
           )}
+          {needsCall && (
+            <View style={styles.callBadge}>
+              <Text style={styles.callBadgeText}>À appeler</Text>
+            </View>
+          )}
         </View>
         <Text style={styles.meta} numberOfLines={1}>
           {r.party_size} couvert{r.party_size > 1 ? 's' : ''}
-          {r.guests?.phone ? ` · ${r.guests.phone}` : ''}
+          {phone ? ` · ${phone}` : ''}
           {(r.tables ?? r.reservation_tables?.length) ? ` · ${formatReservationTables(r.tables, r.reservation_tables)}` : ''}
         </Text>
-        <StatusBadge status={r.status} />
+        <View style={styles.bottomRow}>
+          <StatusBadge status={r.status} />
+          {phone ? (
+            <TouchableOpacity style={styles.callButton} onPress={handleCall} activeOpacity={0.75}>
+              <Text style={styles.callButtonText}>Appeler</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -102,5 +121,34 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.textMuted,
     marginBottom: spacing.sm,
+  },
+  callBadge: {
+    backgroundColor: colors.ctaLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: colors.cta,
+  },
+  callBadgeText: {
+    ...typography.label,
+    color: colors.cta,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  callButton: {
+    backgroundColor: colors.goldLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  callButtonText: {
+    ...typography.label,
+    color: colors.gold,
   },
 });

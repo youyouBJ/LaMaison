@@ -34,15 +34,16 @@ Les deux champs sont écrits simultanément à la création.
 
 | Statut | Signification |
 |---|---|
-| `confirmed` | Réservation créée / confirmée |
+| `pending` | Réservation créée, non encore confirmée |
+| `confirmed` | Réservation confirmée (par staff ou par téléphone) |
 | `seated` | Client installé à table |
 | `completed` | Service terminé |
-| `no_show` | Client ne s'est pas présenté |
+| `noshow` | Client ne s'est pas présenté |
 | `cancelled` | Réservation annulée |
 
 ### Correction de statut
 
-Le changement de statut est possible **à tout moment**, y compris depuis les états terminaux (`completed`, `no_show`, `cancelled`). Cela permet de corriger une erreur de saisie sans avoir à supprimer et recréer la réservation.
+Le changement de statut est possible **à tout moment**, y compris depuis les états terminaux (`completed`, `noshow`, `cancelled`). Cela permet de corriger une erreur de saisie sans avoir à supprimer et recréer la réservation.
 
 ---
 
@@ -66,13 +67,52 @@ Pour créer un walk-in : `isWalkIn: true` dans `CreateReservationInput` — la c
 
 ---
 
+## Confirmation téléphonique
+
+Rappel visuel pour que le staff pense à appeler les clients le jour de leur réservation. Aucune table ni migration : la trace est stockée dans `reservations.notes`.
+
+### Helper `reservationNeedsPhoneConfirmation(r)`
+
+Fichier : `src/utils/reservationConfirmation.ts`
+
+Retourne `true` si toutes ces conditions sont réunies :
+- `r.date` = aujourd'hui (timezone Africa/Tunis)
+- `r.status` = `pending` ou `confirmed`
+- `r.guests.phone` existe
+- `r.notes` ne contient pas la balise `[Appel confirmation]`
+
+### Badge "À appeler"
+
+Affiché dans `ReservationCard` (bordeaux `ctaLight`/`cta`) lorsque `reservationNeedsPhoneConfirmation` est vrai. Disparaît dès qu'un appel a été tracé dans les notes.
+
+### Bouton "Appeler"
+
+Visible dans `ReservationCard` si le guest a un téléphone. Ouvre `Linking.openURL('tel:…')` — aucune librairie externe.
+
+### Bouton "Confirmé par téléphone"
+
+Section dédiée dans `ReservationDetailScreen`, visible si `reservationNeedsPhoneConfirmation` est vrai.
+
+Comportement (`confirmByPhone` dans `useReservationDetail`) :
+- Si `status === 'pending'` → passe à `confirmed`
+- Sinon → statut inchangé
+- Ajoute en fin de notes : `[Appel confirmation] Client confirmé par téléphone le DD/MM à HH:MM.`
+- Timestamp en heure de Tunis (Africa/Tunis)
+- Les notes existantes ne sont pas écrasées
+
+### KPI Dashboard
+
+`DashboardScreen` calcule `toCallCount` depuis `reservations` (déjà chargées) et affiche un `StatCard` "À appeler aujourd'hui" lorsque ce compteur est supérieur à zéro.
+
+---
+
 ## Hooks
 
 | Hook | Responsabilité |
 |---|---|
 | `useCreateReservation` | Création réservation + insertion dans `reservation_tables` |
 | `useReservations` | Liste + enrichissement via `reservation_tables` |
-| `useReservationDetail` | Détail + enrichissement via `reservation_tables` + changement statut |
+| `useReservationDetail` | Détail + enrichissement + changement statut + `confirmByPhone` |
 | `useFloorPlan` | Vue plan + mapping tables secondaires via `reservation_tables` |
 | `useTodayDashboard` | Stats du jour + enrichissement via `reservation_tables` |
 

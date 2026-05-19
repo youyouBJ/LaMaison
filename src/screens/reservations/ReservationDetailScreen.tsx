@@ -19,6 +19,7 @@ import PrimaryButton from '../../components/PrimaryButton';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { ReservationStatus } from '../../types/database';
 import { formatReservationTables } from '../../utils/reservationTables';
+import { reservationNeedsPhoneConfirmation } from '../../utils/reservationConfirmation';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationDetail'>;
 
@@ -78,8 +79,10 @@ function guestName(r: NonNullable<ReturnType<typeof useReservationDetail>['reser
 
 export default function ReservationDetailScreen({ route }: Props): React.JSX.Element {
   const { reservationId } = route.params;
-  const { loading, updating, error, reservation, refresh, updateStatus } =
+  const { loading, updating, error, reservation, refresh, updateStatus, confirmByPhone } =
     useReservationDetail(reservationId);
+
+  const [correctionOpen, setCorrectionOpen] = useState(false);
 
   if (loading) {
     return (
@@ -108,13 +111,12 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
     );
   }
 
-  const [correctionOpen, setCorrectionOpen] = useState(false);
-
   const r = reservation;
   const actions = STATUS_ACTIONS[r.status] ?? [];
   const { backgroundColor: statusBg, color: statusColor } = getReservationStatusColors(r.status);
   const isVip = r.guests?.vip === true;
   const isTerminal = actions.length === 0;
+  const needsPhoneConfirmation = reservationNeedsPhoneConfirmation(r);
 
   const dateLabel = (() => {
     try {
@@ -183,6 +185,25 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
               {r.notes ? <DetailRow label="Notes" value={r.notes} /> : null}
             </View>
           </SectionCard>
+
+          {/* ── Confirmation téléphonique ── */}
+          {needsPhoneConfirmation && (
+            <SectionCard title="Confirmation téléphonique">
+              {updating && (
+                <View style={styles.updatingRow}>
+                  <ActivityIndicator color={colors.gold} size="small" />
+                  <Text style={styles.updatingText}>Mise à jour…</Text>
+                </View>
+              )}
+              <PrimaryButton
+                label="Confirmé par téléphone"
+                onPress={() => { void confirmByPhone(); }}
+                loading={false}
+                disabled={updating}
+                variant="secondary"
+              />
+            </SectionCard>
+          )}
 
           {/* ── Actions ── */}
           {actions.length > 0 && (
