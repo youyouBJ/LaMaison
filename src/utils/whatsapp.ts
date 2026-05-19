@@ -71,6 +71,10 @@ export function buildWaitlistReadyMessage(): string {
   return "Bonjour, votre table à La Maison sera bientôt prête. Vous pouvez vous présenter à l'accueil.";
 }
 
+export function buildGuestGenericMessage(): string {
+  return 'Bonjour, nous vous contactons de La Maison.';
+}
+
 export function buildSatisfactionMessage(): string {
   if (LA_MAISON_REVIEW_URL) {
     return `Bonjour, merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment. Votre avis nous aiderait beaucoup : ${LA_MAISON_REVIEW_URL}`;

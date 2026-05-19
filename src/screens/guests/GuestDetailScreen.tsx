@@ -10,6 +10,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -27,6 +28,11 @@ import {
   getDisplayableGuestTags,
 } from '../../utils/format';
 import { formatTimeSlot } from '../../utils/date';
+import {
+  openWhatsAppMessage,
+  normalizePhoneForWhatsApp,
+  buildGuestGenericMessage,
+} from '../../utils/whatsapp';
 import type { GuestsStackParamList } from '../../navigation/GuestsNavigator';
 import type { ReservationWithDetail } from '../../hooks/useGuestDetail';
 
@@ -126,11 +132,13 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
     notes:            '',
     marketing_opt_in: false,
   });
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const formInitialized = useRef(false);
-  const successTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saveSuccess, setSaveSuccess]   = useState(false);
+  const [vipUpdating, setVipUpdating]   = useState(false);
+  const [waFeedback, setWaFeedback]     = useState<{ ok: boolean; text: string } | null>(null);
+  const formInitialized                 = useRef(false);
+  const successTimer                    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const waTimer                         = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Initialise le formulaire à la première réception des données
   useEffect(() => {
     if (guest && !formInitialized.current) {
       formInitialized.current = true;
@@ -148,6 +156,7 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
   useEffect(() => {
     return () => {
       if (successTimer.current) clearTimeout(successTimer.current);
+      if (waTimer.current)      clearTimeout(waTimer.current);
     };
   }, []);
 
@@ -173,7 +182,35 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
     }
   };
 
-  const handleToggleVip = () => { void toggleVip(); };
+  const handleToggleVip = useCallback(() => {
+    setVipUpdating(true);
+    void toggleVip().finally(() => setVipUpdating(false));
+  }, [toggleVip]);
+
+  const handleCall = () => {
+    const phone = guest?.phone;
+    if (phone) { void Linking.openURL(`tel:${phone}`); }
+  };
+
+  const handleWhatsAppContact = () => {
+    const phone   = guest?.phone ?? null;
+    const message = buildGuestGenericMessage();
+    void openWhatsAppMessage(phone, message).then((opened) => {
+      if (waTimer.current) clearTimeout(waTimer.current);
+      setWaFeedback(
+        opened
+          ? { ok: true, text: 'WhatsApp ouvert' }
+          : {
+              ok: false,
+              text: normalizePhoneForWhatsApp(phone)
+                ? "Impossible d'ouvrir WhatsApp."
+                : 'Numéro invalide.',
+            },
+      );
+      waTimer.current = setTimeout(() => setWaFeedback(null), 4000);
+    });
+  };
+
   const handleRefresh   = () => { refresh(); };
   const handleSavePress = () => { void handleSave(); };
 
@@ -203,7 +240,9 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
     );
   }
 
-  const guestName = formatGuestName(guest?.first_name, guest?.last_name);
+  const guestName  = formatGuestName(guest?.first_name, guest?.last_name);
+  const hasPhone   = Boolean(guest?.phone);
+  const isVip      = guest?.vip ?? false;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -225,7 +264,7 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
                 <Text style={styles.heroName} numberOfLines={2}>{guestName}</Text>
                 <Text style={styles.heroPhone}>{formatPhone(guest?.phone)}</Text>
               </View>
-              {guest?.vip ? (
+              {isVip ? (
                 <View style={styles.vipBadge}>
                   <Text style={styles.vipText}>VIP</Text>
                 </View>
@@ -268,15 +307,57 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
                 autoCapitalize="none"
                 editable={!saving}
               />
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Marketing</Text>
-                <Switch
-                  value={form.marketing_opt_in}
-                  onValueChange={(v) => setField('marketing_opt_in')(v)}
-                  trackColor={{ false: colors.border, true: colors.goldLight }}
-                  thumbColor={form.marketing_opt_in ? colors.gold : colors.sand}
-                  disabled={saving}
-                />
+            </SectionCard>
+
+            {/* ── Contact ── */}
+            {hasPhone ? (
+              <SectionCard title="Contact">
+                {waFeedback ? (
+                  <View style={[styles.waBanner, waFeedback.ok ? styles.waBannerOk : styles.waBannerErr]}>
+                    <Text style={[styles.waBannerText, waFeedback.ok ? styles.waBannerTextOk : styles.waBannerTextErr]}>
+                      {waFeedback.text}
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={styles.contactRow}>
+                  <TouchableOpacity
+                    style={styles.contactBtn}
+                    onPress={handleCall}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.contactBtnText}>Appeler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.contactBtnWa}
+                    onPress={handleWhatsAppContact}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.contactBtnWaText}>WhatsApp</Text>
+                  </TouchableOpacity>
+                </View>
+              </SectionCard>
+            ) : null}
+
+            {/* ── Statut client ── */}
+            <SectionCard title="Statut client">
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleInfo}>
+                  <Text style={[styles.toggleLabel, isVip && styles.toggleLabelActive]}>
+                    Client VIP
+                  </Text>
+                  <Text style={styles.toggleSub}>Marquer ce client comme VIP dans le CRM.</Text>
+                </View>
+                {vipUpdating ? (
+                  <ActivityIndicator size="small" color={colors.gold} />
+                ) : (
+                  <Switch
+                    value={isVip}
+                    onValueChange={() => { handleToggleVip(); }}
+                    trackColor={{ false: colors.border, true: colors.goldLight }}
+                    thumbColor={isVip ? colors.gold : colors.sand}
+                    disabled={saving}
+                  />
+                )}
               </View>
             </SectionCard>
 
@@ -321,6 +402,23 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
               })()}
             </SectionCard>
 
+            {/* ── Données importées ── */}
+            <SectionCard title="Données importées">
+              <View style={styles.importedRow}>
+                <View style={styles.importedInfo}>
+                  <Text style={styles.importedLabel}>Opt-in marketing</Text>
+                  <Text style={styles.importedSub}>Consentement importé depuis SevenRooms.</Text>
+                </View>
+                <Switch
+                  value={form.marketing_opt_in}
+                  onValueChange={(v) => setField('marketing_opt_in')(v)}
+                  trackColor={{ false: colors.border, true: colors.goldLight }}
+                  thumbColor={form.marketing_opt_in ? colors.gold : colors.sand}
+                  disabled={saving}
+                />
+              </View>
+            </SectionCard>
+
             {/* ── Historique réservations ── */}
             <SectionCard title="Historique réservations">
               {reservations.length === 0 ? (
@@ -353,17 +451,6 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
               loading={saving}
               disabled={saving}
             />
-
-            <TouchableOpacity
-              style={[styles.vipActionBtn, guest?.vip && styles.vipActionBtnActive]}
-              onPress={handleToggleVip}
-              disabled={saving}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.vipActionText, guest?.vip && styles.vipActionTextActive]}>
-                {guest?.vip ? 'Retirer VIP' : 'Marquer VIP'}
-              </Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.refreshAction}
@@ -448,6 +535,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.gold,
   },
   vipText: {
     ...typography.label,
@@ -477,16 +566,102 @@ const styles = StyleSheet.create({
     minHeight: 88,
   },
 
-  // Switch
-  switchRow: {
+  // Contact section
+  contactRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  contactBtn: {
+    flex: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 48,
+  },
+  contactBtnText: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+  },
+  contactBtnWa: {
+    flex: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.statusFreeLight,
+    borderWidth: 1,
+    borderColor: colors.statusFree,
+    minHeight: 48,
+  },
+  contactBtnWaText: {
+    ...typography.bodyMedium,
+    color: colors.statusFree,
+  },
+  waBanner: {
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+  },
+  waBannerOk: {
+    backgroundColor: colors.statusFreeLight,
+    borderColor: colors.statusFree,
+  },
+  waBannerErr: {
+    backgroundColor: colors.ctaLight,
+    borderColor: colors.cta,
+  },
+  waBannerText: { ...typography.small, fontFamily: typography.bodyMedium.fontFamily },
+  waBannerTextOk:  { color: colors.statusFree },
+  waBannerTextErr: { color: colors.cta },
+
+  // Statut client — VIP toggle
+  toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.xs,
+    gap: spacing.md,
   },
-  switchLabel: {
-    ...typography.body,
+  toggleInfo: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  toggleLabel: {
+    ...typography.bodyMedium,
     color: colors.textPrimary,
+  },
+  toggleLabelActive: {
+    color: colors.gold,
+  },
+  toggleSub: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+
+  // Données importées
+  importedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  importedInfo: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  importedLabel: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontFamily: typography.bodyMedium.fontFamily,
+  },
+  importedSub: {
+    ...typography.small,
+    color: colors.textMuted,
   },
 
   // InfoRow
@@ -597,29 +772,7 @@ const styles = StyleSheet.create({
     color: colors.statusFree,
   },
 
-  // Actions
-  vipActionBtn: {
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: spacing.sm,
-    minHeight: 48,
-    justifyContent: 'center',
-  },
-  vipActionBtnActive: {
-    borderColor: colors.gold,
-    backgroundColor: colors.goldLight,
-  },
-  vipActionText: {
-    ...typography.bodyMedium,
-    color: colors.textSecondary,
-  },
-  vipActionTextActive: {
-    color: colors.gold,
-  },
+  // Footer actions
   refreshAction: {
     alignItems: 'center',
     paddingVertical: spacing.md,
