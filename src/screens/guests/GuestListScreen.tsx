@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -71,6 +72,10 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
   const handleClear = (): void => { void clearSearch(); };
   const handleRefresh = useCallback((): void => { void refresh(); }, [refresh]);
 
+  useFocusEffect(
+    useCallback(() => { void refresh(); }, [refresh]),
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: GuestRow }) => {
       const displayTags = getDisplayableGuestTags(item.tags).slice(0, 2);
@@ -84,16 +89,16 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
         >
           <View style={styles.cardTop}>
             <View style={styles.cardLeft}>
-              <Text style={styles.guestName} numberOfLines={1}>
-                {formatGuestName(item.first_name, item.last_name)}
-              </Text>
+              <View style={styles.guestNameRow}>
+                <Text style={styles.guestName} numberOfLines={1}>
+                  {formatGuestName(item.first_name, item.last_name)}
+                </Text>
+                {item.vip ? <VipBadge small /> : null}
+              </View>
               <Text style={styles.guestPhone}>{formatPhone(item.phone)}</Text>
               {item.email ? (
                 <Text style={styles.guestEmail} numberOfLines={1}>{item.email}</Text>
               ) : null}
-            </View>
-            <View style={styles.cardRight}>
-              {item.vip ? <VipBadge /> : null}
             </View>
           </View>
 
@@ -465,14 +470,16 @@ const styles = StyleSheet.create({
   cardTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.sm,
   },
   cardLeft: {
     flex: 1,
     gap: spacing.xs,
   },
-  cardRight: {
-    alignItems: 'flex-end',
+  guestNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
   },
   guestName: {
     ...typography.bodyMedium,

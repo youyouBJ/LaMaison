@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useReservations } from '../../hooks/useReservations';
@@ -84,6 +85,10 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
   const [searchQuery, setSearchQuery]       = useState('');
   const [isFocused, setIsFocused]           = useState(false);
   const [serviceFilter, setServiceFilter]   = useState<ReservationServiceFilter>('all');
+
+  useFocusEffect(
+    useCallback(() => { refresh(); }, [refresh]),
+  );
 
   const { count: waitlistWaitingCount } = useWaitlistCount(selectedDate, serviceFilter);
 
