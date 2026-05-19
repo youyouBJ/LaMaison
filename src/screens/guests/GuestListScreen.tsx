@@ -53,8 +53,11 @@ const FILTER_OPTIONS: { key: keyof GuestFilterState; label: string }[] = [
 export default function GuestListScreen({ navigation }: Props): React.JSX.Element {
   const {
     loading,
+    loadingMore,
     error,
     guests,
+    hasMore,
+    loadMore,
     query,
     setQuery,
     sort,
@@ -71,10 +74,23 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
   const handleSearch = (): void => { void search(); };
   const handleClear = (): void => { void clearSearch(); };
   const handleRefresh = useCallback((): void => { void refresh(); }, [refresh]);
+  const handleEndReached = useCallback((): void => {
+    if (!loadingMore && hasMore) void loadMore();
+  }, [loadingMore, hasMore, loadMore]);
 
   useFocusEffect(
     useCallback(() => { void refresh(); }, [refresh]),
   );
+
+  const renderFooter = useCallback((): React.JSX.Element | null => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator color={colors.gold} size="small" />
+        <Text style={styles.footerText}>Chargement des clients…</Text>
+      </View>
+    );
+  }, [loadingMore]);
 
   const renderItem = useCallback(
     ({ item }: { item: GuestRow }) => {
@@ -250,7 +266,11 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
       {/* ── Compteur ── */}
       <View style={styles.resultsBar}>
         <Text style={styles.resultsText}>
-          {loading ? '…' : `${guests.length} client${guests.length !== 1 ? 's' : ''}`}
+          {loading
+            ? '…'
+            : hasMore
+              ? `${guests.length}+ clients chargés`
+              : `${guests.length} client${guests.length !== 1 ? 's' : ''}`}
         </Text>
       </View>
 
@@ -263,6 +283,9 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
           styles.list,
           guests.length === 0 && styles.listEmpty,
         ]}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={renderFooter}
         refreshControl={
           <RefreshControl
             refreshing={loading && guests.length > 0}
@@ -524,6 +547,19 @@ const styles = StyleSheet.create({
     color: colors.cta,
     textTransform: 'none' as const,
     letterSpacing: 0,
+  },
+
+  // Footer loader
+  footerLoader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+  },
+  footerText: {
+    ...typography.small,
+    color: colors.textMuted,
   },
 
   // Empty state

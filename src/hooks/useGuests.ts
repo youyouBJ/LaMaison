@@ -1,6 +1,6 @@
 // Search via Supabase ilike. Tag-based filters are applied client-side after
-// fetching a larger batch (TAG_FILTER_LIMIT) to avoid building complex SQL.
-// Never loads the full 22 682-row dataset — always capped at STANDARD_LIMIT or TAG_FILTER_LIMIT.
+// fetching a larger batch (TAG_FETCH_SIZE) to avoid building complex SQL.
+// Pagination via .range() — never loads the full 22 682-row dataset at once.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
@@ -11,8 +11,13 @@ import { DEFAULT_SORT, DEFAULT_FILTERS } from '../types/guests';
 
 type GuestRow = Database['public']['Tables']['guests']['Row'];
 
-const STANDARD_LIMIT = 150;
-const TAG_FILTER_LIMIT = 300;
+type PageResult =
+  | { ok: true; rows: GuestRow[]; hasMore: boolean }
+  | { ok: false; error: string };
+
+const PAGE_SIZE = 100;
+// Larger batch for client-side tag filtering to reduce round-trips while still paginating.
+const TAG_FETCH_SIZE = 300;
 // Fetch at most 300 upcoming reservations — after dedup the actual .in() list is smaller.
 // At ~50 reservations/day this covers ~6 days ahead, sufficient for CRM use.
 const UPCOMING_RESERVATIONS_LIMIT = 300;
@@ -38,124 +43,161 @@ function applyTagFilters(rows: GuestRow[], filters: GuestFilterState): GuestRow[
   });
 }
 
+async function queryGuestPage(
+  resId: string,
+  searchQuery: string,
+  currentSort: GuestSortOption,
+  currentFilters: GuestFilterState,
+  page: number,
+): Promise<PageResult> {
+  const q = searchQuery.trim();
+  const useTagFilter = hasTagFilter(currentFilters);
+  const fetchSize = useTagFilter ? TAG_FETCH_SIZE : PAGE_SIZE;
+  const from = page * fetchSize;
+  const to = from + fetchSize - 1;
+
+  // Upcoming reservation filter: resolve the set of guest_ids first, then filter guests.
+  // Two queries total — never loads the full guest table.
+  let upcomingGuestIds: string[] | null = null;
+  if (currentFilters.upcomingReservationOnly) {
+    const today = getTodayDateString();
+    const { data: resRows, error: resError } = await supabase
+      .from('reservations')
+      .select('guest_id')
+      .eq('restaurant_id', resId)
+      .gte('date', today)
+      .in('status', UPCOMING_STATUSES)
+      .not('guest_id', 'is', null)
+      .limit(UPCOMING_RESERVATIONS_LIMIT);
+
+    if (resError) return { ok: false, error: resError.message };
+
+    const ids = [
+      ...new Set(
+        (resRows ?? [])
+          .map(r => r.guest_id)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+
+    if (ids.length === 0) return { ok: true, rows: [], hasMore: false };
+    upcomingGuestIds = ids;
+  }
+
+  let dbQuery = supabase
+    .from('guests')
+    .select('*')
+    .eq('restaurant_id', resId);
+
+  if (upcomingGuestIds !== null) {
+    dbQuery = dbQuery.in('id', upcomingGuestIds);
+  }
+
+  if (q.length >= 2) {
+    dbQuery = dbQuery.or(
+      `phone.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`,
+    );
+  }
+
+  if (currentFilters.vipOnly) dbQuery = dbQuery.eq('vip', true);
+  if (currentFilters.withPhoneOnly) dbQuery = dbQuery.not('phone', 'is', null);
+  if (currentFilters.withEmailOnly) dbQuery = dbQuery.not('email', 'is', null);
+  if (currentFilters.withRatingOnly) dbQuery = dbQuery.not('avg_rating', 'is', null);
+
+  // VIP clients always surface first within any sort order so they are
+  // never pushed beyond the first page by the secondary sort criterion.
+  dbQuery = dbQuery.order('vip', { ascending: false });
+
+  switch (currentSort) {
+    case 'last_visit_desc':
+      dbQuery = dbQuery.order('last_visit', { ascending: false });
+      break;
+    case 'created_at_desc':
+      dbQuery = dbQuery.order('created_at', { ascending: false });
+      break;
+    case 'visit_count_desc':
+      dbQuery = dbQuery.order('visit_count', { ascending: false });
+      break;
+    case 'avg_rating_desc':
+      dbQuery = dbQuery.order('avg_rating', { ascending: false });
+      break;
+    case 'name_asc':
+      dbQuery = dbQuery
+        .order('last_name', { ascending: true })
+        .order('first_name', { ascending: true });
+      break;
+  }
+
+  dbQuery = dbQuery.range(from, to);
+
+  const { data, error: fetchError } = await dbQuery;
+  if (fetchError) return { ok: false, error: fetchError.message };
+
+  const rawRows = data ?? [];
+  const rows = useTagFilter ? applyTagFilters(rawRows, currentFilters) : rawRows;
+
+  return { ok: true, rows, hasMore: rawRows.length === fetchSize };
+}
+
 export function useGuests() {
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
-  const [guests, setGuests]       = useState<GuestRow[]>([]);
-  const [query, setQuery]         = useState('');
-  const [sort, setSort]           = useState<GuestSortOption>(DEFAULT_SORT);
-  const [filters, setFilters]     = useState<GuestFilterState>(DEFAULT_FILTERS);
+  const [loading, setLoading]         = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+  const [guests, setGuests]           = useState<GuestRow[]>([]);
+  const [hasMore, setHasMore]         = useState(true);
+  const [query, setQuery]             = useState('');
+  const [sort, setSort]               = useState<GuestSortOption>(DEFAULT_SORT);
+  const [filters, setFilters]         = useState<GuestFilterState>(DEFAULT_FILTERS);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
 
-  const restaurantIdRef   = useRef<string | null>(null);
-  const queryRef          = useRef<string>('');
-  const initialLoadedRef  = useRef(false);
+  const restaurantIdRef    = useRef<string | null>(null);
+  const queryRef           = useRef<string>('');
+  const initialLoadedRef   = useRef(false);
+  const currentPageRef     = useRef(0);
+  const loadingMoreRef     = useRef(false);
+  const hasMoreRef         = useRef(true);
+  // Incremented on every reset so stale loadMore appends are discarded.
+  const fetchGenerationRef = useRef(0);
 
-  const fetchGuests = useCallback(
-    async (
-      resId: string,
-      searchQuery: string,
-      currentSort: GuestSortOption,
-      currentFilters: GuestFilterState,
-    ): Promise<void> => {
-      const q = searchQuery.trim();
-      const useTagLimit = hasTagFilter(currentFilters);
-      const limit = useTagLimit ? TAG_FILTER_LIMIT : STANDARD_LIMIT;
+  const fetchPage = useCallback(async (
+    resId: string,
+    searchQuery: string,
+    currentSort: GuestSortOption,
+    currentFilters: GuestFilterState,
+    page: number,
+    append: boolean,
+  ): Promise<void> => {
+    // append=false means a fresh reset; increment generation to invalidate concurrent loadMore.
+    const generation = append
+      ? fetchGenerationRef.current
+      : ++fetchGenerationRef.current;
 
-      // Upcoming reservation filter: resolve the set of guest_ids first, then filter guests.
-      // Two queries total — never loads the full guest table.
-      let upcomingGuestIds: string[] | null = null;
-      if (currentFilters.upcomingReservationOnly) {
-        const today = getTodayDateString();
-        const { data: resRows, error: resError } = await supabase
-          .from('reservations')
-          .select('guest_id')
-          .eq('restaurant_id', resId)
-          .gte('date', today)
-          .in('status', UPCOMING_STATUSES)
-          .not('guest_id', 'is', null)
-          .limit(UPCOMING_RESERVATIONS_LIMIT);
+    const result = await queryGuestPage(resId, searchQuery, currentSort, currentFilters, page);
 
-        if (resError) { setError(resError.message); return; }
+    // Discard if a newer reset started while this request was in flight.
+    if (fetchGenerationRef.current !== generation) return;
 
-        const ids = [
-          ...new Set(
-            (resRows ?? [])
-              .map(r => r.guest_id)
-              .filter((id): id is string => id !== null),
-          ),
-        ];
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
 
-        if (ids.length === 0) {
-          setGuests([]);
-          setError(null);
-          return;
-        }
+    const { rows, hasMore: pageHasMore } = result;
+    hasMoreRef.current = pageHasMore;
+    setHasMore(pageHasMore);
+    currentPageRef.current = page;
 
-        upcomingGuestIds = ids;
-      }
-
-      let dbQuery = supabase
-        .from('guests')
-        .select('*')
-        .eq('restaurant_id', resId);
-
-      if (upcomingGuestIds !== null) {
-        dbQuery = dbQuery.in('id', upcomingGuestIds);
-      }
-
-      if (q.length >= 2) {
-        dbQuery = dbQuery.or(
-          `phone.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`,
-        );
-      }
-
-      if (currentFilters.vipOnly) dbQuery = dbQuery.eq('vip', true);
-      if (currentFilters.withPhoneOnly) dbQuery = dbQuery.not('phone', 'is', null);
-      if (currentFilters.withEmailOnly) dbQuery = dbQuery.not('email', 'is', null);
-      if (currentFilters.withRatingOnly) dbQuery = dbQuery.not('avg_rating', 'is', null);
-
-      // VIP clients always surface first within any sort order so they are
-      // never pushed beyond STANDARD_LIMIT by the secondary sort criterion.
-      dbQuery = dbQuery.order('vip', { ascending: false });
-
-      switch (currentSort) {
-        case 'last_visit_desc':
-          dbQuery = dbQuery.order('last_visit', { ascending: false });
-          break;
-        case 'created_at_desc':
-          dbQuery = dbQuery.order('created_at', { ascending: false });
-          break;
-        case 'visit_count_desc':
-          dbQuery = dbQuery.order('visit_count', { ascending: false });
-          break;
-        case 'avg_rating_desc':
-          dbQuery = dbQuery.order('avg_rating', { ascending: false });
-          break;
-        case 'name_asc':
-          dbQuery = dbQuery
-            .order('last_name', { ascending: true })
-            .order('first_name', { ascending: true });
-          break;
-      }
-
-      dbQuery = dbQuery.limit(limit);
-
-      const { data, error: fetchError } = await dbQuery;
-
-      if (fetchError) {
-        setError(fetchError.message);
-        return;
-      }
-
-      let results = data ?? [];
-      if (useTagLimit) results = applyTagFilters(results, currentFilters);
-
-      setGuests(results);
-      setError(null);
-    },
-    [],
-  );
+    if (append) {
+      setGuests(prev => {
+        const existingIds = new Set(prev.map(g => g.id));
+        const newRows = rows.filter(g => !existingIds.has(g.id));
+        return [...prev, ...newRows];
+      });
+    } else {
+      setGuests(rows);
+    }
+    setError(null);
+  }, []);
 
   const loadInitial = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -173,31 +215,31 @@ export function useGuests() {
       restaurantIdRef.current = profile.restaurant_id;
       setRestaurantId(profile.restaurant_id);
       initialLoadedRef.current = true;
-      await fetchGuests(profile.restaurant_id, '', DEFAULT_SORT, DEFAULT_FILTERS);
+      await fetchPage(profile.restaurant_id, '', DEFAULT_SORT, DEFAULT_FILTERS, 0, false);
     } finally {
       setLoading(false);
     }
-  }, [fetchGuests]);
+  }, [fetchPage]);
 
   useEffect(() => { void loadInitial(); }, [loadInitial]);
 
-  // Auto-refetch when sort or filters change — only after the initial load
+  // Auto-refetch (reset to page 0) when sort or filters change — only after initial load.
   useEffect(() => {
     if (!initialLoadedRef.current) return;
     const resId = restaurantIdRef.current;
     if (!resId) return;
     setLoading(true);
-    void fetchGuests(resId, queryRef.current, sort, filters).finally(() => setLoading(false));
-  }, [sort, filters, fetchGuests]);
+    void fetchPage(resId, queryRef.current, sort, filters, 0, false).finally(() => setLoading(false));
+  }, [sort, filters, fetchPage]);
 
   const search = useCallback(async (): Promise<void> => {
     const resId = restaurantIdRef.current;
     if (!resId) return;
     queryRef.current = query;
     setLoading(true);
-    try { await fetchGuests(resId, query, sort, filters); }
+    try { await fetchPage(resId, query, sort, filters, 0, false); }
     finally { setLoading(false); }
-  }, [query, sort, filters, fetchGuests]);
+  }, [query, sort, filters, fetchPage]);
 
   const clearSearch = useCallback(async (): Promise<void> => {
     const resId = restaurantIdRef.current;
@@ -205,17 +247,31 @@ export function useGuests() {
     queryRef.current = '';
     if (!resId) return;
     setLoading(true);
-    try { await fetchGuests(resId, '', sort, filters); }
+    try { await fetchPage(resId, '', sort, filters, 0, false); }
     finally { setLoading(false); }
-  }, [sort, filters, fetchGuests]);
+  }, [sort, filters, fetchPage]);
 
   const refresh = useCallback(async (): Promise<void> => {
     const resId = restaurantIdRef.current;
     if (!resId) return;
     setLoading(true);
-    try { await fetchGuests(resId, queryRef.current, sort, filters); }
+    try { await fetchPage(resId, queryRef.current, sort, filters, 0, false); }
     finally { setLoading(false); }
-  }, [sort, filters, fetchGuests]);
+  }, [sort, filters, fetchPage]);
+
+  const loadMore = useCallback(async (): Promise<void> => {
+    if (loadingMoreRef.current || !hasMoreRef.current) return;
+    const resId = restaurantIdRef.current;
+    if (!resId) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      await fetchPage(resId, queryRef.current, sort, filters, currentPageRef.current + 1, true);
+    } finally {
+      setLoadingMore(false);
+      loadingMoreRef.current = false;
+    }
+  }, [sort, filters, fetchPage]);
 
   const toggleFilter = useCallback((key: keyof GuestFilterState): void => {
     setFilters(prev => ({ ...prev, [key]: !prev[key] }));
@@ -229,8 +285,11 @@ export function useGuests() {
 
   return {
     loading,
+    loadingMore,
     error,
     guests,
+    hasMore,
+    loadMore,
     query,
     setQuery,
     sort,
