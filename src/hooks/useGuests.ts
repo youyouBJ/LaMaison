@@ -115,6 +115,10 @@ export function useGuests() {
       if (currentFilters.withEmailOnly) dbQuery = dbQuery.not('email', 'is', null);
       if (currentFilters.withRatingOnly) dbQuery = dbQuery.not('avg_rating', 'is', null);
 
+      // VIP clients always surface first within any sort order so they are
+      // never pushed beyond STANDARD_LIMIT by the secondary sort criterion.
+      dbQuery = dbQuery.order('vip', { ascending: false });
+
       switch (currentSort) {
         case 'last_visit_desc':
           dbQuery = dbQuery.order('last_visit', { ascending: false });
