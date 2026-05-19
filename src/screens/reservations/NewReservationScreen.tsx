@@ -16,7 +16,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useCreateReservation } from '../../hooks/useCreateReservation';
 import { getTodayDateString } from '../../utils/date';
-import { withBirthdayOccasion } from '../../utils/reservationOccasion';
+import { withBirthdayOccasion, withEventOccasion } from '../../utils/reservationOccasion';
 import { isDateAllowedForShift, generateTimeSlots } from '../../utils/reservationSlots';
 import SectionCard from '../../components/SectionCard';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -46,6 +46,7 @@ type FormState = {
   selectedTableIds: string[];
   status: 'confirmed' | 'pending';
   isBirthday: boolean;
+  isEvent: boolean;
   notes: string;
 };
 
@@ -65,6 +66,7 @@ const INITIAL_FORM: FormState = {
   selectedTableIds:  [],
   status:            'confirmed',
   isBirthday:        false,
+  isEvent:           false,
   notes:             '',
 };
 
@@ -190,7 +192,8 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
       const email     = form.guestEmail.trim()     || undefined;
       const hasAnyGuestInfo = Boolean(firstName ?? lastName ?? phone ?? email);
 
-      const finalNotes = withBirthdayOccasion(form.notes.trim() || null, form.isBirthday);
+      let finalNotes = withEventOccasion(form.notes.trim() || null, form.isEvent);
+      finalNotes = withBirthdayOccasion(finalNotes, form.isBirthday);
 
       const id = await createReservation({
         date:      form.date,
@@ -444,6 +447,28 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
               )}
             </SectionCard>}
 
+            {/* ── Occasion ── */}
+            <SectionCard title="Occasion">
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Anniversaire</Text>
+                <Switch
+                  value={form.isBirthday}
+                  onValueChange={(v) => setForm((prev) => ({ ...prev, isBirthday: v }))}
+                  trackColor={{ false: colors.border, true: colors.goldLight }}
+                  thumbColor={form.isBirthday ? colors.gold : colors.sand}
+                />
+              </View>
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Événement</Text>
+                <Switch
+                  value={form.isEvent}
+                  onValueChange={(v) => setForm((prev) => ({ ...prev, isEvent: v }))}
+                  trackColor={{ false: colors.border, true: colors.ctaLight }}
+                  thumbColor={form.isEvent ? colors.cta : colors.sand}
+                />
+              </View>
+            </SectionCard>
+
             {/* ── Table (optionnel) ── */}
             <SectionCard title="Table">
               <Text style={styles.tableHint}>
@@ -493,15 +518,6 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Anniversaire</Text>
-                <Switch
-                  value={form.isBirthday}
-                  onValueChange={(v) => setForm((prev) => ({ ...prev, isBirthday: v }))}
-                  trackColor={{ false: colors.border, true: colors.goldLight }}
-                  thumbColor={form.isBirthday ? colors.gold : colors.sand}
-                />
               </View>
               <TextInput
                 style={[styles.input, styles.textArea]}

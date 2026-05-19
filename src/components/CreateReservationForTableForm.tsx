@@ -17,7 +17,7 @@ import DateSelector from './DateSelector';
 import TimeSlotSelector from './TimeSlotSelector';
 import PrimaryButton from './PrimaryButton';
 import { generateTimeSlots, isDateAllowedForShift } from '../utils/reservationSlots';
-import { withBirthdayOccasion } from '../utils/reservationOccasion';
+import { withBirthdayOccasion, withEventOccasion } from '../utils/reservationOccasion';
 import type { FloorServiceFilter } from '../types/floor';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -112,6 +112,7 @@ export default function CreateReservationForTableForm({
   const [newEmail, setNewEmail]                 = useState('');
   const [newVip, setNewVip]                     = useState(false);
   const [isBirthday, setIsBirthday]             = useState(false);
+  const [isEvent, setIsEvent]                   = useState(false);
 
   const autoSelectedRef = useRef(false);
   const isWalkIn = clientType === 'walkin';
@@ -241,7 +242,8 @@ export default function CreateReservationForTableForm({
     setError(null);
 
     const hasNewGuestInfo = newFirstName || newLastName || newPhone || newEmail;
-    const finalNotes = withBirthdayOccasion(notes.trim() || null, isBirthday);
+    let finalNotes = withEventOccasion(notes.trim() || null, isEvent);
+    finalNotes = withBirthdayOccasion(finalNotes, isBirthday);
     try {
       const id = await createReservation({
         date,
@@ -271,7 +273,7 @@ export default function CreateReservationForTableForm({
     canSubmit, timeSlot, selectedShiftId, date, partySize, notes, status,
     selectedTableIds, isWalkIn, selectedGuestId,
     newFirstName, newLastName, newPhone, newEmail, newVip,
-    isBirthday,
+    isBirthday, isEvent,
     createReservation, setError, onSuccess,
   ]);
 
@@ -552,6 +554,29 @@ export default function CreateReservationForTableForm({
         </View>
       ) : null}
 
+      {/* ── Section 5.5 : Occasion ──────────────────────────────────── */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>Occasion</Text>
+        <View style={styles.vipRow}>
+          <Text style={styles.vipLabel}>Anniversaire</Text>
+          <Switch
+            value={isBirthday}
+            onValueChange={setIsBirthday}
+            trackColor={{ false: colors.border, true: colors.goldLight }}
+            thumbColor={isBirthday ? colors.gold : colors.sand}
+          />
+        </View>
+        <View style={styles.vipRow}>
+          <Text style={styles.vipLabel}>Événement</Text>
+          <Switch
+            value={isEvent}
+            onValueChange={setIsEvent}
+            trackColor={{ false: colors.border, true: colors.ctaLight }}
+            thumbColor={isEvent ? colors.cta : colors.sand}
+          />
+        </View>
+      </View>
+
       {/* ── Section 6 : Statut & Notes ──────────────────────────────────── */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Statut & Notes</Text>
@@ -571,15 +596,6 @@ export default function CreateReservationForTableForm({
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-        <View style={styles.vipRow}>
-          <Text style={styles.vipLabel}>Anniversaire</Text>
-          <Switch
-            value={isBirthday}
-            onValueChange={setIsBirthday}
-            trackColor={{ false: colors.border, true: colors.goldLight }}
-            thumbColor={isBirthday ? colors.gold : colors.sand}
-          />
         </View>
         <TextInput
           style={[styles.input, styles.inputMultiline]}

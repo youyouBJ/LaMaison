@@ -20,7 +20,7 @@ import type { ReservationsStackParamList } from '../../navigation/ReservationsNa
 import type { ReservationStatus } from '../../types/database';
 import { formatReservationTables } from '../../utils/reservationTables';
 import { reservationNeedsPhoneConfirmation } from '../../utils/reservationConfirmation';
-import { isBirthdayReservation, displayNotes } from '../../utils/reservationOccasion';
+import { isBirthdayReservation, isEventReservation, displayNotes } from '../../utils/reservationOccasion';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationDetail'>;
 
@@ -117,6 +117,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
   const { backgroundColor: statusBg, color: statusColor } = getReservationStatusColors(r.status);
   const isVip        = r.guests?.vip === true;
   const isBirthday   = isBirthdayReservation(r.notes);
+  const isEvent      = isEventReservation(r.notes);
   const cleanNotes   = displayNotes(r.notes);
   const isTerminal   = actions.length === 0;
   const needsPhoneConfirmation = reservationNeedsPhoneConfirmation(r);
@@ -185,10 +186,19 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
               <DetailRow label="Table" value={formatReservationTables(r.tables, r.reservation_tables)} />
               <DetailRow label="Statut" value={<StatusBadge status={r.status} />} />
               <DetailRow label="Origine" value={r.source} />
-              {isBirthday ? (
+              {(isBirthday || isEvent) ? (
                 <DetailRow label="Occasion" value={
-                  <View style={styles.birthdayBadge}>
-                    <Text style={styles.birthdayText}>Anniversaire</Text>
+                  <View style={styles.occasionBadges}>
+                    {isBirthday ? (
+                      <View style={styles.birthdayBadge}>
+                        <Text style={styles.birthdayText}>Anniversaire</Text>
+                      </View>
+                    ) : null}
+                    {isEvent ? (
+                      <View style={styles.eventBadge}>
+                        <Text style={styles.eventText}>Événement</Text>
+                      </View>
+                    ) : null}
                   </View>
                 } />
               ) : null}
@@ -417,6 +427,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   vipText: { ...typography.label, color: colors.gold },
+  occasionBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    justifyContent: 'flex-end',
+  },
   birthdayBadge: {
     backgroundColor: colors.goldLight,
     borderRadius: radius.sm,
@@ -426,6 +442,15 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
   },
   birthdayText: { ...typography.label, color: colors.gold },
+  eventBadge: {
+    backgroundColor: colors.ctaLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: colors.cta,
+  },
+  eventText: { ...typography.label, color: colors.cta },
 
   // Detail grid
   detailGrid: { gap: 0 },

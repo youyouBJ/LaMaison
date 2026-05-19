@@ -19,7 +19,7 @@ import FloorCanvas from '../../components/FloorCanvas';
 import CreateReservationForTableForm from '../../components/CreateReservationForTableForm';
 import { useFloorPlan } from '../../hooks/useFloorPlan';
 import type { FloorTableWithState, FloorPlanReservation, FloorServiceFilter } from '../../types/floor';
-import { isBirthdayReservation, displayNotes } from '../../utils/reservationOccasion';
+import { isBirthdayReservation, isEventReservation, displayNotes } from '../../utils/reservationOccasion';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -397,6 +397,7 @@ function TableDetailPanel({
             const isUpdating  = updatingReservationId === res.id;
             const { backgroundColor: pillBg, color: pillText } = getReservationStatusColors(res.status);
             const resBirthday = isBirthdayReservation(res.notes);
+            const resEvent    = isEventReservation(res.notes);
             const resNotes    = displayNotes(res.notes);
 
             return (
@@ -419,6 +420,11 @@ function TableDetailPanel({
                     {resBirthday ? (
                       <View style={styles.birthdayBadge}>
                         <Text style={styles.birthdayBadgeText}>Anniversaire</Text>
+                      </View>
+                    ) : null}
+                    {resEvent ? (
+                      <View style={styles.eventBadge}>
+                        <Text style={styles.eventBadgeText}>Événement</Text>
                       </View>
                     ) : null}
                     {resNotes ? (
@@ -623,6 +629,17 @@ const styles = StyleSheet.create({
     marginTop:       2,
   },
   birthdayBadgeText: { ...typography.label, color: colors.gold },
+  eventBadge: {
+    backgroundColor: colors.ctaLight,
+    borderRadius:    radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   2,
+    borderWidth:     1,
+    borderColor:     colors.cta,
+    alignSelf:       'flex-start',
+    marginTop:       2,
+  },
+  eventBadgeText: { ...typography.label, color: colors.cta },
   resPill: {
     borderRadius:      radius.xl,
     paddingHorizontal: spacing.sm,

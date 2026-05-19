@@ -4,7 +4,7 @@ import { colors, typography, spacing, radius } from '../theme';
 import { formatTimeSlot } from '../utils/date';
 import { formatReservationTables } from '../utils/reservationTables';
 import { reservationNeedsPhoneConfirmation } from '../utils/reservationConfirmation';
-import { isBirthdayReservation } from '../utils/reservationOccasion';
+import { isBirthdayReservation, isEventReservation } from '../utils/reservationOccasion';
 import StatusBadge from './StatusBadge';
 import type { ReservationWithJoins } from '../types/reservations';
 
@@ -22,6 +22,7 @@ function guestDisplayName(r: ReservationWithJoins): string {
 export default function ReservationCard({ reservation: r, onPress }: Props): React.JSX.Element {
   const isVip       = r.guests?.vip === true;
   const isBirthday  = isBirthdayReservation(r.notes);
+  const isEvent     = isEventReservation(r.notes);
   const needsCall   = reservationNeedsPhoneConfirmation(r);
   const phone       = r.guests?.phone ?? null;
 
@@ -45,6 +46,11 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
           {isBirthday && (
             <View style={styles.birthdayBadge}>
               <Text style={styles.birthdayText}>Anniversaire</Text>
+            </View>
+          )}
+          {isEvent && (
+            <View style={styles.eventBadge}>
+              <Text style={styles.eventText}>Événement</Text>
             </View>
           )}
           {needsCall && (
@@ -135,6 +141,18 @@ const styles = StyleSheet.create({
   birthdayText: {
     ...typography.label,
     color: colors.gold,
+  },
+  eventBadge: {
+    backgroundColor: colors.ctaLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: colors.cta,
+  },
+  eventText: {
+    ...typography.label,
+    color: colors.cta,
   },
   meta: {
     ...typography.small,
