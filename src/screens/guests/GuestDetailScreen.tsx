@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -120,10 +121,12 @@ function ReservationRow({ item }: { item: ReservationWithDetail }): React.JSX.El
 
 // ─── Écran principal ──────────────────────────────────────────────────────────
 
-export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
+export default function GuestDetailScreen({ route, navigation }: Props): React.JSX.Element {
   const { guestId } = route.params;
-  const { loading, saving, error, guest, reservations, refresh, updateGuest, toggleVip } =
-    useGuestDetail(guestId);
+  const {
+    loading, saving, deleting, error, guest, reservations,
+    refresh, updateGuest, toggleVip, fetchLinkedCounts, deleteGuest,
+  } = useGuestDetail(guestId);
 
   const [form, setForm] = useState<FormState>({
     first_name:       '',
@@ -136,6 +139,7 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
   const [saveSuccess, setSaveSuccess]   = useState(false);
   const [vipUpdating, setVipUpdating]   = useState(false);
   const [waFeedback, setWaFeedback]     = useState<{ ok: boolean; text: string } | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
   const formInitialized                 = useRef(false);
   const successTimer                    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const waTimer                         = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -214,6 +218,52 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
 
   const handleRefresh   = () => { refresh(); };
   const handleSavePress = () => { void handleSave(); };
+
+  const handleDeletePress = useCallback(() => {
+    if (!guest || deletePending || deleting || saving) return;
+    setDeletePending(true);
+    void (async () => {
+      try {
+        const counts = await fetchLinkedCounts();
+        setDeletePending(false);
+
+        const reservationCount = counts?.reservationCount ?? 0;
+        const waitlistCount    = counts?.waitlistCount    ?? 0;
+        const hasLinked        = reservationCount > 0 || waitlistCount > 0;
+
+        let message: string;
+        if (hasLinked) {
+          const parts: string[] = [];
+          if (reservationCount > 0) parts.push(`${reservationCount} réservation${reservationCount > 1 ? 's' : ''}`);
+          if (waitlistCount    > 0) parts.push(`${waitlistCount} entrée${waitlistCount > 1 ? 's' : ''} en liste d'attente`);
+          message =
+            `Ce client est lié à ${parts.join(' et ')}. ` +
+            'La suppression peut être bloquée par la base de données. ' +
+            'Voulez-vous continuer ?';
+        } else {
+          message =
+            'Cette action est définitive. ' +
+            'Les réservations associées resteront dans l\'historique, mais le client ne sera plus lié.';
+        }
+
+        Alert.alert('Supprimer ce client ?', message, [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Supprimer',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                const result = await deleteGuest();
+                if (result.ok) { navigation.goBack(); }
+              })();
+            },
+          },
+        ]);
+      } catch {
+        setDeletePending(false);
+      }
+    })();
+  }, [guest, deletePending, deleting, saving, fetchLinkedCounts, deleteGuest, navigation]);
 
   // ── Loading ──
   if (loading) {
@@ -425,6 +475,25 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
                   <ReservationRow key={item.id} item={item} />
                 ))
               )}
+            </SectionCard>
+
+            {/* ── Gestion du compte ── */}
+            <SectionCard title="Gestion du compte">
+              <TouchableOpacity
+                style={[
+                  styles.deleteBtn,
+                  (deletePending || deleting || saving) && styles.deleteBtnDisabled,
+                ]}
+                onPress={handleDeletePress}
+                disabled={deletePending || deleting || saving}
+                activeOpacity={0.75}
+              >
+                {deletePending || deleting ? (
+                  <ActivityIndicator size="small" color={colors.cta} />
+                ) : (
+                  <Text style={styles.deleteBtnText}>Supprimer le client</Text>
+                )}
+              </TouchableOpacity>
             </SectionCard>
 
             {/* ── Bannière erreur ── */}
@@ -764,5 +833,24 @@ const styles = StyleSheet.create({
   refreshActionText: {
     ...typography.small,
     color: colors.textMuted,
+  },
+
+  // Danger — delete button
+  deleteBtn: {
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.cta,
+    backgroundColor: colors.ctaLight,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  deleteBtnDisabled: {
+    opacity: 0.5,
+  },
+  deleteBtnText: {
+    ...typography.bodyMedium,
+    color: colors.cta,
   },
 });

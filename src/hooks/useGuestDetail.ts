@@ -25,9 +25,13 @@ export type UpdateGuestInput = {
 
 const RESERVATION_LIMIT = 10;
 
+type LinkedCounts = { reservationCount: number; waitlistCount: number };
+type DeleteResult = { ok: true } | { ok: false; errorMessage: string };
+
 export function useGuestDetail(guestId: string) {
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [guest, setGuest]       = useState<GuestRow | null>(null);
   const [reservations, setReservations] = useState<ReservationWithDetail[]>([]);
@@ -88,6 +92,31 @@ export function useGuestDetail(guestId: string) {
 
   const refresh = useCallback(() => { void fetchGuest(); }, [fetchGuest]);
 
+  const fetchLinkedCounts = useCallback(async (): Promise<LinkedCounts | null> => {
+    const [{ count: resCount, error: resError }, { count: wlCount, error: wlError }] =
+      await Promise.all([
+        supabase.from('reservations').select('id', { count: 'exact', head: true }).eq('guest_id', guestId),
+        supabase.from('waitlist').select('id', { count: 'exact', head: true }).eq('guest_id', guestId),
+      ]);
+    if (resError || wlError) return null;
+    return { reservationCount: resCount ?? 0, waitlistCount: wlCount ?? 0 };
+  }, [guestId]);
+
+  const deleteGuest = useCallback(async (): Promise<DeleteResult> => {
+    setDeleting(true);
+    setError(null);
+    try {
+      const { error: deleteError } = await supabase.from('guests').delete().eq('id', guestId);
+      if (deleteError) {
+        setError(deleteError.message);
+        return { ok: false, errorMessage: deleteError.message };
+      }
+      return { ok: true };
+    } finally {
+      setDeleting(false);
+    }
+  }, [guestId]);
+
   // Realtime sur le client courant
   useEffect(() => {
     channelRef.current = supabase
@@ -115,5 +144,5 @@ export function useGuestDetail(guestId: string) {
     })();
   }, [fetchGuest]);
 
-  return { loading, saving, error, guest, reservations, refresh, updateGuest, toggleVip };
+  return { loading, saving, deleting, error, guest, reservations, refresh, updateGuest, toggleVip, fetchLinkedCounts, deleteGuest };
 }
