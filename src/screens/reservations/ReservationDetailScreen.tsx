@@ -21,6 +21,13 @@ import type { ReservationStatus } from '../../types/database';
 import { formatReservationTables } from '../../utils/reservationTables';
 import { reservationNeedsPhoneConfirmation } from '../../utils/reservationConfirmation';
 import { isBirthdayReservation, isEventReservation, displayNotes } from '../../utils/reservationOccasion';
+import {
+  openWhatsAppMessage,
+  normalizePhoneForWhatsApp,
+  buildReservationConfirmationMessage,
+  buildReservationReminderMessage,
+  buildSatisfactionMessage,
+} from '../../utils/whatsapp';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationDetail'>;
 
@@ -84,6 +91,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
     useReservationDetail(reservationId);
 
   const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [whatsappFeedback, setWhatsappFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
   if (loading) {
     return (
@@ -129,6 +137,32 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
       return r.date;
     }
   })();
+
+  const handleWhatsApp = (type: 'confirmation' | 'reminder' | 'satisfaction') => {
+    const phone = r.guests?.phone ?? null;
+    const time  = formatTimeSlot(r.time_slot);
+    let message: string;
+    if (type === 'confirmation') {
+      message = buildReservationConfirmationMessage({ date: dateLabel, time, partySize: r.party_size });
+    } else if (type === 'reminder') {
+      message = buildReservationReminderMessage({ time, partySize: r.party_size });
+    } else {
+      message = buildSatisfactionMessage();
+    }
+    void openWhatsAppMessage(phone, message).then((opened) => {
+      setWhatsappFeedback(
+        opened
+          ? { ok: true, text: 'WhatsApp ouvert' }
+          : {
+              ok: false,
+              text: normalizePhoneForWhatsApp(phone)
+                ? "Impossible d'ouvrir WhatsApp."
+                : 'Numéro invalide.',
+            },
+      );
+      setTimeout(() => setWhatsappFeedback(null), 4000);
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -178,6 +212,40 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
               )}
             </View>
           </SectionCard>
+
+          {/* ── Contact WhatsApp ── */}
+          {r.guests?.phone && r.status !== 'cancelled' && r.status !== 'noshow' ? (
+            <SectionCard title="Contact WhatsApp">
+              {whatsappFeedback ? (
+                <View style={[styles.waBanner, whatsappFeedback.ok ? styles.waBannerOk : styles.waBannerErr]}>
+                  <Text style={[styles.waBannerText, whatsappFeedback.ok ? styles.waBannerTextOk : styles.waBannerTextErr]}>
+                    {whatsappFeedback.text}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={styles.waGrid}>
+                {(r.status === 'pending' || r.status === 'confirmed') ? (
+                  <PrimaryButton
+                    label="Demander confirmation"
+                    variant="secondary"
+                    onPress={() => handleWhatsApp('confirmation')}
+                  />
+                ) : null}
+                {(r.status === 'pending' || r.status === 'confirmed' || r.status === 'seated') ? (
+                  <PrimaryButton
+                    label="Envoyer rappel"
+                    variant="secondary"
+                    onPress={() => handleWhatsApp('reminder')}
+                  />
+                ) : null}
+                <PrimaryButton
+                  label="Demander un avis"
+                  variant="secondary"
+                  onPress={() => handleWhatsApp('satisfaction')}
+                />
+              </View>
+            </SectionCard>
+          ) : null}
 
           {/* ── Détails réservation ── */}
           <SectionCard title="Réservation">
@@ -465,6 +533,27 @@ const styles = StyleSheet.create({
   updatingText: { ...typography.small, color: colors.textMuted },
   actionsGrid: { gap: spacing.sm },
   actionBtnWrapper: {},
+
+  // WhatsApp section
+  waBanner: {
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+  },
+  waBannerOk: {
+    backgroundColor: colors.statusFreeLight,
+    borderColor: colors.statusFree,
+  },
+  waBannerErr: {
+    backgroundColor: colors.ctaLight,
+    borderColor: colors.cta,
+  },
+  waBannerText: { ...typography.small, fontFamily: typography.bodyMedium.fontFamily },
+  waBannerTextOk:  { color: colors.statusFree },
+  waBannerTextErr: { color: colors.cta },
+  waGrid: { gap: spacing.sm },
 
   // Correction section
   correctionToggle: {

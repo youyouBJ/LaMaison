@@ -80,6 +80,7 @@ export interface FloorPlanReservation {
   status: Database['public']['Tables']['reservations']['Row']['status'];
   source: Database['public']['Tables']['reservations']['Row']['source'];
   guestName: string | null;
+  guestPhone: string | null;
   shiftName: string | null;
   notes: string | null;
   tableLabels: string[];

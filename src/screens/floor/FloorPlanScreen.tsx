@@ -20,6 +20,13 @@ import CreateReservationForTableForm from '../../components/CreateReservationFor
 import { useFloorPlan } from '../../hooks/useFloorPlan';
 import type { FloorTableWithState, FloorPlanReservation, FloorServiceFilter } from '../../types/floor';
 import { isBirthdayReservation, isEventReservation, displayNotes } from '../../utils/reservationOccasion';
+import { formatReadableDate } from '../../utils/date';
+import {
+  openWhatsAppMessage,
+  normalizePhoneForWhatsApp,
+  buildReservationConfirmationMessage,
+  buildReservationReminderMessage,
+} from '../../utils/whatsapp';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -42,7 +49,7 @@ const LEGEND: { status: string; color: string; label: string }[] = [
 
 // ─── Action button ────────────────────────────────────────────────────────────
 
-type ActionVariant = 'seat' | 'complete' | 'confirm' | 'noshow' | 'cancel';
+type ActionVariant = 'seat' | 'complete' | 'confirm' | 'noshow' | 'cancel' | 'whatsapp';
 
 const ACTION_COLORS: Record<ActionVariant, { bg: string; border: string; text: string }> = {
   seat:     { bg: colors.cta,             border: colors.cta,        text: colors.textOnDark },
@@ -50,6 +57,7 @@ const ACTION_COLORS: Record<ActionVariant, { bg: string; border: string; text: s
   confirm:  { bg: colors.goldLight,       border: colors.gold,       text: colors.gold },
   noshow:   { bg: colors.surface,         border: colors.border,     text: colors.textMuted },
   cancel:   { bg: colors.ctaLight,        border: colors.cta,        text: colors.cta },
+  whatsapp: { bg: colors.statusFreeLight, border: colors.statusFree, text: colors.statusFree },
 };
 
 function ActionButton({
@@ -258,6 +266,7 @@ export default function FloorPlanScreen(): React.JSX.Element {
           successMsg={successMsg}
           actionError={actionError}
           updatingReservationId={updatingReservationId}
+          selectedDate={selectedDate}
           onClose={handleClosePanel}
           onAddReservation={() => setShowForm(true)}
           onSeat={(id) => { void handleSeat(id); }}
@@ -303,6 +312,7 @@ function TableDetailPanel({
   successMsg,
   actionError,
   updatingReservationId,
+  selectedDate,
   onClose,
   onAddReservation,
   onSeat,
@@ -315,6 +325,7 @@ function TableDetailPanel({
   successMsg: string | null;
   actionError: string | null;
   updatingReservationId: string | null;
+  selectedDate: string;
   onClose: () => void;
   onAddReservation: () => void;
   onSeat: (id: string) => void;
@@ -323,6 +334,33 @@ function TableDetailPanel({
   onNoShow: (id: string) => void;
   onCancel: (id: string) => void;
 }): React.JSX.Element {
+  const [waFeedback, setWaFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const formattedDate = (() => {
+    try { return formatReadableDate(new Date(`${selectedDate}T12:00:00`)); }
+    catch { return selectedDate; }
+  })();
+
+  const handleWhatsApp = (res: FloorPlanReservation) => {
+    const phone = res.guestPhone;
+    const time  = res.timeSlot.substring(0, 5);
+    const message = (res.status === 'pending' || res.status === 'confirmed')
+      ? buildReservationConfirmationMessage({ date: formattedDate, time, partySize: res.partySize })
+      : buildReservationReminderMessage({ time, partySize: res.partySize });
+    void openWhatsAppMessage(phone, message).then((opened) => {
+      setWaFeedback(
+        opened
+          ? { ok: true, text: 'WhatsApp ouvert' }
+          : {
+              ok: false,
+              text: normalizePhoneForWhatsApp(phone)
+                ? "Impossible d'ouvrir WhatsApp."
+                : 'Numéro invalide.',
+            },
+      );
+      setTimeout(() => setWaFeedback(null), 4000);
+    });
+  };
   const STATUS_LABEL: Record<string, string> = {
     free:        'Libre',
     reserved:    'Réservée',
@@ -386,6 +424,20 @@ function TableDetailPanel({
           <View style={styles.errorBanner}>
             <Ionicons name={'alert-circle-outline' as IoniconsName} size={15} color={colors.cta} />
             <Text style={styles.errorBannerText}>{actionError}</Text>
+          </View>
+        ) : null}
+
+        {/* WhatsApp feedback */}
+        {waFeedback ? (
+          <View style={[waFeedback.ok ? styles.successBanner : styles.errorBanner]}>
+            <Ionicons
+              name={(waFeedback.ok ? 'checkmark-circle-outline' : 'alert-circle-outline') as IoniconsName}
+              size={15}
+              color={waFeedback.ok ? colors.statusFree : colors.cta}
+            />
+            <Text style={[waFeedback.ok ? styles.successText : styles.errorBannerText]}>
+              {waFeedback.text}
+            </Text>
           </View>
         ) : null}
 
@@ -461,6 +513,9 @@ function TableDetailPanel({
                     {(res.status === 'pending' || res.status === 'confirmed' || res.status === 'seated') && (
                       <ActionButton label="Annuler" variant="cancel" onPress={() => onCancel(res.id)} />
                     )}
+                    {res.guestPhone ? (
+                      <ActionButton label="WhatsApp" variant="whatsapp" onPress={() => handleWhatsApp(res)} />
+                    ) : null}
                   </View>
                 )}
 

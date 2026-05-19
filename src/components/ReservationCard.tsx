@@ -1,12 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { colors, typography, spacing, radius } from '../theme';
-import { formatTimeSlot } from '../utils/date';
+import { formatTimeSlot, formatReadableDate } from '../utils/date';
 import { formatReservationTables } from '../utils/reservationTables';
 import { reservationNeedsPhoneConfirmation } from '../utils/reservationConfirmation';
 import { isBirthdayReservation, isEventReservation } from '../utils/reservationOccasion';
 import StatusBadge from './StatusBadge';
 import type { ReservationWithJoins } from '../types/reservations';
+import {
+  openWhatsAppMessage,
+  normalizePhoneForWhatsApp,
+  buildReservationConfirmationMessage,
+  buildReservationReminderMessage,
+  buildSatisfactionMessage,
+} from '../utils/whatsapp';
 
 type Props = {
   reservation: ReservationWithJoins;
@@ -26,8 +33,44 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
   const needsCall   = reservationNeedsPhoneConfirmation(r);
   const phone       = r.guests?.phone ?? null;
 
+  const [waFeedback, setWaFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+
   const handleCall = () => {
     if (phone) { void Linking.openURL(`tel:${phone}`); }
+  };
+
+  const showWhatsApp =
+    phone !== null &&
+    r.status !== 'cancelled' &&
+    r.status !== 'noshow';
+
+  const handleWhatsApp = () => {
+    const time    = formatTimeSlot(r.time_slot);
+    const dateStr = (() => {
+      try { return formatReadableDate(new Date(`${r.date}T12:00:00`)); }
+      catch { return r.date; }
+    })();
+    let message: string;
+    if (r.status === 'completed') {
+      message = buildSatisfactionMessage();
+    } else if (r.status === 'seated') {
+      message = buildReservationReminderMessage({ time, partySize: r.party_size });
+    } else {
+      message = buildReservationConfirmationMessage({ date: dateStr, time, partySize: r.party_size });
+    }
+    void openWhatsAppMessage(phone, message).then((opened) => {
+      setWaFeedback(
+        opened
+          ? { ok: true, text: 'WhatsApp ouvert' }
+          : {
+              ok: false,
+              text: normalizePhoneForWhatsApp(phone)
+                ? "Impossible d'ouvrir WhatsApp."
+                : 'Numéro invalide.',
+            },
+      );
+      setTimeout(() => setWaFeedback(null), 4000);
+    });
   };
 
   return (
@@ -66,12 +109,24 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
         </Text>
         <View style={styles.bottomRow}>
           <StatusBadge status={r.status} />
-          {phone ? (
-            <TouchableOpacity style={styles.callButton} onPress={handleCall} activeOpacity={0.75}>
-              <Text style={styles.callButtonText}>Appeler</Text>
-            </TouchableOpacity>
-          ) : null}
+          <View style={styles.bottomActions}>
+            {showWhatsApp ? (
+              <TouchableOpacity style={styles.waButton} onPress={handleWhatsApp} activeOpacity={0.75}>
+                <Text style={styles.waButtonText}>WhatsApp</Text>
+              </TouchableOpacity>
+            ) : null}
+            {phone ? (
+              <TouchableOpacity style={styles.callButton} onPress={handleCall} activeOpacity={0.75}>
+                <Text style={styles.callButtonText}>Appeler</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
+        {waFeedback ? (
+          <Text style={[styles.waFeedbackText, waFeedback.ok ? styles.waFeedbackOk : styles.waFeedbackErr]}>
+            {waFeedback.text}
+          </Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -176,6 +231,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  bottomActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   callButton: {
     backgroundColor: colors.goldLight,
     borderRadius: radius.sm,
@@ -188,4 +248,23 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.gold,
   },
+  waButton: {
+    backgroundColor: colors.statusFreeLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.statusFree,
+  },
+  waButtonText: {
+    ...typography.label,
+    color: colors.statusFree,
+  },
+  waFeedbackText: {
+    ...typography.small,
+    marginTop: spacing.xs,
+    fontFamily: typography.bodyMedium.fontFamily,
+  },
+  waFeedbackOk:  { color: colors.statusFree },
+  waFeedbackErr: { color: colors.cta },
 });

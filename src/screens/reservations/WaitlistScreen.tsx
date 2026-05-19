@@ -23,6 +23,11 @@ import {
 } from '../../utils/waitlistStatus';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { WaitlistEntryWithGuest, WaitlistServiceFilter } from '../../types/waitlist';
+import {
+  openWhatsAppMessage,
+  normalizePhoneForWhatsApp,
+  buildWaitlistReadyMessage,
+} from '../../utils/whatsapp';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'Waitlist'>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -62,8 +67,28 @@ function EntryCard({
   onConvertConfirm,
   onConvertCancel,
 }: EntryCardProps): React.JSX.Element {
-  const isLoading        = actionLoadingId === entry.id;
+  const isLoading         = actionLoadingId === entry.id;
   const showConvertPicker = activeConvertId === entry.id;
+
+  const [waFeedback, setWaFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handleWhatsApp = () => {
+    const phone   = entry.guests?.phone ?? null;
+    const message = buildWaitlistReadyMessage();
+    void openWhatsAppMessage(phone, message).then((opened) => {
+      setWaFeedback(
+        opened
+          ? { ok: true, text: 'WhatsApp ouvert' }
+          : {
+              ok: false,
+              text: normalizePhoneForWhatsApp(phone)
+                ? "Impossible d'ouvrir WhatsApp."
+                : 'Numéro invalide.',
+            },
+      );
+      setTimeout(() => setWaFeedback(null), 4000);
+    });
+  };
   const { backgroundColor, color } = getWaitlistStatusColors(entry.status);
   const statusLabel = getWaitlistStatusLabel(entry.status);
 
@@ -114,6 +139,13 @@ function EntryCard({
         <Text style={styles.entryNotes} numberOfLines={2}>{entry.notes}</Text>
       ) : null}
 
+      {/* ── WhatsApp feedback ── */}
+      {waFeedback ? (
+        <Text style={[styles.waFeedbackText, waFeedback.ok ? styles.waFeedbackOk : styles.waFeedbackErr]}>
+          {waFeedback.text}
+        </Text>
+      ) : null}
+
       {/* ── Actions ── */}
       {isLoading ? (
         <View style={styles.entryLoadingRow}>
@@ -149,22 +181,28 @@ function EntryCard({
         </View>
       ) : showActions ? (
         <View style={styles.entryActions}>
-          {/* waiting : Prévenir / Installer / Parti / Convertir */}
+          {/* waiting : Prévenir / Installer / Parti / Convertir / WhatsApp */}
           {entry.status === 'waiting' ? (
             <>
               <ActionChip label="Prévenir"  variant="notify"   onPress={() => onNotify(entry.id)} />
               <ActionChip label="Installer" variant="seat"     onPress={() => onSeat(entry.id)} />
               <ActionChip label="Parti"     variant="left"     onPress={() => onLeft(entry.id)} />
               <ActionChip label="→ Résa"    variant="convert"  onPress={() => onConvertRequest(entry.id)} />
+              {entry.guests?.phone ? (
+                <ActionChip label="WhatsApp" variant="whatsapp" onPress={handleWhatsApp} />
+              ) : null}
             </>
           ) : null}
-          {/* notified : Installer / Parti / Repasser en attente / Convertir */}
+          {/* notified : Installer / Parti / Repasser en attente / Convertir / WhatsApp */}
           {entry.status === 'notified' ? (
             <>
-              <ActionChip label="Installer"     variant="seat"    onPress={() => onSeat(entry.id)} />
-              <ActionChip label="Parti"         variant="left"    onPress={() => onLeft(entry.id)} />
-              <ActionChip label="En attente"    variant="waiting" onPress={() => onWaiting(entry.id)} />
-              <ActionChip label="→ Résa"        variant="convert" onPress={() => onConvertRequest(entry.id)} />
+              <ActionChip label="Installer"  variant="seat"     onPress={() => onSeat(entry.id)} />
+              <ActionChip label="Parti"      variant="left"     onPress={() => onLeft(entry.id)} />
+              <ActionChip label="En attente" variant="waiting"  onPress={() => onWaiting(entry.id)} />
+              <ActionChip label="→ Résa"     variant="convert"  onPress={() => onConvertRequest(entry.id)} />
+              {entry.guests?.phone ? (
+                <ActionChip label="WhatsApp" variant="whatsapp" onPress={handleWhatsApp} />
+              ) : null}
             </>
           ) : null}
           {/* seated : Parti / Repasser en attente */}
@@ -186,14 +224,15 @@ function EntryCard({
 
 // ── ActionChip ────────────────────────────────────────────────────────────────
 
-type ActionChipVariant = 'notify' | 'seat' | 'left' | 'waiting' | 'convert';
+type ActionChipVariant = 'notify' | 'seat' | 'left' | 'waiting' | 'convert' | 'whatsapp';
 
 const CHIP_STYLES: Record<ActionChipVariant, { bg: string; border: string; text: string }> = {
-  notify:  { bg: colors.goldLight,             border: colors.gold,             text: colors.gold },
-  seat:    { bg: colors.statusFreeLight,        border: colors.statusFree,       text: colors.statusFree },
-  left:    { bg: colors.statusUnavailableLight, border: colors.statusUnavailable, text: colors.statusUnavailable },
-  waiting: { bg: colors.surface,               border: colors.border,           text: colors.textSecondary },
-  convert: { bg: colors.goldLight,             border: colors.gold,             text: colors.gold },
+  notify:   { bg: colors.goldLight,             border: colors.gold,             text: colors.gold },
+  seat:     { bg: colors.statusFreeLight,        border: colors.statusFree,       text: colors.statusFree },
+  left:     { bg: colors.statusUnavailableLight, border: colors.statusUnavailable, text: colors.statusUnavailable },
+  waiting:  { bg: colors.surface,               border: colors.border,           text: colors.textSecondary },
+  convert:  { bg: colors.goldLight,             border: colors.gold,             text: colors.gold },
+  whatsapp: { bg: colors.statusFreeLight,        border: colors.statusFree,       text: colors.statusFree },
 };
 
 function ActionChip({
@@ -627,6 +666,15 @@ const styles = StyleSheet.create({
   },
   entryCoversText: { ...typography.bodyMedium, color: colors.textSecondary },
   entryNotes: { ...typography.small, color: colors.textMuted, marginBottom: spacing.sm, fontStyle: 'italic' },
+
+  // WhatsApp feedback
+  waFeedbackText: {
+    ...typography.small,
+    fontFamily: typography.bodyMedium.fontFamily,
+    marginTop: spacing.xs,
+  },
+  waFeedbackOk:  { color: colors.statusFree },
+  waFeedbackErr: { color: colors.cta },
 
   // Actions
   entryLoadingRow: {

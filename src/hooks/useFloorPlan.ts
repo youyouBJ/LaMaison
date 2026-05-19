@@ -328,6 +328,7 @@ export function useFloorPlan(): UseFloorPlanResult {
       status:      res.status,
       source:      res.source,
       guestName,
+      guestPhone:  res.guests?.phone ?? null,
       shiftName:   res.shifts?.name ?? null,
       notes:       res.notes,
       tableLabels: tableLabelsForRes.get(res.id) ?? [],
