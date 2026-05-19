@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import type { ReservationStatus } from '../types/database';
-import type { ReservationWithJoins } from '../types/reservations';
+import type { ReservationStatus, Database } from '../types/database';
+import type { ReservationWithJoins, ReservationTableEntry } from '../types/reservations';
+
+type TableRow = Database['public']['Tables']['tables']['Row'];
+type RtQueryRow = { id: string; reservation_id: string; table_id: string; tables: TableRow | null };
 
 export function useReservationDetail(reservationId: string) {
   const [loading, setLoading]       = useState(true);
@@ -19,7 +22,23 @@ export function useReservationDetail(reservationId: string) {
       .single();
 
     if (fetchError) { setError(fetchError.message); return; }
-    setReservation(data as unknown as ReservationWithJoins);
+    let row = data as unknown as ReservationWithJoins;
+
+    // Enrich with reservation_tables (silently ignore pre-migration)
+    const { data: rtData } = await supabase
+      .from('reservation_tables')
+      .select('id, reservation_id, table_id, tables(*)')
+      .eq('reservation_id', reservationId);
+
+    if (rtData && rtData.length > 0) {
+      const rtRows = rtData as unknown as RtQueryRow[];
+      const entries: ReservationTableEntry[] = rtRows
+        .filter((rt) => rt.tables !== null)
+        .map((rt) => ({ id: rt.id, table_id: rt.table_id, tables: rt.tables as TableRow }));
+      row = { ...row, reservation_tables: entries };
+    }
+
+    setReservation(row);
     setError(null);
   }, [reservationId]);
 

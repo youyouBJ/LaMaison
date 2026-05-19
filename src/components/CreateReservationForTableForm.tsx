@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius } from '../theme';
 import { useCreateReservation } from '../hooks/useCreateReservation';
-import type { ShiftRow, GuestRow } from '../hooks/useCreateReservation';
+import type { ShiftRow, TableRow, GuestRow } from '../hooks/useCreateReservation';
 import DateSelector from './DateSelector';
 import TimeSlotSelector from './TimeSlotSelector';
 import PrimaryButton from './PrimaryButton';
@@ -22,16 +22,20 @@ import type { FloorServiceFilter } from '../types/floor';
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 export type CreateReservationForTableFormProps = {
-  tableId: string;
-  tableLabel: string;
-  tableCapacity: number;
-  initialDate: string;
+  tableId:              string;
+  tableLabel:           string;
+  tableCapacity:        number;
+  initialDate:          string;
   initialServiceFilter: FloorServiceFilter;
-  onSuccess: (reservationId: string) => void;
-  onCancel: () => void;
+  onSuccess:            (reservationId: string) => void;
+  onCancel:             () => void;
 };
 
-type GuestMode = 'none' | 'existing' | 'new';
+type GuestMode    = 'none' | 'existing' | 'new';
+type ClientType   = 'identified' | 'walkin';
+type StatusOption = 'confirmed' | 'pending' | 'seated';
+
+// ── Shift helpers ─────────────────────────────────────────────────────────────
 
 function isLunchShift(shift: ShiftRow): boolean {
   const n = shift.name.toLowerCase();
@@ -45,12 +49,14 @@ function isDinnerShift(shift: ShiftRow): boolean {
 
 function preferredShiftForFilter(
   forDate: ShiftRow[],
-  filter: FloorServiceFilter,
+  filter:  FloorServiceFilter,
 ): ShiftRow | undefined {
-  if (filter === 'lunch') return forDate.find(isLunchShift) ?? forDate[0];
+  if (filter === 'lunch')  return forDate.find(isLunchShift)  ?? forDate[0];
   if (filter === 'dinner') return forDate.find(isDinnerShift) ?? forDate[0];
   return forDate.find(isDinnerShift) ?? forDate[0];
 }
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function CreateReservationForTableForm({
   tableId,
@@ -67,18 +73,34 @@ export default function CreateReservationForTableForm({
     searchLoading,
     error,
     shifts,
+    tables,
     guestSearchResults,
     searchGuests,
     createReservation,
     setError,
   } = useCreateReservation();
 
+  // ── Date & service ────────────────────────────────────────────────────────
   const [date, setDate]                         = useState(initialDate);
   const [selectedShiftId, setSelectedShiftId]   = useState<string | null>(null);
   const [timeSlot, setTimeSlot]                 = useState<string | null>(null);
+
+  // ── Couverts ──────────────────────────────────────────────────────────────
   const [partySize, setPartySize]               = useState(tableCapacity > 0 ? tableCapacity : 2);
-  const [status, setStatus]                     = useState<'confirmed' | 'pending'>('confirmed');
+
+  // ── Tables combinées ─────────────────────────────────────────────────────
+  const [selectedTableIds, setSelectedTableIds] = useState<string[]>([tableId]);
+
+  // ── Type client ───────────────────────────────────────────────────────────
+  const [clientType, setClientType]             = useState<ClientType>('identified');
+
+  // ── Statut ────────────────────────────────────────────────────────────────
+  const [status, setStatus]                     = useState<StatusOption>('confirmed');
+
+  // ── Notes ─────────────────────────────────────────────────────────────────
   const [notes, setNotes]                       = useState('');
+
+  // ── Guest ─────────────────────────────────────────────────────────────────
   const [guestMode, setGuestMode]               = useState<GuestMode>('none');
   const [searchQuery, setSearchQuery]           = useState('');
   const [selectedGuestId, setSelectedGuestId]   = useState<string | null>(null);
@@ -90,13 +112,35 @@ export default function CreateReservationForTableForm({
   const [newVip, setNewVip]                     = useState(false);
 
   const autoSelectedRef = useRef(false);
+  const isWalkIn = clientType === 'walkin';
 
-  // Available shifts for the selected date, sorted by start_time (Déjeuner before Dîner)
-  const availableShifts = shifts
-    .filter((s) => isDateAllowedForShift(date, s.days_of_week))
-    .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  // ── Shifts filtrés & triés ────────────────────────────────────────────────
+  const availableShifts = useMemo(
+    () =>
+      shifts
+        .filter((s) => isDateAllowedForShift(date, s.days_of_week))
+        .sort((a, b) => a.start_time.localeCompare(b.start_time)),
+    [shifts, date],
+  );
 
-  // Pre-select shift once when shifts load
+  // ── Tables par zone ───────────────────────────────────────────────────────
+  const tablesByZone = useMemo(() => {
+    const groups = new Map<string, TableRow[]>();
+    for (const t of tables) {
+      const zone = t.zone.trim() || 'Salle';
+      const existing = groups.get(zone);
+      if (existing !== undefined) {
+        existing.push(t);
+      } else {
+        groups.set(zone, [t]);
+      }
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b, 'fr'))
+      .map(([zone, items]) => ({ zone, items }));
+  }, [tables]);
+
+  // ── Auto-selection shift initial ──────────────────────────────────────────
   useEffect(() => {
     if (!shifts.length || autoSelectedRef.current) return;
     autoSelectedRef.current = true;
@@ -106,7 +150,7 @@ export default function CreateReservationForTableForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shifts]);
 
-  // When date changes: validate current shift, reset time slot
+  // ── Re-validation shift si date change ────────────────────────────────────
   useEffect(() => {
     setTimeSlot(null);
     if (!shifts.length) return;
@@ -119,7 +163,7 @@ export default function CreateReservationForTableForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  // When shift changes: reset time slot
+  // ── Reset time slot si shift change ──────────────────────────────────────
   const prevShiftRef = useRef(selectedShiftId);
   useEffect(() => {
     if (prevShiftRef.current === selectedShiftId) return;
@@ -132,6 +176,7 @@ export default function CreateReservationForTableForm({
     ? generateTimeSlots(selectedShift.start_time, selectedShift.end_time, selectedShift.slot_duration)
     : [];
 
+  // ── Guest handlers ────────────────────────────────────────────────────────
   const handleSearchGuests = useCallback(
     (q: string) => {
       setSearchQuery(q);
@@ -157,6 +202,36 @@ export default function CreateReservationForTableForm({
     setNewVip(false);
   }, []);
 
+  // ── Toggle client type ────────────────────────────────────────────────────
+  const handleClientType = useCallback((type: ClientType) => {
+    setClientType(type);
+    if (type === 'walkin') {
+      setStatus('seated');
+      handleClearGuest();
+    } else {
+      setStatus('confirmed');
+    }
+  }, [handleClearGuest]);
+
+  // ── Toggle table ──────────────────────────────────────────────────────────
+  const toggleTable = useCallback((tid: string) => {
+    setSelectedTableIds((prev) =>
+      prev.includes(tid) ? prev.filter((id) => id !== tid) : [...prev, tid],
+    );
+  }, []);
+
+  // ── Résumé tables ─────────────────────────────────────────────────────────
+  const tablesSummary = useMemo(() => {
+    if (selectedTableIds.length === 0) return 'Aucune table';
+    const labels = selectedTableIds
+      .map((id) => tables.find((t) => t.id === id)?.label ?? id)
+      .sort();
+    return selectedTableIds.length > 1
+      ? `Tables ${labels.join(', ')}`
+      : `Table ${labels[0]}`;
+  }, [selectedTableIds, tables]);
+
+  // ── Submit ────────────────────────────────────────────────────────────────
   const canSubmit = !!date && !!selectedShiftId && !!timeSlot && partySize > 0;
 
   const handleSubmit = useCallback(async () => {
@@ -168,20 +243,21 @@ export default function CreateReservationForTableForm({
         date,
         timeSlot,
         partySize,
-        shiftId: selectedShiftId,
-        notes: notes.trim() || undefined,
+        shiftId:   selectedShiftId,
+        notes:     notes.trim() || undefined,
         status,
-        tableId,
-        guestId: selectedGuestId ?? undefined,
-        guest: !selectedGuestId && hasNewGuestInfo
-          ? {
+        tableIds:  selectedTableIds.length > 0 ? selectedTableIds : undefined,
+        isWalkIn,
+        guestId:   isWalkIn ? undefined : (selectedGuestId ?? undefined),
+        guest:     isWalkIn || selectedGuestId || !hasNewGuestInfo
+          ? undefined
+          : {
               firstName: newFirstName.trim() || undefined,
               lastName:  newLastName.trim()  || undefined,
               phone:     newPhone.trim()     || undefined,
               email:     newEmail.trim()     || undefined,
               vip:       newVip,
-            }
-          : undefined,
+            },
       });
       onSuccess(id);
     } catch {
@@ -189,10 +265,12 @@ export default function CreateReservationForTableForm({
     }
   }, [
     canSubmit, timeSlot, selectedShiftId, date, partySize, notes, status,
-    tableId, selectedGuestId, newFirstName, newLastName, newPhone, newEmail, newVip,
+    selectedTableIds, isWalkIn, selectedGuestId,
+    newFirstName, newLastName, newPhone, newEmail, newVip,
     createReservation, setError, onSuccess,
   ]);
 
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -200,6 +278,17 @@ export default function CreateReservationForTableForm({
       </View>
     );
   }
+
+  // ── Status options for walk-in from floor plan ────────────────────────────
+  const statusOptions: Array<{ value: StatusOption; label: string }> = isWalkIn
+    ? [
+        { value: 'seated',    label: 'À table' },
+        { value: 'confirmed', label: 'Confirmée' },
+      ]
+    : [
+        { value: 'confirmed', label: 'Confirmée' },
+        { value: 'pending',   label: 'En attente' },
+      ];
 
   return (
     <ScrollView
@@ -209,7 +298,7 @@ export default function CreateReservationForTableForm({
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.formHeader}>
-        <Text style={styles.formTitle}>Nouvelle réservation — Table {tableLabel}</Text>
+        <Text style={styles.formTitle}>Nouvelle réservation — {tablesSummary}</Text>
       </View>
 
       {error ? (
@@ -219,7 +308,7 @@ export default function CreateReservationForTableForm({
         </View>
       ) : null}
 
-      {/* ── Section 1 : Date & Service ─────────────────────────── */}
+      {/* ── Section 1 : Date & Service ──────────────────────────────────── */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Date & Service</Text>
         <DateSelector value={date} onChange={setDate} showQuickActions />
@@ -246,7 +335,7 @@ export default function CreateReservationForTableForm({
         </View>
       </View>
 
-      {/* ── Section 2 : Heure & Couverts ───────────────────────── */}
+      {/* ── Section 2 : Heure & Couverts ────────────────────────────────── */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Heure & Couverts</Text>
         <TimeSlotSelector
@@ -281,128 +370,199 @@ export default function CreateReservationForTableForm({
         </View>
       </View>
 
-      {/* ── Section 3 : Client ─────────────────────────────────── */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Client (optionnel)</Text>
-
-        {guestMode === 'existing' && selectedGuestId ? (
-          <View style={styles.selectedGuest}>
-            <Ionicons name={'person-circle-outline' as IoniconsName} size={18} color={colors.gold} />
-            <Text style={styles.selectedGuestName} numberOfLines={1}>{selectedGuestName}</Text>
-            <TouchableOpacity onPress={handleClearGuest} style={styles.clearBtn}>
-              <Ionicons name={'close-circle' as IoniconsName} size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-        ) : guestMode === 'new' ? (
-          <View style={styles.newGuestForm}>
-            <View style={styles.nameRow}>
-              <TextInput
-                style={[styles.input, styles.inputHalf]}
-                value={newFirstName}
-                onChangeText={setNewFirstName}
-                placeholder="Prénom"
-                placeholderTextColor={colors.textMuted}
-                returnKeyType="next"
-              />
-              <TextInput
-                style={[styles.input, styles.inputHalf]}
-                value={newLastName}
-                onChangeText={setNewLastName}
-                placeholder="Nom"
-                placeholderTextColor={colors.textMuted}
-                returnKeyType="next"
-              />
-            </View>
-            <TextInput
-              style={styles.input}
-              value={newPhone}
-              onChangeText={setNewPhone}
-              placeholder="Téléphone (optionnel)"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="phone-pad"
-              returnKeyType="next"
-            />
-            <TextInput
-              style={styles.input}
-              value={newEmail}
-              onChangeText={setNewEmail}
-              placeholder="Email (optionnel)"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              returnKeyType="done"
-            />
-            <View style={styles.vipRow}>
-              <Text style={styles.vipLabel}>Client VIP</Text>
-              <Switch
-                value={newVip}
-                onValueChange={setNewVip}
-                trackColor={{ false: colors.border, true: colors.goldLight }}
-                thumbColor={newVip ? colors.gold : colors.sand}
-              />
-            </View>
-            <TouchableOpacity onPress={() => { setGuestMode('none'); setNewVip(false); }} style={styles.textLink}>
-              <Text style={styles.textLinkText}>Annuler</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <TextInput
-              style={styles.input}
-              value={searchQuery}
-              onChangeText={handleSearchGuests}
-              placeholder="Rechercher un client par nom, tél, email…"
-              placeholderTextColor={colors.textMuted}
-              returnKeyType="search"
-            />
-            {searchLoading ? (
-              <ActivityIndicator size="small" color={colors.gold} style={styles.searchSpinner} />
-            ) : null}
-            {guestSearchResults.length > 0 ? (
-              <View style={styles.searchResults}>
-                {guestSearchResults.map((g) => (
-                  <TouchableOpacity
-                    key={g.id}
-                    style={styles.searchResultItem}
-                    onPress={() => handleSelectGuest(g)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.searchResultName}>
-                      {[g.first_name, g.last_name].filter(Boolean).join(' ') || 'Client'}
-                    </Text>
-                    {g.phone ? <Text style={styles.searchResultSub}>{g.phone}</Text> : null}
-                  </TouchableOpacity>
-                ))}
+      {/* ── Section 3 : Tables combinées ────────────────────────────────── */}
+      {tablesByZone.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Tables combinées</Text>
+          <Text style={styles.fieldHint}>Sélectionnez une ou plusieurs tables.</Text>
+          {tablesByZone.map(({ zone, items }) => (
+            <View key={zone} style={styles.zoneGroup}>
+              <Text style={styles.zoneLabel}>{zone}</Text>
+              <View style={styles.chipRow}>
+                {items.map((t) => {
+                  const isSelected = selectedTableIds.includes(t.id);
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => toggleTable(t.id)}
+                      activeOpacity={0.75}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected }}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-            ) : null}
-            <TouchableOpacity
-              style={styles.newGuestTrigger}
-              onPress={() => setGuestMode('new')}
-              activeOpacity={0.75}
-            >
-              <Ionicons name={'person-add-outline' as IoniconsName} size={14} color={colors.gold} />
-              <Text style={styles.newGuestTriggerText}>Créer un nouveau client</Text>
-            </TouchableOpacity>
-          </>
-        )}
+            </View>
+          ))}
+          {selectedTableIds.length === 0 ? (
+            <View style={styles.noTableRow}>
+              <Ionicons name={'information-circle-outline' as IoniconsName} size={14} color={colors.textMuted} />
+              <Text style={styles.noTableText}>Aucune table sélectionnée.</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* ── Section 4 : Type de client ──────────────────────────────────── */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>Type de client</Text>
+        <View style={styles.chipRow}>
+          <TouchableOpacity
+            style={[styles.chip, styles.chipHalf, clientType === 'identified' && styles.chipActive]}
+            onPress={() => handleClientType('identified')}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.chipText, clientType === 'identified' && styles.chipTextActive]}>
+              Client identifié
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.chip, styles.chipHalf, clientType === 'walkin' && styles.chipActive]}
+            onPress={() => handleClientType('walkin')}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.chipText, clientType === 'walkin' && styles.chipTextActive]}>
+              Client de passage
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {isWalkIn ? (
+          <Text style={styles.fieldHint}>Pour les clients de dernière minute sans fiche client.</Text>
+        ) : null}
       </View>
 
-      {/* ── Section 4 : Statut & Notes ─────────────────────────── */}
+      {/* ── Section 5 : Client (masqué en walk-in) ──────────────────────── */}
+      {!isWalkIn ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Client (optionnel)</Text>
+
+          {guestMode === 'existing' && selectedGuestId ? (
+            <View style={styles.selectedGuest}>
+              <Ionicons name={'person-circle-outline' as IoniconsName} size={18} color={colors.gold} />
+              <Text style={styles.selectedGuestName} numberOfLines={1}>{selectedGuestName}</Text>
+              <TouchableOpacity onPress={handleClearGuest} style={styles.clearBtn}>
+                <Ionicons name={'close-circle' as IoniconsName} size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          ) : guestMode === 'new' ? (
+            <View style={styles.newGuestForm}>
+              <View style={styles.nameRow}>
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  value={newFirstName}
+                  onChangeText={setNewFirstName}
+                  placeholder="Prénom"
+                  placeholderTextColor={colors.textMuted}
+                  returnKeyType="next"
+                />
+                <TextInput
+                  style={[styles.input, styles.inputHalf]}
+                  value={newLastName}
+                  onChangeText={setNewLastName}
+                  placeholder="Nom"
+                  placeholderTextColor={colors.textMuted}
+                  returnKeyType="next"
+                />
+              </View>
+              <TextInput
+                style={styles.input}
+                value={newPhone}
+                onChangeText={setNewPhone}
+                placeholder="Téléphone (optionnel)"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="phone-pad"
+                returnKeyType="next"
+              />
+              <TextInput
+                style={styles.input}
+                value={newEmail}
+                onChangeText={setNewEmail}
+                placeholder="Email (optionnel)"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                returnKeyType="done"
+              />
+              <View style={styles.vipRow}>
+                <Text style={styles.vipLabel}>Client VIP</Text>
+                <Switch
+                  value={newVip}
+                  onValueChange={setNewVip}
+                  trackColor={{ false: colors.border, true: colors.goldLight }}
+                  thumbColor={newVip ? colors.gold : colors.sand}
+                />
+              </View>
+              <TouchableOpacity
+                onPress={() => { setGuestMode('none'); setNewVip(false); }}
+                style={styles.textLink}
+              >
+                <Text style={styles.textLinkText}>Annuler</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                value={searchQuery}
+                onChangeText={handleSearchGuests}
+                placeholder="Rechercher un client par nom, tél, email…"
+                placeholderTextColor={colors.textMuted}
+                returnKeyType="search"
+              />
+              {searchLoading ? (
+                <ActivityIndicator size="small" color={colors.gold} style={styles.searchSpinner} />
+              ) : null}
+              {guestSearchResults.length > 0 ? (
+                <View style={styles.searchResults}>
+                  {guestSearchResults.map((g) => (
+                    <TouchableOpacity
+                      key={g.id}
+                      style={styles.searchResultItem}
+                      onPress={() => handleSelectGuest(g)}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.searchResultName}>
+                        {[g.first_name, g.last_name].filter(Boolean).join(' ') || 'Client'}
+                      </Text>
+                      {g.phone ? <Text style={styles.searchResultSub}>{g.phone}</Text> : null}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+              <TouchableOpacity
+                style={styles.newGuestTrigger}
+                onPress={() => setGuestMode('new')}
+                activeOpacity={0.75}
+              >
+                <Ionicons name={'person-add-outline' as IoniconsName} size={14} color={colors.gold} />
+                <Text style={styles.newGuestTriggerText}>Créer un nouveau client</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      ) : null}
+
+      {/* ── Section 6 : Statut & Notes ──────────────────────────────────── */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Statut & Notes</Text>
         <Text style={styles.fieldLabel}>Statut de la réservation</Text>
         <View style={styles.chipRow}>
-          {(['confirmed', 'pending'] as const).map((s) => (
+          {statusOptions.map(({ value, label }) => (
             <TouchableOpacity
-              key={s}
-              style={[styles.chip, styles.chipHalf, status === s && styles.chipActive]}
-              onPress={() => setStatus(s)}
+              key={value}
+              style={[styles.chip, styles.chipHalf, status === value && styles.chipActive]}
+              onPress={() => setStatus(value)}
               activeOpacity={0.75}
               accessibilityRole="button"
-              accessibilityState={{ selected: status === s }}
+              accessibilityState={{ selected: status === value }}
             >
-              <Text style={[styles.chipText, status === s && styles.chipTextActive]}>
-                {s === 'confirmed' ? 'Confirmée' : 'En attente'}
+              <Text style={[styles.chipText, status === value && styles.chipTextActive]}>
+                {label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -420,7 +580,7 @@ export default function CreateReservationForTableForm({
         />
       </View>
 
-      {/* ── Actions ─────────────────────────────────────────────── */}
+      {/* ── Actions ─────────────────────────────────────────────────────── */}
       <View style={styles.actions}>
         <PrimaryButton
           label="Créer la réservation"
@@ -440,27 +600,17 @@ export default function CreateReservationForTableForm({
 
 const styles = StyleSheet.create({
   centered: {
-    flex: 1,
+    flex:           1,
     alignItems:     'center',
     justifyContent: 'center',
     padding:        spacing.xl,
   },
-  scroll: {
-    flex: 1,
-  },
-  container: {
-    padding:       spacing.xl,
-    paddingBottom: spacing.xxl,
-  },
-  formHeader: {
-    marginBottom: spacing.lg,
-  },
-  formTitle: {
-    ...typography.h2,
-    color: colors.textPrimary,
-  },
+  scroll:    { flex: 1 },
+  container: { padding: spacing.xl, paddingBottom: spacing.xxl },
+  formHeader:  { marginBottom: spacing.lg },
+  formTitle:   { ...typography.h2, color: colors.textPrimary },
 
-  // Error / Warning banners
+  // Error banner
   errorBanner: {
     flexDirection:   'row',
     alignItems:      'center',
@@ -472,11 +622,8 @@ const styles = StyleSheet.create({
     borderWidth:     1,
     borderColor:     colors.cta,
   },
-  errorText: {
-    ...typography.small,
-    color: colors.cta,
-    flex:  1,
-  },
+  errorText: { ...typography.small, color: colors.cta, flex: 1 },
+
   // Section card
   section: {
     backgroundColor: colors.surface,
@@ -492,27 +639,24 @@ const styles = StyleSheet.create({
     shadowRadius:    4,
     elevation:       1,
   },
-  sectionLabel: {
-    ...typography.label,
-    color:        colors.textMuted,
-    marginBottom: spacing.xs,
-  },
-  fieldLabel: {
-    ...typography.label,
-    color: colors.textMuted,
-  },
-  emptyHint: {
-    ...typography.small,
-    color:      colors.textMuted,
-    fontStyle:  'italic',
-  },
+  sectionLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing.xs },
+  fieldLabel:   { ...typography.label, color: colors.textMuted },
+  fieldHint:    { ...typography.small, color: colors.textMuted, fontStyle: 'italic' },
+  emptyHint:    { ...typography.small, color: colors.textMuted, fontStyle: 'italic' },
 
-  // Service / status chips
-  chipRow: {
+  // Zone group (pour tables combinées)
+  zoneGroup: { marginTop: spacing.xs },
+  zoneLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing.xs },
+  noTableRow: {
     flexDirection: 'row',
-    flexWrap:      'wrap',
-    gap:           spacing.sm,
+    alignItems:    'center',
+    gap:           spacing.xs,
+    marginTop:     spacing.xs,
   },
+  noTableText: { ...typography.small, color: colors.textMuted, fontStyle: 'italic' },
+
+  // Chips
+  chipRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     paddingHorizontal: spacing.lg,
     paddingVertical:   spacing.sm,
@@ -521,22 +665,10 @@ const styles = StyleSheet.create({
     borderWidth:       1,
     borderColor:       colors.border,
   },
-  chipHalf: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  chipActive: {
-    backgroundColor: colors.cta,
-    borderColor:     colors.cta,
-  },
-  chipText: {
-    ...typography.small,
-    color:      colors.textMuted,
-    fontFamily: 'Inter_500Medium',
-  },
-  chipTextActive: {
-    color: colors.textOnDark,
-  },
+  chipHalf:       { flex: 1, alignItems: 'center' },
+  chipActive:     { backgroundColor: colors.cta, borderColor: colors.cta },
+  chipText:       { ...typography.small, color: colors.textMuted, fontFamily: 'Inter_500Medium' },
+  chipTextActive: { color: colors.textOnDark },
 
   // Stepper
   stepperRow: {
@@ -546,27 +678,22 @@ const styles = StyleSheet.create({
     marginTop:      spacing.xs,
   },
   stepper: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             spacing.sm,
-    backgroundColor: colors.background,
-    borderRadius:    radius.md,
-    borderWidth:     1,
-    borderColor:     colors.border,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing.sm,
+    backgroundColor:   colors.background,
+    borderRadius:      radius.md,
+    borderWidth:       1,
+    borderColor:       colors.border,
     paddingHorizontal: spacing.sm,
     paddingVertical:   spacing.xs,
   },
-  stepBtn: {
-    padding:      spacing.sm,
-    borderRadius: radius.sm,
-  },
-  stepBtnDisabled: {
-    opacity: 0.4,
-  },
+  stepBtn:         { padding: spacing.sm, borderRadius: radius.sm },
+  stepBtnDisabled: { opacity: 0.4 },
   stepValue: {
     ...typography.h2,
-    color:     colors.textPrimary,
-    minWidth:  32,
+    color:    colors.textPrimary,
+    minWidth: 32,
     textAlign: 'center',
   },
 
@@ -581,19 +708,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical:   spacing.sm,
   },
-  inputHalf: {
-    flex: 1,
-  },
-  inputMultiline: {
-    minHeight:  72,
-    paddingTop: spacing.sm,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    gap:           spacing.sm,
-  },
+  inputHalf:      { flex: 1 },
+  inputMultiline: { minHeight: 72, paddingTop: spacing.sm },
+  nameRow:        { flexDirection: 'row', gap: spacing.sm },
 
-  // Guest — selected state
+  // Guest — selected
   selectedGuest: {
     flexDirection:   'row',
     alignItems:      'center',
@@ -604,43 +723,23 @@ const styles = StyleSheet.create({
     borderWidth:     1,
     borderColor:     colors.gold,
   },
-  selectedGuestName: {
-    ...typography.bodyMedium,
-    color: colors.textPrimary,
-    flex:  1,
-  },
-  clearBtn: {
-    padding: spacing.xs,
-  },
+  selectedGuestName: { ...typography.bodyMedium, color: colors.textPrimary, flex: 1 },
+  clearBtn:           { padding: spacing.xs },
 
   // Guest — new form
-  newGuestForm: {
-    gap: spacing.sm,
-  },
+  newGuestForm: { gap: spacing.sm },
   vipRow: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'space-between',
     paddingVertical: spacing.xs,
   },
-  vipLabel: {
-    ...typography.body,
-    color: colors.textPrimary,
-  },
-  textLink: {
-    alignSelf:       'flex-start',
-    paddingVertical: spacing.xs,
-  },
-  textLinkText: {
-    ...typography.small,
-    color:               colors.textMuted,
-    textDecorationLine:  'underline',
-  },
+  vipLabel: { ...typography.body, color: colors.textPrimary },
+  textLink: { alignSelf: 'flex-start', paddingVertical: spacing.xs },
+  textLinkText: { ...typography.small, color: colors.textMuted, textDecorationLine: 'underline' },
 
   // Guest — search
-  searchSpinner: {
-    marginTop: spacing.sm,
-  },
+  searchSpinner: { marginTop: spacing.sm },
   searchResults: {
     backgroundColor: colors.surface,
     borderRadius:    radius.md,
@@ -654,39 +753,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
-  searchResultName: {
-    ...typography.bodyMedium,
-    color: colors.textPrimary,
-  },
-  searchResultSub: {
-    ...typography.small,
-    color:     colors.textMuted,
-    marginTop: spacing.xs,
-  },
+  searchResultName: { ...typography.bodyMedium, color: colors.textPrimary },
+  searchResultSub:  { ...typography.small, color: colors.textMuted, marginTop: spacing.xs },
   newGuestTrigger: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            spacing.xs,
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.xs,
     paddingVertical: spacing.sm,
-    alignSelf:      'flex-start',
+    alignSelf:       'flex-start',
   },
-  newGuestTriggerText: {
-    ...typography.small,
-    color:      colors.gold,
-    fontFamily: 'Inter_500Medium',
-  },
+  newGuestTriggerText: { ...typography.small, color: colors.gold, fontFamily: 'Inter_500Medium' },
 
   // Actions
-  actions: {
-    gap:       spacing.md,
-    marginTop: spacing.sm,
-  },
-  cancelBtn: {
-    alignItems:      'center',
-    paddingVertical: spacing.md,
-  },
-  cancelBtnText: {
-    ...typography.bodyMedium,
-    color: colors.textMuted,
-  },
+  actions: { gap: spacing.md, marginTop: spacing.sm },
+  cancelBtn: { alignItems: 'center', paddingVertical: spacing.md },
+  cancelBtnText: { ...typography.bodyMedium, color: colors.textMuted },
 });

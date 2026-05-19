@@ -4,11 +4,13 @@ import { colors, typography } from '../theme';
 import ReservationListScreen from '../screens/reservations/ReservationListScreen';
 import NewReservationScreen from '../screens/reservations/NewReservationScreen';
 import ReservationDetailScreen from '../screens/reservations/ReservationDetailScreen';
+import WaitlistScreen from '../screens/reservations/WaitlistScreen';
 
 export type ReservationsStackParamList = {
   ReservationList: undefined;
   NewReservation: undefined;
   ReservationDetail: { reservationId: string };
+  Waitlist: undefined;
 };
 
 const Stack = createNativeStackNavigator<ReservationsStackParamList>();
@@ -44,6 +46,15 @@ export default function ReservationsNavigator(): React.JSX.Element {
         options={{
           ...sharedHeaderOptions,
           headerTitle: 'Détail réservation',
+        }}
+      />
+      <Stack.Screen
+        name="Waitlist"
+        component={WaitlistScreen}
+        options={{
+          ...sharedHeaderOptions,
+          headerTitle: 'Liste d\'attente',
+          headerShown: false,
         }}
       />
     </Stack.Navigator>

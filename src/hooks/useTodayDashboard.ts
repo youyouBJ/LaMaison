@@ -3,16 +3,20 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Database, ReservationStatus } from '../types/database';
 import { getTodayDateString, getCurrentTimeInTunis, formatTimeSlot } from '../utils/date';
+import type { ReservationTableEntry } from '../types/reservations';
 
 type ReservationRow = Database['public']['Tables']['reservations']['Row'];
 type GuestRow      = Database['public']['Tables']['guests']['Row'];
 type TableRow      = Database['public']['Tables']['tables']['Row'];
 type ShiftRow      = Database['public']['Tables']['shifts']['Row'];
 
+type RtQueryRow = { id: string; reservation_id: string; table_id: string; tables: TableRow | null };
+
 export type DashboardReservation = ReservationRow & {
-  guests: GuestRow | null;
-  tables: TableRow | null;
-  shifts: ShiftRow | null;
+  guests:             GuestRow | null;
+  tables:             TableRow | null;
+  shifts:             ShiftRow | null;
+  reservation_tables?: ReservationTableEntry[];
 };
 
 export type DashboardStats = {
@@ -98,8 +102,30 @@ export function useTodayDashboard() {
     }
 
     // Join types not declared in Relationships[] — explicit cast required.
-    // Resolved once the CLI generates database.ts with proper FK relationships.
-    const rows = (data as unknown as DashboardReservation[] | null) ?? [];
+    let rows = (data as unknown as DashboardReservation[] | null) ?? [];
+
+    // Enrich with reservation_tables (silently ignore pre-migration)
+    const ids = rows.map((r) => r.id);
+    if (ids.length > 0) {
+      const { data: rtData } = await supabase
+        .from('reservation_tables')
+        .select('id, reservation_id, table_id, tables(*)')
+        .in('reservation_id', ids);
+
+      if (rtData && rtData.length > 0) {
+        const rtRows = rtData as unknown as RtQueryRow[];
+        const rtByResId = new Map<string, ReservationTableEntry[]>();
+        for (const rt of rtRows) {
+          if (!rt.tables) continue;
+          const entry: ReservationTableEntry = { id: rt.id, table_id: rt.table_id, tables: rt.tables };
+          const existing = rtByResId.get(rt.reservation_id) ?? [];
+          existing.push(entry);
+          rtByResId.set(rt.reservation_id, existing);
+        }
+        rows = rows.map((r) => ({ ...r, reservation_tables: rtByResId.get(r.id) }));
+      }
+    }
+
     setReservations(rows);
     setStats(computeStats(rows));
     setError(null);

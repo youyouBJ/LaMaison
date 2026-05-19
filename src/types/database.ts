@@ -360,39 +360,46 @@ export interface Database {
       };
 
       // ── waitlist ─────────────────────────────────────────────────────────
+      // shift_id et time_slot ajoutés dans 003_waitlist_shift_time.sql
       waitlist: {
         Row: {
-          id: string;
+          id:            string;
           restaurant_id: string;
-          guest_id: string | null;
-          date: string;
-          party_size: number;
-          status: WaitlistStatus;
-          notes: string | null;
-          created_at: string;
-          updated_at: string;
+          guest_id:      string | null;
+          shift_id:      string | null;
+          date:          string;
+          time_slot:     string | null;  // HH:MM:SS (PostgreSQL time)
+          party_size:    number;
+          status:        WaitlistStatus;
+          notes:         string | null;
+          created_at:    string;
+          updated_at:    string;
         };
         Insert: {
-          id?: string;
-          restaurant_id: string;
-          guest_id?: string | null;
-          date: string;
-          party_size: number;
-          status?: WaitlistStatus;
-          notes?: string | null;
-          created_at?: string;
-          updated_at?: string;
+          id?:            string;
+          restaurant_id:  string;
+          guest_id?:      string | null;
+          shift_id?:      string | null;
+          date:           string;
+          time_slot?:     string | null;
+          party_size:     number;
+          status?:        WaitlistStatus;
+          notes?:         string | null;
+          created_at?:    string;
+          updated_at?:    string;
         };
         Update: {
-          id?: string;
+          id?:            string;
           restaurant_id?: string;
-          guest_id?: string | null;
-          date?: string;
-          party_size?: number;
-          status?: WaitlistStatus;
-          notes?: string | null;
-          created_at?: string;
-          updated_at?: string;
+          guest_id?:      string | null;
+          shift_id?:      string | null;
+          date?:          string;
+          time_slot?:     string | null;
+          party_size?:    number;
+          status?:        WaitlistStatus;
+          notes?:         string | null;
+          created_at?:    string;
+          updated_at?:    string;
         };
         Relationships: [];
       };

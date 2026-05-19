@@ -10,32 +10,37 @@ type GuestRow = Database['public']['Tables']['guests']['Row'];
 export type { ShiftRow, TableRow, GuestRow };
 
 export type CreateReservationInput = {
-  date: string;
-  timeSlot: string;            // HH:MM
+  date:      string;
+  timeSlot:  string;            // HH:MM
   partySize: number;
-  shiftId: string;
-  notes?: string;
-  status: 'confirmed' | 'pending';
-  tableId?: string;
-  // Soit guestId (existant), soit guest (nouveau)
-  guestId?: string;
+  shiftId:   string;
+  notes?:    string;
+  status:    'confirmed' | 'pending' | 'seated';
+  // Table(s) — tableIds prend le dessus sur tableId si fourni.
+  // tableId est conservé pour compatibilité ascendante.
+  tableId?:  string;
+  tableIds?: string[];
+  // Walk-in : guest_id = null, source = 'walkin'
+  isWalkIn?: boolean;
+  // Soit guestId (existant), soit guest (nouveau) — ignorés si isWalkIn = true.
+  guestId?:  string;
   guest?: {
     firstName?: string;
-    lastName?: string;
-    phone?: string;
-    email?: string;
-    notes?: string;
-    vip?: boolean;
+    lastName?:  string;
+    phone?:     string;
+    email?:     string;
+    notes?:     string;
+    vip?:       boolean;
   };
 };
 
 export function useCreateReservation() {
-  const [loading, setLoading]                     = useState(true);
-  const [submitting, setSubmitting]               = useState(false);
-  const [searchLoading, setSearchLoading]         = useState(false);
-  const [error, setError]                         = useState<string | null>(null);
-  const [shifts, setShifts]                       = useState<ShiftRow[]>([]);
-  const [tables, setTables]                       = useState<TableRow[]>([]);
+  const [loading, setLoading]                       = useState(true);
+  const [submitting, setSubmitting]                 = useState(false);
+  const [searchLoading, setSearchLoading]           = useState(false);
+  const [error, setError]                           = useState<string | null>(null);
+  const [shifts, setShifts]                         = useState<ShiftRow[]>([]);
+  const [tables, setTables]                         = useState<TableRow[]>([]);
   const [guestSearchResults, setGuestSearchResults] = useState<GuestRow[]>([]);
 
   const restaurantIdRef = useRef<string | null>(null);
@@ -92,12 +97,14 @@ export function useCreateReservation() {
     setSubmitting(true);
     setError(null);
     try {
-      // Validation
+      // ── Validation ──────────────────────────────────────────────────────
       if (!input.date || !input.shiftId || !input.timeSlot) {
         throw new Error('Date, service et créneau sont obligatoires.');
       }
       if (input.partySize <= 0) throw new Error('Nombre de couverts invalide.');
-      if (input.status !== 'confirmed' && input.status !== 'pending') {
+
+      const validStatuses: string[] = ['confirmed', 'pending', 'seated'];
+      if (!validStatuses.includes(input.status)) {
         throw new Error('Statut invalide.');
       }
 
@@ -107,7 +114,7 @@ export function useCreateReservation() {
         throw new Error('Créneau non disponible pour ce service.');
       }
 
-      // Vérification capacité par créneau
+      // ── Vérification capacité par créneau ────────────────────────────────
       const normalizedSlot = `${input.timeSlot.substring(0, 5)}:00`;
       const { data: slotData } = await supabase
         .from('reservations')
@@ -125,46 +132,79 @@ export function useCreateReservation() {
         );
       }
 
-      // Création du client si nécessaire
-      let guestId = input.guestId ?? null;
-      if (!guestId && input.guest) {
-        const { data: newGuest, error: guestError } = await supabase
-          .from('guests')
-          .insert({
-            restaurant_id: resId,
-            first_name:    input.guest.firstName ?? null,
-            last_name:     input.guest.lastName  ?? null,
-            phone:         input.guest.phone     ?? null,
-            email:         input.guest.email     ?? null,
-            notes:         input.guest.notes     ?? null,
-            vip:           input.guest.vip       ?? false,
-            source:        'manual',
-          })
-          .select('id')
-          .single();
-        if (guestError) throw new Error(`Erreur création client : ${guestError.message}`);
-        guestId = newGuest.id;
+      // ── Déterminer les tables ─────────────────────────────────────────────
+      // tableIds prend le dessus sur tableId.
+      const tableIdsToInsert: string[] =
+        input.tableIds && input.tableIds.length > 0
+          ? input.tableIds
+          : input.tableId
+            ? [input.tableId]
+            : [];
+      const primaryTableId = tableIdsToInsert[0] ?? null;
+
+      // ── Guest ─────────────────────────────────────────────────────────────
+      // Walk-in : pas de guest, source = 'walkin'.
+      let guestId: string | null = null;
+      const source = input.isWalkIn ? 'walkin' : 'phone';
+
+      if (!input.isWalkIn) {
+        guestId = input.guestId ?? null;
+        if (!guestId && input.guest) {
+          const { data: newGuest, error: guestError } = await supabase
+            .from('guests')
+            .insert({
+              restaurant_id: resId,
+              first_name:    input.guest.firstName ?? null,
+              last_name:     input.guest.lastName  ?? null,
+              phone:         input.guest.phone     ?? null,
+              email:         input.guest.email     ?? null,
+              notes:         input.guest.notes     ?? null,
+              vip:           input.guest.vip       ?? false,
+              source:        'manual',
+            })
+            .select('id')
+            .single();
+          if (guestError) throw new Error(`Erreur création client : ${guestError.message}`);
+          guestId = newGuest.id;
+        }
       }
 
-      // Création de la réservation
+      // ── Créer la réservation ──────────────────────────────────────────────
       const { data: newRes, error: resError } = await supabase
         .from('reservations')
         .insert({
           restaurant_id: resId,
           guest_id:      guestId,
-          table_id:      input.tableId ?? null,
+          table_id:      primaryTableId,
           shift_id:      input.shiftId,
           date:          input.date,
           time_slot:     normalizedSlot,
           party_size:    input.partySize,
           status:        input.status,
           notes:         input.notes ?? null,
-          source:        'phone',
+          source,
           created_by:    uid,
         })
         .select('id')
         .single();
       if (resError) throw new Error(`Erreur création réservation : ${resError.message}`);
+
+      // ── Insérer dans reservation_tables ───────────────────────────────────
+      // Silencieusement ignoré en pré-migration (table inexistante).
+      if (tableIdsToInsert.length > 0) {
+        await supabase
+          .from('reservation_tables')
+          .insert(
+            tableIdsToInsert.map((tid) => ({
+              reservation_id: newRes.id,
+              table_id:       tid,
+              restaurant_id:  resId,
+            })),
+          );
+        // L'erreur éventuelle (table non encore créée) n'est pas levée :
+        // la réservation est déjà créée et son ID est valide.
+      }
+
       return newRes.id;
     } finally {
       setSubmitting(false);

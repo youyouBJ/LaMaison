@@ -2,7 +2,17 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { getTodayDateString } from '../utils/date';
-import type { ReservationWithJoins } from '../types/reservations';
+import type { ReservationWithJoins, ReservationTableEntry } from '../types/reservations';
+import type { Database } from '../types/database';
+
+type TableRow = Database['public']['Tables']['tables']['Row'];
+
+type RtQueryRow = {
+  id:             string;
+  reservation_id: string;
+  table_id:       string;
+  tables:         TableRow | null;
+};
 
 export type { ReservationWithJoins };
 
@@ -27,7 +37,31 @@ export function useReservations() {
       .order('time_slot', { ascending: true });
 
     if (fetchError) { setError(fetchError.message); return; }
-    setReservations((data as unknown as ReservationWithJoins[] | null) ?? []);
+    let rows = (data as unknown as ReservationWithJoins[] | null) ?? [];
+
+    // Enrich with reservation_tables (silently ignore pre-migration)
+    const ids = rows.map((r) => r.id);
+    if (ids.length > 0) {
+      const { data: rtData } = await supabase
+        .from('reservation_tables')
+        .select('id, reservation_id, table_id, tables(*)')
+        .in('reservation_id', ids);
+
+      if (rtData && rtData.length > 0) {
+        const rtRows = rtData as unknown as RtQueryRow[];
+        const rtByResId = new Map<string, ReservationTableEntry[]>();
+        for (const rt of rtRows) {
+          if (!rt.tables) continue;
+          const entry: ReservationTableEntry = { id: rt.id, table_id: rt.table_id, tables: rt.tables };
+          const existing = rtByResId.get(rt.reservation_id) ?? [];
+          existing.push(entry);
+          rtByResId.set(rt.reservation_id, existing);
+        }
+        rows = rows.map((r) => ({ ...r, reservation_tables: rtByResId.get(r.id) }));
+      }
+    }
+
+    setReservations(rows);
     setError(null);
   }, []);
 

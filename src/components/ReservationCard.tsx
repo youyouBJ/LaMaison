@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors, typography, spacing, radius } from '../theme';
 import { formatTimeSlot } from '../utils/date';
+import { formatReservationTables } from '../utils/reservationTables';
 import StatusBadge from './StatusBadge';
 import type { ReservationWithJoins } from '../types/reservations';
 
@@ -11,7 +12,7 @@ type Props = {
 };
 
 function guestDisplayName(r: ReservationWithJoins): string {
-  if (!r.guests) return 'Client sans nom';
+  if (!r.guests) return r.source === 'walkin' ? 'Client de passage' : 'Client sans nom';
   const parts = [r.guests.first_name, r.guests.last_name].filter((p): p is string => Boolean(p));
   return parts.length > 0 ? parts.join(' ') : 'Client sans nom';
 }
@@ -36,7 +37,7 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
         <Text style={styles.meta} numberOfLines={1}>
           {r.party_size} couvert{r.party_size > 1 ? 's' : ''}
           {r.guests?.phone ? ` · ${r.guests.phone}` : ''}
-          {r.tables?.label ? ` · ${r.tables.label}` : ''}
+          {(r.tables ?? r.reservation_tables?.length) ? ` · ${formatReservationTables(r.tables, r.reservation_tables)}` : ''}
         </Text>
         <StatusBadge status={r.status} />
       </View>

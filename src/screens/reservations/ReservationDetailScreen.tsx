@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -18,11 +18,13 @@ import SectionCard from '../../components/SectionCard';
 import PrimaryButton from '../../components/PrimaryButton';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { ReservationStatus } from '../../types/database';
+import { formatReservationTables } from '../../utils/reservationTables';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationDetail'>;
 
 type ActionDef = { status: ReservationStatus; label: string; variant: 'primary' | 'secondary' | 'danger' };
 
+// Actions contextuelles principales (flux normal)
 const STATUS_ACTIONS: Record<ReservationStatus, ActionDef[]> = {
   pending: [
     { status: 'confirmed', label: 'Confirmer',      variant: 'primary'   },
@@ -31,21 +33,45 @@ const STATUS_ACTIONS: Record<ReservationStatus, ActionDef[]> = {
     { status: 'cancelled', label: 'Annuler',         variant: 'danger'    },
   ],
   confirmed: [
-    { status: 'seated',    label: 'Mettre à table', variant: 'primary'   },
-    { status: 'noshow',    label: 'No-show',         variant: 'secondary' },
-    { status: 'cancelled', label: 'Annuler',         variant: 'danger'    },
+    { status: 'seated',    label: 'À table',         variant: 'primary'   },
+    { status: 'noshow',    label: 'No-show',          variant: 'secondary' },
+    { status: 'cancelled', label: 'Annuler',          variant: 'danger'    },
   ],
   seated: [
-    { status: 'completed', label: 'Terminer',        variant: 'primary'   },
-    { status: 'cancelled', label: 'Annuler',         variant: 'danger'    },
+    { status: 'completed', label: 'Terminer',         variant: 'primary'   },
+    { status: 'cancelled', label: 'Annuler',          variant: 'danger'    },
   ],
   completed: [],
   cancelled: [],
   noshow:    [],
 };
 
+// Labels courts pour la section correction
+const CORRECTION_LABEL: Record<ReservationStatus, string> = {
+  pending:   'En attente',
+  confirmed: 'Confirmée',
+  seated:    'À table',
+  completed: 'Terminée',
+  cancelled: 'Annulée',
+  noshow:    'No-show',
+};
+
+// Couleurs chips correction (fond + texte)
+const CORRECTION_COLORS: Record<ReservationStatus, { bg: string; text: string; border: string }> = {
+  pending:   { bg: colors.sandLight,               text: colors.textSecondary,    border: colors.sand },
+  confirmed: { bg: colors.goldLight,               text: colors.gold,             border: colors.gold },
+  seated:    { bg: colors.statusOccupiedLight,     text: colors.statusOccupied,   border: colors.statusOccupied },
+  completed: { bg: colors.statusFreeLight,         text: colors.statusFree,       border: colors.statusFree },
+  cancelled: { bg: colors.statusUnavailableLight,  text: colors.statusUnavailable, border: colors.statusUnavailable },
+  noshow:    { bg: colors.ctaLight,                text: colors.cta,              border: colors.cta },
+};
+
+const ALL_STATUSES: ReservationStatus[] = [
+  'pending', 'confirmed', 'seated', 'completed', 'cancelled', 'noshow',
+];
+
 function guestName(r: NonNullable<ReturnType<typeof useReservationDetail>['reservation']>): string {
-  if (!r.guests) return 'Client sans nom';
+  if (!r.guests) return r.source === 'walkin' ? 'Client de passage' : 'Client sans nom';
   const parts = [r.guests.first_name, r.guests.last_name].filter((p): p is string => Boolean(p));
   return parts.length > 0 ? parts.join(' ') : 'Client sans nom';
 }
@@ -82,10 +108,13 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
     );
   }
 
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+
   const r = reservation;
   const actions = STATUS_ACTIONS[r.status] ?? [];
   const { backgroundColor: statusBg, color: statusColor } = getReservationStatusColors(r.status);
   const isVip = r.guests?.vip === true;
+  const isTerminal = actions.length === 0;
 
   const dateLabel = (() => {
     try {
@@ -148,7 +177,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
           <SectionCard title="Réservation">
             <View style={styles.detailGrid}>
               <DetailRow label="Couverts" value={`${r.party_size} personne${r.party_size > 1 ? 's' : ''}`} />
-              <DetailRow label="Table" value={r.tables?.label ?? 'Non assignée'} />
+              <DetailRow label="Table" value={formatReservationTables(r.tables, r.reservation_tables)} />
               <DetailRow label="Statut" value={<StatusBadge status={r.status} />} />
               <DetailRow label="Origine" value={r.source} />
               {r.notes ? <DetailRow label="Notes" value={r.notes} /> : null}
@@ -180,13 +209,62 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
             </SectionCard>
           )}
 
-          {actions.length === 0 && (
-            <View style={styles.terminalBanner}>
-              <Text style={styles.terminalText}>
-                Cette réservation est terminée et ne peut plus être modifiée.
-              </Text>
-            </View>
-          )}
+          {/* ── Correction du statut ── */}
+          <SectionCard title="Correction du statut">
+            {isTerminal && !correctionOpen ? (
+              <TouchableOpacity
+                style={styles.correctionToggle}
+                onPress={() => setCorrectionOpen(true)}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.correctionToggleText}>Modifier le statut…</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {(correctionOpen || !isTerminal) ? (
+              <>
+                {updating && (
+                  <View style={styles.updatingRow}>
+                    <ActivityIndicator color={colors.gold} size="small" />
+                    <Text style={styles.updatingText}>Mise à jour…</Text>
+                  </View>
+                )}
+                <View style={styles.correctionGrid}>
+                  {ALL_STATUSES.map((s) => {
+                    const isCurrent = s === r.status;
+                    const { bg, text, border } = CORRECTION_COLORS[s];
+                    return (
+                      <TouchableOpacity
+                        key={s}
+                        style={[
+                          styles.correctionChip,
+                          { backgroundColor: bg, borderColor: border },
+                          isCurrent && styles.correctionChipCurrent,
+                        ]}
+                        onPress={() => { if (!isCurrent) void updateStatus(s); }}
+                        disabled={isCurrent || updating}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.correctionChipText, { color: text }, isCurrent && styles.correctionChipTextCurrent]}>
+                          {CORRECTION_LABEL[s]}
+                          {isCurrent ? ' ✓' : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {isTerminal ? (
+                  <TouchableOpacity
+                    style={styles.correctionClose}
+                    onPress={() => setCorrectionOpen(false)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.correctionCloseText}>Fermer</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
+            ) : null}
+          </SectionCard>
 
         </View>
       </ScrollView>
@@ -323,13 +401,45 @@ const styles = StyleSheet.create({
   actionsGrid: { gap: spacing.sm },
   actionBtnWrapper: {},
 
-  // Terminal state
-  terminalBanner: {
-    backgroundColor: colors.surfaceWarm,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+  // Correction section
+  correctionToggle: {
+    paddingVertical: spacing.sm,
+    alignSelf: 'flex-start',
   },
-  terminalText: { ...typography.small, color: colors.textMuted, textAlign: 'center' },
+  correctionToggleText: {
+    ...typography.small,
+    color: colors.gold,
+    fontFamily: typography.bodyMedium.fontFamily,
+  },
+  correctionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  correctionChip: {
+    borderRadius: radius.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+  },
+  correctionChipCurrent: {
+    opacity: 1,
+    borderWidth: 2,
+  },
+  correctionChipText: {
+    ...typography.small,
+    fontFamily: typography.bodyMedium.fontFamily,
+  },
+  correctionChipTextCurrent: {
+    fontFamily: typography.h2.fontFamily,
+  },
+  correctionClose: {
+    marginTop: spacing.md,
+    alignSelf: 'flex-start',
+  },
+  correctionCloseText: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
 });

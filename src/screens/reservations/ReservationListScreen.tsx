@@ -163,14 +163,24 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
               <Text style={styles.headerLabel}>Réservations</Text>
               <Text style={styles.headerTitle}>Planning</Text>
             </View>
-            <TouchableOpacity
-              style={styles.newButton}
-              onPress={() => navigation.navigate('NewReservation')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name={'add' as IoniconsName} size={18} color={colors.textOnDark} />
-              <Text style={styles.newButtonText}>Nouvelle</Text>
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity
+                style={styles.waitlistButton}
+                onPress={() => navigation.navigate('Waitlist')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={'time-outline' as IoniconsName} size={16} color={colors.gold} />
+                <Text style={styles.waitlistButtonText}>Attente</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.newButton}
+                onPress={() => navigation.navigate('NewReservation')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={'add' as IoniconsName} size={18} color={colors.textOnDark} />
+                <Text style={styles.newButtonText}>Nouvelle</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* ── Sélecteur de date ── */}
@@ -327,6 +337,23 @@ const styles = StyleSheet.create({
   },
   headerLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing.xs },
   headerTitle: { ...typography.h1, color: colors.textPrimary },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  waitlistButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.goldLight,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  waitlistButtonText: { ...typography.bodyMedium, color: colors.gold },
   newButton: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -33,6 +33,7 @@ type FormState = {
   selectedTimeSlot: string;
   partySize: number;
   // Client
+  isWalkIn: boolean;
   selectedGuest: GuestRow | null;
   guestSearchQuery: string;
   guestFirstName: string;
@@ -41,7 +42,7 @@ type FormState = {
   guestEmail: string;
   guestVip: boolean;
   // Détails
-  selectedTableId: string | null;
+  selectedTableIds: string[];
   status: 'confirmed' | 'pending';
   notes: string;
 };
@@ -51,6 +52,7 @@ const INITIAL_FORM: FormState = {
   selectedShiftId:   '',
   selectedTimeSlot:  '',
   partySize:         2,
+  isWalkIn:          false,
   selectedGuest:     null,
   guestSearchQuery:  '',
   guestFirstName:    '',
@@ -58,7 +60,7 @@ const INITIAL_FORM: FormState = {
   guestPhone:        '',
   guestEmail:        '',
   guestVip:          false,
-  selectedTableId:   null,
+  selectedTableIds:  [],
   status:            'confirmed',
   notes:             '',
 };
@@ -146,6 +148,27 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
       guestVip:        false,
     }));
 
+  const handleClientType = (walkIn: boolean) =>
+    setForm((prev) => ({
+      ...prev,
+      isWalkIn:        walkIn,
+      selectedGuest:   null,
+      guestSearchQuery: '',
+      guestFirstName:  '',
+      guestLastName:   '',
+      guestPhone:      '',
+      guestEmail:      '',
+      guestVip:        false,
+    }));
+
+  const toggleTable = (tid: string) =>
+    setForm((prev) => ({
+      ...prev,
+      selectedTableIds: prev.selectedTableIds.includes(tid)
+        ? prev.selectedTableIds.filter((id) => id !== tid)
+        : [...prev.selectedTableIds, tid],
+    }));
+
   const handleSearch = () => {
     void searchGuests(form.guestSearchQuery);
   };
@@ -171,9 +194,10 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
         shiftId:   form.selectedShiftId,
         notes:     form.notes.trim() || undefined,
         status:    form.status,
-        tableId:   form.selectedTableId ?? undefined,
-        guestId:   form.selectedGuest?.id,
-        guest: form.selectedGuest
+        tableIds:  form.selectedTableIds.length > 0 ? form.selectedTableIds : undefined,
+        isWalkIn:  form.isWalkIn,
+        guestId:   form.isWalkIn ? undefined : form.selectedGuest?.id,
+        guest: form.isWalkIn || form.selectedGuest
           ? undefined
           : hasAnyGuestInfo
             ? { firstName, lastName, phone, email, vip: form.guestVip }
@@ -277,8 +301,35 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
               </SectionCard>
             ) : null}
 
+            {/* ── Type de client ── */}
+            <SectionCard title="Type de client">
+              <View style={styles.shiftRow}>
+                <TouchableOpacity
+                  style={[styles.shiftChip, !form.isWalkIn && styles.shiftChipActive]}
+                  onPress={() => handleClientType(false)}
+                >
+                  <Text style={[styles.shiftText, !form.isWalkIn && styles.shiftTextActive]}>
+                    Client identifié
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.shiftChip, form.isWalkIn && styles.shiftChipActive]}
+                  onPress={() => handleClientType(true)}
+                >
+                  <Text style={[styles.shiftText, form.isWalkIn && styles.shiftTextActive]}>
+                    Client de passage
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {form.isWalkIn && (
+                <Text style={styles.walkInHint}>
+                  Pour les clients de dernière minute sans fiche client.
+                </Text>
+              )}
+            </SectionCard>
+
             {/* ── Client ── */}
-            <SectionCard title="Client">
+            {!form.isWalkIn && <SectionCard title="Client">
               {form.selectedGuest ? (
                 <View>
                   <View style={styles.selectedGuestCard}>
@@ -386,38 +437,38 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                   </View>
                 </View>
               )}
-            </SectionCard>
+            </SectionCard>}
 
             {/* ── Table (optionnel) ── */}
             <SectionCard title="Table">
               <Text style={styles.tableHint}>
-                Optionnel, peut être assignée plus tard depuis le plan.
+                Optionnel — sélection multiple possible, peut être assignée plus tard depuis le plan.
               </Text>
-              <View style={styles.tableChipRow}>
+              {form.selectedTableIds.length > 0 && (
                 <TouchableOpacity
-                  style={[styles.tableChip, form.selectedTableId === null && styles.tableChipActive]}
-                  onPress={() => setForm((prev) => ({ ...prev, selectedTableId: null }))}
+                  onPress={() => setForm((prev) => ({ ...prev, selectedTableIds: [] }))}
                 >
-                  <Text style={[styles.tableChipText, form.selectedTableId === null && styles.tableChipTextActive]}>
-                    Aucune
-                  </Text>
+                  <Text style={styles.clearTablesLink}>Effacer la sélection</Text>
                 </TouchableOpacity>
-              </View>
+              )}
               {tablesByZone.map(({ zone, items }) => (
                 <View key={zone} style={styles.tableZoneGroup}>
                   <Text style={styles.tableZoneLabel}>{zone}</Text>
                   <View style={styles.tableChipRow}>
-                    {items.map((t) => (
-                      <TouchableOpacity
-                        key={t.id}
-                        style={[styles.tableChip, form.selectedTableId === t.id && styles.tableChipActive]}
-                        onPress={() => setForm((prev) => ({ ...prev, selectedTableId: t.id }))}
-                      >
-                        <Text style={[styles.tableChipText, form.selectedTableId === t.id && styles.tableChipTextActive]}>
-                          {t.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                    {items.map((t) => {
+                      const isSelected = form.selectedTableIds.includes(t.id);
+                      return (
+                        <TouchableOpacity
+                          key={t.id}
+                          style={[styles.tableChip, isSelected && styles.tableChipActive]}
+                          onPress={() => toggleTable(t.id)}
+                        >
+                          <Text style={[styles.tableChipText, isSelected && styles.tableChipTextActive]}>
+                            {t.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 </View>
               ))}
@@ -507,12 +558,25 @@ const styles = StyleSheet.create({
   shiftText: { ...typography.bodyMedium, color: colors.textMuted },
   shiftTextActive: { color: colors.cta },
 
+  // Walk-in hint
+  walkInHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    fontStyle: 'italic',
+  },
+
   // Table picker
   tableHint: {
     ...typography.small,
     color: colors.textMuted,
     marginBottom: spacing.sm,
     fontStyle: 'italic',
+  },
+  clearTablesLink: {
+    ...typography.small,
+    color: colors.cta,
+    marginBottom: spacing.sm,
   },
   tableZoneGroup: {
     marginTop: spacing.sm,
