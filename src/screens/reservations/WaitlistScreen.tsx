@@ -17,6 +17,7 @@ import { useWaitlist } from '../../hooks/useWaitlist';
 import { FilterChip } from '../../components/FilterChip';
 import DateSelector from '../../components/DateSelector';
 import CreateWaitlistEntryForm from '../../components/CreateWaitlistEntryForm';
+import VipBadge from '../../components/VipBadge';
 import {
   getWaitlistStatusLabel,
   getWaitlistStatusColors,
@@ -120,10 +121,10 @@ function EntryCard({
       {/* ── Guest info ── */}
       <View style={styles.entryGuestRow}>
         <View style={styles.entryGuestInfo}>
-          <Text style={styles.entryGuestName}>
-            {guestName}
-            {entry.guests?.vip ? <Text style={styles.vipSuffix}> ★</Text> : null}
-          </Text>
+          <View style={styles.entryNameRow}>
+            <Text style={styles.entryGuestName}>{guestName}</Text>
+            {entry.guests?.vip ? <VipBadge small /> : null}
+          </View>
           {entry.guests?.phone ? (
             <Text style={styles.entryGuestSub}>{entry.guests.phone}</Text>
           ) : null}
@@ -652,9 +653,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   entryGuestInfo: { flex: 1 },
+  entryNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   entryGuestName: { ...typography.bodyMedium, color: colors.textPrimary },
   entryGuestSub:  { ...typography.small, color: colors.textMuted },
-  vipSuffix: { color: colors.gold },
   entryCoversBadge: {
     flexDirection: 'row',
     alignItems: 'center',

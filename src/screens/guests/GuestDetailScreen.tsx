@@ -19,6 +19,7 @@ import { useGuestDetail } from '../../hooks/useGuestDetail';
 import SectionCard from '../../components/SectionCard';
 import PrimaryButton from '../../components/PrimaryButton';
 import StatusBadge from '../../components/StatusBadge';
+import VipBadge from '../../components/VipBadge';
 import {
   formatGuestName,
   formatPhone,
@@ -264,11 +265,7 @@ export default function GuestDetailScreen({ route }: Props): React.JSX.Element {
                 <Text style={styles.heroName} numberOfLines={2}>{guestName}</Text>
                 <Text style={styles.heroPhone}>{formatPhone(guest?.phone)}</Text>
               </View>
-              {isVip ? (
-                <View style={styles.vipBadge}>
-                  <Text style={styles.vipText}>VIP</Text>
-                </View>
-              ) : null}
+              {isVip ? <VipBadge /> : null}
             </View>
 
             {/* ── Informations ── */}
@@ -529,20 +526,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
-  vipBadge: {
-    backgroundColor: colors.goldLight,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: colors.gold,
-  },
-  vipText: {
-    ...typography.label,
-    color: colors.gold,
-  },
-
   // Field
   fieldBlock: {
     marginBottom: spacing.sm,

@@ -25,6 +25,7 @@ import {
 import type { GuestsStackParamList } from '../../navigation/GuestsNavigator';
 import type { Database } from '../../types/database';
 import type { GuestSortOption, GuestFilterState } from '../../types/guests';
+import VipBadge from '../../components/VipBadge';
 
 type GuestRow = Database['public']['Tables']['guests']['Row'];
 type Props = NativeStackScreenProps<GuestsStackParamList, 'GuestList'>;
@@ -92,11 +93,7 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
               ) : null}
             </View>
             <View style={styles.cardRight}>
-              {item.vip ? (
-                <View style={styles.vipBadge}>
-                  <Text style={styles.vipText}>VIP</Text>
-                </View>
-              ) : null}
+              {item.vip ? <VipBadge /> : null}
             </View>
           </View>
 
@@ -488,16 +485,6 @@ const styles = StyleSheet.create({
   guestEmail: {
     ...typography.small,
     color: colors.textMuted,
-  },
-  vipBadge: {
-    backgroundColor: colors.goldLight,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  vipText: {
-    ...typography.label,
-    color: colors.gold,
   },
   cardStats: {
     flexDirection: 'row',

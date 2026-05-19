@@ -6,6 +6,7 @@ import { formatReservationTables } from '../utils/reservationTables';
 import { reservationNeedsPhoneConfirmation } from '../utils/reservationConfirmation';
 import { isBirthdayReservation, isEventReservation } from '../utils/reservationOccasion';
 import StatusBadge from './StatusBadge';
+import VipBadge from './VipBadge';
 import type { ReservationWithJoins } from '../types/reservations';
 import {
   openWhatsAppMessage,
@@ -81,11 +82,7 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
       <View style={styles.info}>
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{guestDisplayName(r)}</Text>
-          {isVip && (
-            <View style={styles.vipBadge}>
-              <Text style={styles.vipText}>VIP</Text>
-            </View>
-          )}
+          {isVip && <VipBadge small />}
           {isBirthday && (
             <View style={styles.birthdayBadge}>
               <Text style={styles.birthdayText}>Anniversaire</Text>
@@ -174,16 +171,6 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.textPrimary,
     flex: 1,
-  },
-  vipBadge: {
-    backgroundColor: colors.goldLight,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  vipText: {
-    ...typography.label,
-    color: colors.gold,
   },
   birthdayBadge: {
     backgroundColor: colors.goldLight,

@@ -81,6 +81,7 @@ export interface FloorPlanReservation {
   source: Database['public']['Tables']['reservations']['Row']['source'];
   guestName: string | null;
   guestPhone: string | null;
+  guestVip: boolean;
   shiftName: string | null;
   notes: string | null;
   tableLabels: string[];

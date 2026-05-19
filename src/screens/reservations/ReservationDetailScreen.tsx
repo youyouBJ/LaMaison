@@ -15,6 +15,7 @@ import { formatReadableDate, formatTimeSlot } from '../../utils/date';
 import { getReservationStatusLabel, getReservationStatusColors } from '../../utils/reservationStatus';
 import StatusBadge from '../../components/StatusBadge';
 import SectionCard from '../../components/SectionCard';
+import VipBadge from '../../components/VipBadge';
 import PrimaryButton from '../../components/PrimaryButton';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { ReservationStatus } from '../../types/database';
@@ -205,11 +206,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                   <Text style={styles.guestMeta}>{r.guests.email}</Text>
                 ) : null}
               </View>
-              {isVip && (
-                <View style={styles.vipBadge}>
-                  <Text style={styles.vipText}>VIP</Text>
-                </View>
-              )}
+              {isVip && <VipBadge />}
             </View>
           </SectionCard>
 
@@ -488,13 +485,6 @@ const styles = StyleSheet.create({
   guestInfo: { flex: 1, gap: spacing.xs },
   guestName: { ...typography.bodyMedium, color: colors.textPrimary },
   guestMeta: { ...typography.small, color: colors.textMuted },
-  vipBadge: {
-    backgroundColor: colors.goldLight,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  vipText: { ...typography.label, color: colors.gold },
   occasionBadges: {
     flexDirection: 'row',
     flexWrap: 'wrap',

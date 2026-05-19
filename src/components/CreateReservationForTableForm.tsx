@@ -16,6 +16,7 @@ import type { ShiftRow, TableRow, GuestRow } from '../hooks/useCreateReservation
 import DateSelector from './DateSelector';
 import TimeSlotSelector from './TimeSlotSelector';
 import PrimaryButton from './PrimaryButton';
+import VipBadge from './VipBadge';
 import { generateTimeSlots, isDateAllowedForShift } from '../utils/reservationSlots';
 import { withBirthdayOccasion, withEventOccasion } from '../utils/reservationOccasion';
 import type { FloorServiceFilter } from '../types/floor';
@@ -533,9 +534,12 @@ export default function CreateReservationForTableForm({
                       onPress={() => handleSelectGuest(g)}
                       activeOpacity={0.75}
                     >
-                      <Text style={styles.searchResultName}>
-                        {[g.first_name, g.last_name].filter(Boolean).join(' ') || 'Client'}
-                      </Text>
+                      <View style={styles.searchNameRow}>
+                        <Text style={styles.searchResultName}>
+                          {[g.first_name, g.last_name].filter(Boolean).join(' ') || 'Client'}
+                        </Text>
+                        {g.vip ? <VipBadge small /> : null}
+                      </View>
                       {g.phone ? <Text style={styles.searchResultSub}>{g.phone}</Text> : null}
                     </TouchableOpacity>
                   ))}
@@ -783,7 +787,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
-  searchResultName: { ...typography.bodyMedium, color: colors.textPrimary },
+  searchNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  searchResultName: { ...typography.bodyMedium, color: colors.textPrimary, flex: 1 },
   searchResultSub:  { ...typography.small, color: colors.textMuted, marginTop: spacing.xs },
   newGuestTrigger: {
     flexDirection:   'row',

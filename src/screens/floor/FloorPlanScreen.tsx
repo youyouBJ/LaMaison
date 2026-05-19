@@ -17,6 +17,7 @@ import { getReservationStatusLabel, getReservationStatusColors } from '../../uti
 import DateSelector from '../../components/DateSelector';
 import FloorCanvas from '../../components/FloorCanvas';
 import CreateReservationForTableForm from '../../components/CreateReservationForTableForm';
+import VipBadge from '../../components/VipBadge';
 import { useFloorPlan } from '../../hooks/useFloorPlan';
 import type { FloorTableWithState, FloorPlanReservation, FloorServiceFilter } from '../../types/floor';
 import { isBirthdayReservation, isEventReservation, displayNotes } from '../../utils/reservationOccasion';
@@ -461,9 +462,12 @@ function TableDetailPanel({
                     <Text style={styles.resTimeText}>{res.timeSlot.substring(0, 5)}</Text>
                   </View>
                   <View style={styles.resInfoBlock}>
-                    <Text style={styles.resGuestName} numberOfLines={1}>
-                      {guestLabel(res)}
-                    </Text>
+                    <View style={styles.resNameRow}>
+                      <Text style={styles.resGuestName} numberOfLines={1}>
+                        {guestLabel(res)}
+                      </Text>
+                      {res.guestVip ? <VipBadge small /> : null}
+                    </View>
                     <Text style={styles.resMeta} numberOfLines={1}>
                       {res.partySize} couvert{res.partySize > 1 ? 's' : ''}
                       {res.tableLabels.length > 1 ? ` · Tables ${res.tableLabels.join(', ')}` : ''}
@@ -670,7 +674,8 @@ const styles = StyleSheet.create({
     color:      colors.gold,
   },
   resInfoBlock: { flex: 1 },
-  resGuestName: { ...typography.bodyMedium, color: colors.textPrimary, marginBottom: 2 },
+  resNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: 2 },
+  resGuestName: { ...typography.bodyMedium, color: colors.textPrimary },
   resMeta: { ...typography.small, color: colors.textMuted },
   resNotes: { ...typography.small, color: colors.textMuted, fontStyle: 'italic', marginTop: 2 },
   birthdayBadge: {

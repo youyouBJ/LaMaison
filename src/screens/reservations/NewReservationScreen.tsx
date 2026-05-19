@@ -20,6 +20,7 @@ import { withBirthdayOccasion, withEventOccasion } from '../../utils/reservation
 import { isDateAllowedForShift, generateTimeSlots } from '../../utils/reservationSlots';
 import SectionCard from '../../components/SectionCard';
 import PrimaryButton from '../../components/PrimaryButton';
+import VipBadge from '../../components/VipBadge';
 import DateSelector from '../../components/DateSelector';
 import CalendarPicker from '../../components/CalendarPicker';
 import TimeSlotSelector from '../../components/TimeSlotSelector';
@@ -347,9 +348,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                           .filter(Boolean).join(' ') || 'Client'}
                       </Text>
                       <Text style={styles.selectedGuestPhone}>{form.selectedGuest.phone}</Text>
-                      {form.selectedGuest.vip && (
-                        <View style={styles.vipBadge}><Text style={styles.vipText}>VIP</Text></View>
-                      )}
+                      {form.selectedGuest.vip && <VipBadge small />}
                     </View>
                     <TouchableOpacity onPress={clearGuest}>
                       <Text style={styles.changeClient}>Changer</Text>
@@ -388,9 +387,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                             {[g.first_name, g.last_name].filter(Boolean).join(' ') || 'Client'}
                           </Text>
                           <Text style={styles.resultPhone}>{g.phone}</Text>
-                          {g.vip && (
-                            <View style={styles.vipBadge}><Text style={styles.vipText}>VIP</Text></View>
-                          )}
+                          {g.vip && <VipBadge small />}
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -768,15 +765,6 @@ const styles = StyleSheet.create({
   statusOptionActive: { backgroundColor: colors.ctaLight, borderColor: colors.cta },
   statusOptionText: { ...typography.small, color: colors.textMuted },
   statusOptionTextActive: { color: colors.cta, fontFamily: typography.bodyMedium.fontFamily },
-
-  // VIP
-  vipBadge: {
-    backgroundColor: colors.goldLight,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  vipText: { ...typography.label, color: colors.gold },
 
   // Info
   infoText: { ...typography.small, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.sm },
