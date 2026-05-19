@@ -59,6 +59,10 @@ export function useFeedbackSurveyLink() {
         }
 
         if (existing) {
+          if (!existing.token) {
+            setError("Token d'enquête invalide pour cette réservation.");
+            return null;
+          }
           const url = buildFeedbackSurveyUrl(existing.token);
           if (!url) {
             setError("URL d'enquête non configurée.");

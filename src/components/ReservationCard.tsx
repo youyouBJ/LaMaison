@@ -21,7 +21,7 @@ import {
   buildSatisfactionEmail,
   isValidEmail,
 } from '../utils/email';
-import { getFeedbackBaseUrl } from '../utils/feedbackSurvey';
+import { useFeedbackSurveyLink } from '../hooks/useFeedbackSurveyLink';
 
 type Props = {
   reservation: ReservationWithJoins;
@@ -45,6 +45,8 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
   const [waFeedback, setWaFeedback]       = useState<{ ok: boolean; text: string } | null>(null);
   const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const { getOrCreate: getOrCreateSurveyLink, loading: surveyLoading } = useFeedbackSurveyLink();
+
   const handleCall = () => {
     if (phone) { void Linking.openURL(`tel:${phone}`); }
   };
@@ -60,16 +62,32 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
       try { return formatReadableDate(new Date(`${r.date}T12:00:00`)); }
       catch { return r.date; }
     })();
-    let message: string;
     if (r.status === 'completed') {
-      const surveyUrl = getFeedbackBaseUrl();
-      if (!surveyUrl) {
-        setWaFeedback({ ok: false, text: "URL d'enquête non configurée." });
-        setTimeout(() => setWaFeedback(null), 5000);
-        return;
-      }
-      message = buildSatisfactionMessage(surveyUrl);
-    } else if (r.status === 'seated') {
+      void getOrCreateSurveyLink(r).then((result) => {
+        if (!result) {
+          setWaFeedback({ ok: false, text: "Lien d'enquête invalide." });
+          setTimeout(() => setWaFeedback(null), 5000);
+          return;
+        }
+        const message = buildSatisfactionMessage(result.url);
+        void openWhatsAppMessage(phone, message).then((opened) => {
+          setWaFeedback(
+            opened
+              ? { ok: true, text: 'WhatsApp ouvert' }
+              : {
+                  ok: false,
+                  text: normalizePhoneForWhatsApp(phone)
+                    ? "Impossible d'ouvrir WhatsApp."
+                    : 'Numéro invalide.',
+                },
+          );
+          setTimeout(() => setWaFeedback(null), 4000);
+        });
+      });
+      return;
+    }
+    let message: string;
+    if (r.status === 'seated') {
       message = buildReservationReminderMessage({ time, partySize: r.party_size });
     } else {
       message = buildReservationConfirmationMessage({ date: dateStr, time, partySize: r.party_size });
@@ -95,19 +113,31 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
       try { return formatReadableDate(new Date(`${r.date}T12:00:00`)); }
       catch { return r.date; }
     })();
-    let emailParams: { subject: string; body: string };
     if (r.status === 'completed') {
-      const surveyUrl = getFeedbackBaseUrl();
-      if (!surveyUrl) {
-        setEmailFeedback({ ok: false, text: "URL d'enquête non configurée." });
-        setTimeout(() => setEmailFeedback(null), 5000);
-        return;
-      }
-      emailParams = buildSatisfactionEmail(surveyUrl);
-    } else {
-      emailParams = buildReservationConfirmationEmail({ date: dateStr, time, partySize: r.party_size });
+      void getOrCreateSurveyLink(r).then((result) => {
+        if (!result) {
+          setEmailFeedback({ ok: false, text: "Lien d'enquête invalide." });
+          setTimeout(() => setEmailFeedback(null), 5000);
+          return;
+        }
+        const { subject, body } = buildSatisfactionEmail(result.url);
+        void openEmailMessage(email, subject, body).then((opened) => {
+          setEmailFeedback(
+            opened
+              ? { ok: true, text: 'Email ouvert' }
+              : {
+                  ok: false,
+                  text: email && isValidEmail(email)
+                    ? "Impossible d'ouvrir l'application Mail."
+                    : 'Email invalide.',
+                },
+          );
+          setTimeout(() => setEmailFeedback(null), 4000);
+        });
+      });
+      return;
     }
-    const { subject, body } = emailParams;
+    const { subject, body } = buildReservationConfirmationEmail({ date: dateStr, time, partySize: r.party_size });
     void openEmailMessage(email, subject, body).then((opened) => {
       setEmailFeedback(
         opened
@@ -157,14 +187,24 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
           <StatusBadge status={r.status} />
           <View style={styles.bottomActions}>
             {showWhatsApp ? (
-              <TouchableOpacity style={styles.waButton} onPress={handleWhatsApp} activeOpacity={0.75}>
+              <TouchableOpacity
+                style={[styles.waButton, surveyLoading && r.status === 'completed' ? styles.waButtonDisabled : null]}
+                onPress={handleWhatsApp}
+                activeOpacity={0.75}
+                disabled={surveyLoading && r.status === 'completed'}
+              >
                 <Text style={styles.waButtonText}>
                   {(r.status === 'pending' || r.status === 'confirmed') ? 'Confirmer' : r.status === 'completed' ? 'Avis' : 'WhatsApp'}
                 </Text>
               </TouchableOpacity>
             ) : null}
             {showEmail ? (
-              <TouchableOpacity style={styles.emailButton} onPress={handleEmailChip} activeOpacity={0.75}>
+              <TouchableOpacity
+                style={[styles.emailButton, surveyLoading && r.status === 'completed' ? styles.waButtonDisabled : null]}
+                onPress={handleEmailChip}
+                activeOpacity={0.75}
+                disabled={surveyLoading && r.status === 'completed'}
+              >
                 <Text style={styles.emailButtonText}>
                   {r.status === 'completed' ? 'Avis email' : 'Email'}
                 </Text>
@@ -309,6 +349,9 @@ const styles = StyleSheet.create({
   waButtonText: {
     ...typography.label,
     color: colors.statusFree,
+  },
+  waButtonDisabled: {
+    opacity: 0.5,
   },
   emailButton: {
     backgroundColor: colors.goldLight,

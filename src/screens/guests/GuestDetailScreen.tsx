@@ -34,15 +34,12 @@ import {
   openWhatsAppMessage,
   normalizePhoneForWhatsApp,
   buildGuestConfirmationMessage,
-  buildSatisfactionMessage,
 } from '../../utils/whatsapp';
 import {
   openEmailMessage,
   isValidEmail,
   buildGuestConfirmationEmail,
-  buildSatisfactionEmail,
 } from '../../utils/email';
-import { getFeedbackBaseUrl } from '../../utils/feedbackSurvey';
 import type { GuestsStackParamList } from '../../navigation/GuestsNavigator';
 import type { ReservationWithDetail } from '../../hooks/useGuestDetail';
 
@@ -208,21 +205,9 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
     if (phone) { void Linking.openURL(`tel:${phone}`); }
   };
 
-  const handleWhatsApp = (type: 'confirmation' | 'enquete') => {
+  const handleWhatsApp = () => {
     const phone   = guest?.phone ?? null;
-    let message: string;
-    if (type === 'confirmation') {
-      message = buildGuestConfirmationMessage();
-    } else {
-      const surveyUrl = getFeedbackBaseUrl();
-      if (!surveyUrl) {
-        if (waTimer.current) clearTimeout(waTimer.current);
-        setWaFeedback({ ok: false, text: "URL d'enquête non configurée." });
-        waTimer.current = setTimeout(() => setWaFeedback(null), 5000);
-        return;
-      }
-      message = buildSatisfactionMessage(surveyUrl);
-    }
+    const message = buildGuestConfirmationMessage();
     void openWhatsAppMessage(phone, message).then((opened) => {
       if (waTimer.current) clearTimeout(waTimer.current);
       setWaFeedback(
@@ -239,22 +224,9 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
     });
   };
 
-  const handleEmail = (type: 'confirmation' | 'enquete') => {
+  const handleEmail = () => {
     const email = guest?.email ?? null;
-    let emailParams: { subject: string; body: string };
-    if (type === 'confirmation') {
-      emailParams = buildGuestConfirmationEmail();
-    } else {
-      const surveyUrl = getFeedbackBaseUrl();
-      if (!surveyUrl) {
-        if (emailTimer.current) clearTimeout(emailTimer.current);
-        setEmailFeedback({ ok: false, text: "URL d'enquête non configurée." });
-        emailTimer.current = setTimeout(() => setEmailFeedback(null), 5000);
-        return;
-      }
-      emailParams = buildSatisfactionEmail(surveyUrl);
-    }
-    const { subject, body } = emailParams;
+    const { subject, body } = buildGuestConfirmationEmail();
     void openEmailMessage(email, subject, body).then((opened) => {
       if (emailTimer.current) clearTimeout(emailTimer.current);
       setEmailFeedback(
@@ -443,17 +415,10 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.contactBtnWa}
-                        onPress={() => handleWhatsApp('confirmation')}
+                        onPress={handleWhatsApp}
                         activeOpacity={0.75}
                       >
                         <Text style={styles.contactBtnWaText}>WhatsApp confirmation</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.contactBtnWa}
-                        onPress={() => handleWhatsApp('enquete')}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={styles.contactBtnWaText}>WhatsApp enquête</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -465,17 +430,10 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
                     <View style={styles.contactStack}>
                       <TouchableOpacity
                         style={styles.contactBtnEmail}
-                        onPress={() => handleEmail('confirmation')}
+                        onPress={handleEmail}
                         activeOpacity={0.75}
                       >
                         <Text style={styles.contactBtnEmailText}>Email confirmation</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.contactBtnEmail}
-                        onPress={() => handleEmail('enquete')}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={styles.contactBtnEmailText}>Email enquête</Text>
                       </TouchableOpacity>
                     </View>
                   </View>

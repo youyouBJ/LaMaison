@@ -27,15 +27,12 @@ import {
   normalizePhoneForWhatsApp,
   buildReservationConfirmationMessage,
   buildReservationReminderMessage,
-  buildSatisfactionMessage,
 } from '../../utils/whatsapp';
 import {
   openEmailMessage,
   buildReservationConfirmationEmail,
-  buildSatisfactionEmail,
   isValidEmail,
 } from '../../utils/email';
-import { getFeedbackBaseUrl } from '../../utils/feedbackSurvey';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -359,13 +356,9 @@ function TableDetailPanel({
     if (res.status === 'pending' || res.status === 'confirmed') {
       message = buildReservationConfirmationMessage({ date: formattedDate, time, partySize: res.partySize });
     } else if (res.status === 'completed') {
-      const surveyUrl = getFeedbackBaseUrl();
-      if (!surveyUrl) {
-        setWaFeedback({ ok: false, text: "URL d'enquête non configurée." });
-        setTimeout(() => setWaFeedback(null), 5000);
-        return;
-      }
-      message = buildSatisfactionMessage(surveyUrl);
+      setWaFeedback({ ok: false, text: "Pour l'enquête satisfaction, ouvrez la fiche réservation." });
+      setTimeout(() => setWaFeedback(null), 5000);
+      return;
     } else {
       message = buildReservationReminderMessage({ time, partySize: res.partySize });
     }
@@ -390,13 +383,9 @@ function TableDetailPanel({
     if (res.status === 'pending' || res.status === 'confirmed') {
       emailParams = buildReservationConfirmationEmail({ date: formattedDate, time, partySize: res.partySize });
     } else {
-      const surveyUrl = getFeedbackBaseUrl();
-      if (!surveyUrl) {
-        setEmailFeedback({ ok: false, text: "URL d'enquête non configurée." });
-        setTimeout(() => setEmailFeedback(null), 5000);
-        return;
-      }
-      emailParams = buildSatisfactionEmail(surveyUrl);
+      setEmailFeedback({ ok: false, text: "Pour l'enquête satisfaction, ouvrez la fiche réservation." });
+      setTimeout(() => setEmailFeedback(null), 5000);
+      return;
     }
     const { subject, body } = emailParams;
     void openEmailMessage(email, subject, body).then((opened) => {

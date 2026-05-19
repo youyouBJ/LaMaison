@@ -25,8 +25,14 @@ export function generateFeedbackToken(): string {
   return token;
 }
 
+export function joinUrl(baseUrl: string, token: string): string | null {
+  if (!token) return null;
+  const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  return `${base}/${token}`;
+}
+
 export function buildFeedbackSurveyUrl(token: string): string | null {
   const base = getFeedbackBaseUrl();
   if (!base) return null;
-  return `${base}/${token}`;
+  return joinUrl(base, token);
 }
