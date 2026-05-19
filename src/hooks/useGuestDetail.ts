@@ -92,6 +92,8 @@ export function useGuestDetail(guestId: string) {
 
   const refresh = useCallback(() => { void fetchGuest(); }, [fetchGuest]);
 
+  // Appelé par l'UI avant de proposer la suppression pour afficher un guard
+  // (nombre de réservations et entrées waitlist liées au client).
   const fetchLinkedCounts = useCallback(async (): Promise<LinkedCounts | null> => {
     const [{ count: resCount, error: resError }, { count: wlCount, error: wlError }] =
       await Promise.all([

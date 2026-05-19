@@ -39,7 +39,9 @@ export function useReservations() {
     if (fetchError) { setError(fetchError.message); return; }
     let rows = (data as unknown as ReservationWithJoins[] | null) ?? [];
 
-    // Enrich with reservation_tables (silently ignore pre-migration)
+    // Second query for reservation_tables: PostgREST can't join through a N:N junction
+    // table with full column selection in one pass, so we enrich client-side.
+    // Silently ignore pre-migration (table may not exist yet).
     const ids = rows.map((r) => r.id);
     if (ids.length > 0) {
       const { data: rtData } = await supabase
@@ -95,8 +97,9 @@ export function useReservations() {
     }
   }, [selectedDate, fetchReservations]);
 
-  // Realtime sur reservations du restaurant
-  // Les tables et floor_plans seront traités dans le module Plan de salle.
+  // Realtime : restaurantIdRef et selectedDateRef sont utilisés dans le callback
+  // à la place des valeurs d'état directes pour éviter les stale closures —
+  // le callback capture une snapshot au moment de sa définition.
   useEffect(() => {
     if (!restaurantId) return;
     if (channelRef.current) { void supabase.removeChannel(channelRef.current); }

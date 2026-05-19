@@ -33,6 +33,9 @@ function timeInRange(time: string, start: string, end: string): boolean {
   return time >= start && time <= end;
 }
 
+// Détermine si une réservation appartient au service filtré.
+// Priorité : nom du shift → fallback sur la plage horaire du créneau.
+// Le fallback couvre les cas où shift_id est null ou le nom non reconnu.
 function matchesService(res: ReservationWithJoins, filter: FloorServiceFilter): boolean {
   if (filter === 'all') return true;
   const shiftName = res.shifts?.name?.toLowerCase() ?? '';

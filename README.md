@@ -96,6 +96,29 @@ Stack à ne jamais changer sauf décision explicite.
 - Recherche de client pour l'ajout
 - Synchronisation Realtime
 
+### Contact direct (V1 manuel)
+- WhatsApp : ouvre l'app WhatsApp native avec un message pré-rempli (lien `wa.me`)
+- Email : ouvre l'app email native avec sujet et corps pré-remplis (`mailto:`)
+- Messages disponibles : confirmation réservation, rappel du jour, notification waitlist, envoi d'enquête
+- Aucun envoi automatique — le staff déclenche depuis la fiche réservation ou la fiche client
+
+### Occasions
+- Tags `[Occasion] Anniversaire` et `[Occasion] Événement` stockés dans le champ `notes` de la réservation
+- Affichés comme badges visuels dans le détail de réservation
+- Filtrés lors de l'affichage des notes libres (non inclus dans le texte brut affiché)
+
+### Enquête satisfaction
+- Génération d'un token public de 32 caractères par réservation, sans données client exposées
+- Idempotent : une même réservation reçoit toujours le même lien
+- Envoi via WhatsApp ou email (manuel V1)
+- Formulaire : notes 1–5 sur 5 dimensions, recommandation Oui/Non, commentaire libre
+- URL de base configurable dans `src/utils/feedbackSurvey.ts` (non encore déployée en production)
+
+### Suppression client
+- Vérification des données liées (réservations, entrées waitlist) avant toute suppression
+- Dialog de confirmation avec décompte des données concernées
+- Action irréversible — le guard affiche clairement les risques avant validation
+
 ---
 
 ## Fonctionnalités à venir
@@ -105,10 +128,21 @@ Stack à ne jamais changer sauf décision explicite.
 - Paramètres admin : shifts, tables, staff
 - Tests manuels end-to-end complets
 - Polish iPad
+- Guide utilisateur PDF (formation équipe La Maison)
+- Comptes staff de test + environnement de recette isolé
+- Build TestFlight / distribution interne iOS
+- Stabilisation post go-live (premiers services réels, retours terrain)
 
 ### P1 — post go-live
 - SMS Twilio : confirmations et rappels automatiques
 - Email Resend : confirmations
+- Notifications push : rappels pour le staff (table prête, retard…)
+- Statistiques avancées : taux de remplissage par service, no-shows, revenus
+- Export réservations : CSV pour comptabilité
+- Import historique feedbacks SevenRooms (script `import-sevenrooms-feedback.ts`)
+- Audit qualité base de données (doublons, normalisation téléphone/email)
+- Nettoyage contrôlé du CRM sous validation humaine
+- Dashboard satisfaction (notes moyennes, taux de recommandation par service)
 
 ### P2 — SaaS
 - Multi-restaurants (déjà multi-tenant en base)
@@ -203,7 +237,70 @@ npm run seed:floor
 
 # Vérification TypeScript des scripts
 npm run typecheck:scripts
+
+# Vérification TypeScript des scripts (commande directe)
+npx tsc -p tsconfig.scripts.json --noEmit
 ```
+
+---
+
+## Supabase
+
+### Auth
+Connexion email/mot de passe via `supabase.auth`. Session persistante avec AsyncStorage. Les profils staff sont dans `public.users`, liés à `auth.users` par UUID.
+
+### Tables principales
+
+| Table | Rôle |
+|---|---|
+| `restaurants` | Cœur du multi-tenant — un enregistrement = un restaurant isolé |
+| `users` | Profils staff (FK → `auth.users.id`) |
+| `guests` | Base clients (22 000+ importés depuis SevenRooms) |
+| `reservations` | Réservations : statut, créneau, couverts, table principale |
+| `reservation_tables` | Jointure N:N réservation ↔ tables (multi-tables, migration 002) |
+| `tables` | Tables du restaurant : zone, capacité, statut physique |
+| `shifts` | Services (Déjeuner, Dîner) : horaires, créneaux, capacité max par créneau |
+| `waitlist` | Entrées de liste d'attente avec statut |
+| `feedback_survey_links` | Tokens publics d'enquête satisfaction, 1 par réservation |
+| `feedback_surveys` | Réponses aux enquêtes (usage futur + import historique SevenRooms) |
+
+### RLS (Row Level Security)
+Toutes les tables ont des policies RLS basées sur `restaurant_id`. Un utilisateur authentifié n'accède qu'aux données de son propre restaurant.
+
+### Realtime
+Activé sur `reservations`, `tables`, et `waitlist`. Les hooks utilisent `supabase.channel()` avec `postgres_changes` pour maintenir l'UI synchronisée sans polling.
+
+---
+
+## Fonctionnement métier
+
+### Réservations multi-tables
+Chaque réservation a une **table principale** (`reservations.table_id`, toujours renseignée) et optionnellement des **tables secondaires** via la jointure `reservation_tables`. `formatReservationTables()` dans `src/utils/reservationTables.ts` combine les deux pour l'affichage.
+
+### Walk-ins
+Un walk-in peut n'avoir aucune fiche client : `guest_id = null` est un cas normal. La source est `'walkin'` et le statut initial est `'seated'` (client déjà installé à la création).
+
+### Statuts de réservation
+
+| Statut | Signification |
+|---|---|
+| `pending` | Créée, en attente de confirmation téléphonique |
+| `confirmed` | Confirmée par le staff |
+| `seated` | Client installé à table |
+| `completed` | Service terminé |
+| `cancelled` | Annulée |
+| `noshow` | No-show |
+
+Les changements de statut sont possibles dans tous les sens — pas de blocage depuis `completed` ou `cancelled`.
+
+### Occasions (Anniversaire / Événement)
+Stockées comme marqueurs dans le champ `notes` (`[Occasion] Anniversaire`, `[Occasion] Événement`). Ce choix évite une migration de schéma prématurée. Ils sont filtrés de l'affichage texte libre et rendus visuellement comme badges.
+
+### VIP
+`vip` est un booléen sur la fiche client (`guests.vip`), visible sur les réservations et dans le CRM, avec priorité d'affichage dans la liste clients.
+
+### Waitlist
+Statuts : `waiting` → `notified` → `seated` / `left`. La conversion en réservation met à jour le statut waitlist automatiquement : `confirmed` → `notified`, `seated` → `seated`.
 
 ---
 
@@ -214,6 +311,8 @@ npm run typecheck:scripts
 - Ne jamais commiter les fichiers clients CSV/XLSX (dossier `data/` ignoré par Git)
 - La `service_role` key n'est utilisée que dans les scripts locaux, jamais dans l'app mobile
 - Si la `service_role` key est exposée accidentellement, la régénérer immédiatement dans le Dashboard Supabase → Project Settings → API
+- WhatsApp et email sont **manuels en V1** : l'app ouvre l'application externe du staff, elle n'envoie rien automatiquement et ne garantit pas la remise
+- Ne jamais implémenter d'envoi automatique sans consentement client explicite et logs d'envoi côté serveur
 
 ---
 

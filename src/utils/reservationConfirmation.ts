@@ -8,6 +8,10 @@ type PhoneCheckable = {
   notes?: string | null;
 };
 
+// Détermine si une réservation nécessite encore une confirmation téléphonique.
+// La présence du tag '[Appel confirmation]' dans les notes signale qu'un appel
+// a déjà eu lieu — ce tag est inséré par buildConfirmationNote() et constitue
+// la seule trace d'historique d'appel (pas de table dédiée en V1).
 export function reservationNeedsPhoneConfirmation(r: PhoneCheckable): boolean {
   if (r.date !== getTodayDateString()) return false;
   if (r.status !== 'pending' && r.status !== 'confirmed') return false;

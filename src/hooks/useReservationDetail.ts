@@ -62,6 +62,9 @@ export function useReservationDetail(reservationId: string) {
     await updateStatus('cancelled');
   }, [updateStatus]);
 
+  // Confirme par téléphone : passe de 'pending' → 'confirmed' uniquement.
+  // Si le statut est déjà 'confirmed' ou plus avancé, il n'est pas modifié.
+  // Ajoute toujours une trace horodatée dans les notes pour l'historique.
   const confirmByPhone = useCallback(async (): Promise<void> => {
     if (!reservation) return;
     setUpdating(true);

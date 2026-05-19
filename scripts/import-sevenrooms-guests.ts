@@ -7,6 +7,13 @@
  *   npm run import:sevenrooms -- --apply   # écriture réelle
  *
  * Prérequis : .env.import renseigné depuis .env.import.example
+ *
+ * Ce script utilise la service_role key (via createSupabaseAdmin) pour bypasser
+ * le RLS et insérer/mettre à jour en masse. Il ne doit jamais être exécuté depuis
+ * l'app mobile — usage local uniquement, .env.import jamais commité.
+ *
+ * Stratégie de dédoublonnage : téléphone normalisé en priorité, email en fallback.
+ * Si un guest existant matche, ses champs sont mis à jour (pas de doublon créé).
  */
 
 import { config as dotenvConfig } from 'dotenv';

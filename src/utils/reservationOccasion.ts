@@ -1,3 +1,6 @@
+// Les occasions (Anniversaire, Événement) sont stockées dans le champ `notes` de la
+// réservation plutôt que dans une colonne dédiée, pour éviter une migration de schéma
+// prématurée. Les tags sont filtrés à l'affichage des notes libres via displayNotes().
 const BIRTHDAY_TAG = '[Occasion] Anniversaire';
 const EVENT_TAG    = '[Occasion] Événement';
 

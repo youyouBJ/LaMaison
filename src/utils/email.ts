@@ -1,3 +1,6 @@
+// Email manuel V1 : ces fonctions ouvrent l'app email native du device via un lien
+// mailto:. Elles ne garantissent pas l'envoi — le staff envoie manuellement.
+// Aucun webhook, aucun log d'envoi côté serveur en V1.
 import { Linking } from 'react-native';
 
 export interface ReservationEmailParams {

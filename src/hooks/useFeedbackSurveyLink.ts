@@ -12,6 +12,9 @@ export interface FeedbackSurveyLinkResult {
   token: string;
 }
 
+// Le token est une chaîne publique de 32 caractères alphanumériques.
+// Il ne contient aucune information client — il identifie uniquement la réservation
+// auprès de la RPC `submit_feedback_survey` (accessible en anon).
 // feedback_survey_links not yet in generated types; typed explicitly via unknown intermediate.
 // These casts will become unnecessary after migration + type regeneration.
 type LinkRow = { token: string };
