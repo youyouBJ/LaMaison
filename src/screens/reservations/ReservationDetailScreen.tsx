@@ -20,6 +20,7 @@ import type { ReservationsStackParamList } from '../../navigation/ReservationsNa
 import type { ReservationStatus } from '../../types/database';
 import { formatReservationTables } from '../../utils/reservationTables';
 import { reservationNeedsPhoneConfirmation } from '../../utils/reservationConfirmation';
+import { isBirthdayReservation, displayNotes } from '../../utils/reservationOccasion';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationDetail'>;
 
@@ -114,8 +115,10 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
   const r = reservation;
   const actions = STATUS_ACTIONS[r.status] ?? [];
   const { backgroundColor: statusBg, color: statusColor } = getReservationStatusColors(r.status);
-  const isVip = r.guests?.vip === true;
-  const isTerminal = actions.length === 0;
+  const isVip        = r.guests?.vip === true;
+  const isBirthday   = isBirthdayReservation(r.notes);
+  const cleanNotes   = displayNotes(r.notes);
+  const isTerminal   = actions.length === 0;
   const needsPhoneConfirmation = reservationNeedsPhoneConfirmation(r);
 
   const dateLabel = (() => {
@@ -182,7 +185,14 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
               <DetailRow label="Table" value={formatReservationTables(r.tables, r.reservation_tables)} />
               <DetailRow label="Statut" value={<StatusBadge status={r.status} />} />
               <DetailRow label="Origine" value={r.source} />
-              {r.notes ? <DetailRow label="Notes" value={r.notes} /> : null}
+              {isBirthday ? (
+                <DetailRow label="Occasion" value={
+                  <View style={styles.birthdayBadge}>
+                    <Text style={styles.birthdayText}>Anniversaire</Text>
+                  </View>
+                } />
+              ) : null}
+              {cleanNotes ? <DetailRow label="Notes" value={cleanNotes} /> : null}
             </View>
           </SectionCard>
 
@@ -407,6 +417,15 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   vipText: { ...typography.label, color: colors.gold },
+  birthdayBadge: {
+    backgroundColor: colors.goldLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  birthdayText: { ...typography.label, color: colors.gold },
 
   // Detail grid
   detailGrid: { gap: 0 },

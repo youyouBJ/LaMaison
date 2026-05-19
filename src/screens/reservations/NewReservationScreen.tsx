@@ -15,7 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useCreateReservation } from '../../hooks/useCreateReservation';
-import { getTodayDateString, parseDateString } from '../../utils/date';
+import { getTodayDateString } from '../../utils/date';
+import { withBirthdayOccasion } from '../../utils/reservationOccasion';
 import { isDateAllowedForShift, generateTimeSlots } from '../../utils/reservationSlots';
 import SectionCard from '../../components/SectionCard';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -41,11 +42,10 @@ type FormState = {
   guestPhone: string;
   guestEmail: string;
   guestVip: boolean;
-  guestBirthday: string;
-  showBirthday: boolean;
   // Détails
   selectedTableIds: string[];
   status: 'confirmed' | 'pending';
+  isBirthday: boolean;
   notes: string;
 };
 
@@ -62,10 +62,9 @@ const INITIAL_FORM: FormState = {
   guestPhone:        '',
   guestEmail:        '',
   guestVip:          false,
-  guestBirthday:     '',
-  showBirthday:      false,
   selectedTableIds:  [],
   status:            'confirmed',
+  isBirthday:        false,
   notes:             '',
 };
 
@@ -150,8 +149,6 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
       guestPhone:      '',
       guestEmail:      '',
       guestVip:        false,
-      guestBirthday:   '',
-      showBirthday:    false,
     }));
 
   const handleClientType = (walkIn: boolean) =>
@@ -165,8 +162,6 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
       guestPhone:      '',
       guestEmail:      '',
       guestVip:        false,
-      guestBirthday:   '',
-      showBirthday:    false,
     }));
 
   const toggleTable = (tid: string) =>
@@ -188,24 +183,6 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
     if (!form.selectedShiftId) { setValidationError('Choisissez un service.'); return; }
     if (!form.selectedTimeSlot) { setValidationError('Choisissez un créneau.'); return; }
 
-    // Birthday validation
-    let birthday: string | null = null;
-    if (!form.isWalkIn && !form.selectedGuest && form.showBirthday && form.guestBirthday.trim()) {
-      const bval = form.guestBirthday.trim();
-      const parsed = parseDateString(bval);
-      if (!parsed) {
-        setValidationError('Format anniversaire invalide. Utilisez AAAA-MM-JJ.');
-        return;
-      }
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-      if (parsed > today) {
-        setValidationError("L'anniversaire ne peut pas être dans le futur.");
-        return;
-      }
-      birthday = bval;
-    }
-
     try {
       const firstName = form.guestFirstName.trim() || undefined;
       const lastName  = form.guestLastName.trim()  || undefined;
@@ -213,12 +190,14 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
       const email     = form.guestEmail.trim()     || undefined;
       const hasAnyGuestInfo = Boolean(firstName ?? lastName ?? phone ?? email);
 
+      const finalNotes = withBirthdayOccasion(form.notes.trim() || null, form.isBirthday);
+
       const id = await createReservation({
         date:      form.date,
         timeSlot:  form.selectedTimeSlot,
         partySize: form.partySize,
         shiftId:   form.selectedShiftId,
-        notes:     form.notes.trim() || undefined,
+        notes:     finalNotes ?? undefined,
         status:    form.status,
         tableIds:  form.selectedTableIds.length > 0 ? form.selectedTableIds : undefined,
         isWalkIn:  form.isWalkIn,
@@ -226,7 +205,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
         guest: form.isWalkIn || form.selectedGuest
           ? undefined
           : hasAnyGuestInfo
-            ? { firstName, lastName, phone, email, vip: form.guestVip, birthday }
+            ? { firstName, lastName, phone, email, vip: form.guestVip }
             : undefined,
       });
       navigation.replace('ReservationDetail', { reservationId: id });
@@ -461,28 +440,6 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                       thumbColor={form.guestVip ? colors.gold : colors.sand}
                     />
                   </View>
-                  <View style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>Anniversaire</Text>
-                    <Switch
-                      value={form.showBirthday}
-                      onValueChange={(v) =>
-                        setForm((prev) => ({ ...prev, showBirthday: v, guestBirthday: '' }))
-                      }
-                      trackColor={{ false: colors.border, true: colors.goldLight }}
-                      thumbColor={form.showBirthday ? colors.gold : colors.sand}
-                    />
-                  </View>
-                  {form.showBirthday && (
-                    <TextInput
-                      style={styles.input}
-                      placeholder="AAAA-MM-JJ (optionnel)"
-                      placeholderTextColor={colors.textMuted}
-                      value={form.guestBirthday}
-                      onChangeText={(t) => setForm((prev) => ({ ...prev, guestBirthday: t }))}
-                      keyboardType="numeric"
-                      maxLength={10}
-                    />
-                  )}
                 </View>
               )}
             </SectionCard>}
@@ -536,6 +493,15 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                     </Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Anniversaire</Text>
+                <Switch
+                  value={form.isBirthday}
+                  onValueChange={(v) => setForm((prev) => ({ ...prev, isBirthday: v }))}
+                  trackColor={{ false: colors.border, true: colors.goldLight }}
+                  thumbColor={form.isBirthday ? colors.gold : colors.sand}
+                />
               </View>
               <TextInput
                 style={[styles.input, styles.textArea]}

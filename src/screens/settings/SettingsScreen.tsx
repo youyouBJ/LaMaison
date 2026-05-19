@@ -153,12 +153,18 @@ export default function SettingsScreen(): React.JSX.Element {
   const handleSignOut = async (): Promise<void> => {
     setSigningOut(true);
     setSignOutError(null);
-    const { error: signOutErr } = await supabase.auth.signOut();
-    if (signOutErr) {
-      setSignOutError(signOutErr.message);
+    try {
+      const { error: signOutErr } = await supabase.auth.signOut();
+      if (signOutErr) {
+        setSignOutError(signOutErr.message);
+        setSigningOut(false);
+      }
+      // On success the RootNavigator's onAuthStateChange fires and unmounts this screen.
+    } catch (e) {
+      console.error('[Settings] signOut threw:', e);
+      setSignOutError('Erreur lors de la déconnexion.');
       setSigningOut(false);
     }
-    // On success the RootNavigator's onAuthStateChange fires and unmounts this screen.
   };
 
   if (loading) {

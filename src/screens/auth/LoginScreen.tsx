@@ -32,17 +32,21 @@ export default function LoginScreen(): React.JSX.Element {
     setLoading(true);
     setError(null);
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-
-    setLoading(false);
-
-    if (authError) {
-      setError(authError.message);
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (authError) {
+        setError(authError.message);
+      }
+      // Si succès, RootNavigator bascule automatiquement vers MainTabs via onAuthStateChange
+    } catch (e) {
+      console.error('[Login] signInWithPassword threw:', e);
+      setError('Erreur de connexion. Vérifiez votre réseau.');
+    } finally {
+      setLoading(false);
     }
-    // Si succès, RootNavigator bascule automatiquement vers MainTabs via onAuthStateChange
   }
 
   return (

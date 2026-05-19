@@ -4,6 +4,7 @@ import { colors, typography, spacing, radius } from '../theme';
 import { formatTimeSlot } from '../utils/date';
 import { formatReservationTables } from '../utils/reservationTables';
 import { reservationNeedsPhoneConfirmation } from '../utils/reservationConfirmation';
+import { isBirthdayReservation } from '../utils/reservationOccasion';
 import StatusBadge from './StatusBadge';
 import type { ReservationWithJoins } from '../types/reservations';
 
@@ -19,9 +20,10 @@ function guestDisplayName(r: ReservationWithJoins): string {
 }
 
 export default function ReservationCard({ reservation: r, onPress }: Props): React.JSX.Element {
-  const isVip      = r.guests?.vip === true;
-  const needsCall  = reservationNeedsPhoneConfirmation(r);
-  const phone      = r.guests?.phone ?? null;
+  const isVip       = r.guests?.vip === true;
+  const isBirthday  = isBirthdayReservation(r.notes);
+  const needsCall   = reservationNeedsPhoneConfirmation(r);
+  const phone       = r.guests?.phone ?? null;
 
   const handleCall = () => {
     if (phone) { void Linking.openURL(`tel:${phone}`); }
@@ -38,6 +40,11 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
           {isVip && (
             <View style={styles.vipBadge}>
               <Text style={styles.vipText}>VIP</Text>
+            </View>
+          )}
+          {isBirthday && (
+            <View style={styles.birthdayBadge}>
+              <Text style={styles.birthdayText}>Anniversaire</Text>
             </View>
           )}
           {needsCall && (
@@ -114,6 +121,18 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   vipText: {
+    ...typography.label,
+    color: colors.gold,
+  },
+  birthdayBadge: {
+    backgroundColor: colors.goldLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  birthdayText: {
     ...typography.label,
     color: colors.gold,
   },

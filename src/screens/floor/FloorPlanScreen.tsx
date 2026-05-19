@@ -19,6 +19,7 @@ import FloorCanvas from '../../components/FloorCanvas';
 import CreateReservationForTableForm from '../../components/CreateReservationForTableForm';
 import { useFloorPlan } from '../../hooks/useFloorPlan';
 import type { FloorTableWithState, FloorPlanReservation, FloorServiceFilter } from '../../types/floor';
+import { isBirthdayReservation, displayNotes } from '../../utils/reservationOccasion';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -393,8 +394,10 @@ function TableDetailPanel({
           <Text style={styles.noRes}>Aucune réservation assignée</Text>
         ) : (
           table.reservations.map((res) => {
-            const isUpdating = updatingReservationId === res.id;
+            const isUpdating  = updatingReservationId === res.id;
             const { backgroundColor: pillBg, color: pillText } = getReservationStatusColors(res.status);
+            const resBirthday = isBirthdayReservation(res.notes);
+            const resNotes    = displayNotes(res.notes);
 
             return (
               <View key={res.id} style={styles.resCard}>
@@ -413,8 +416,13 @@ function TableDetailPanel({
                       {res.tableLabels.length > 1 ? ` · Tables ${res.tableLabels.join(', ')}` : ''}
                       {res.shiftName ? ` · ${res.shiftName}` : ''}
                     </Text>
-                    {res.notes ? (
-                      <Text style={styles.resNotes} numberOfLines={2}>{res.notes}</Text>
+                    {resBirthday ? (
+                      <View style={styles.birthdayBadge}>
+                        <Text style={styles.birthdayBadgeText}>Anniversaire</Text>
+                      </View>
+                    ) : null}
+                    {resNotes ? (
+                      <Text style={styles.resNotes} numberOfLines={2}>{resNotes}</Text>
                     ) : null}
                   </View>
                   <View style={[styles.resPill, { backgroundColor: pillBg }]}>
@@ -604,6 +612,17 @@ const styles = StyleSheet.create({
   resGuestName: { ...typography.bodyMedium, color: colors.textPrimary, marginBottom: 2 },
   resMeta: { ...typography.small, color: colors.textMuted },
   resNotes: { ...typography.small, color: colors.textMuted, fontStyle: 'italic', marginTop: 2 },
+  birthdayBadge: {
+    backgroundColor: colors.goldLight,
+    borderRadius:    radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   2,
+    borderWidth:     1,
+    borderColor:     colors.gold,
+    alignSelf:       'flex-start',
+    marginTop:       2,
+  },
+  birthdayBadgeText: { ...typography.label, color: colors.gold },
   resPill: {
     borderRadius:      radius.xl,
     paddingHorizontal: spacing.sm,
