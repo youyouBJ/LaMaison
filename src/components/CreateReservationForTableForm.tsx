@@ -17,6 +17,7 @@ import DateSelector from './DateSelector';
 import TimeSlotSelector from './TimeSlotSelector';
 import PrimaryButton from './PrimaryButton';
 import { generateTimeSlots, isDateAllowedForShift } from '../utils/reservationSlots';
+import { parseDateString } from '../utils/date';
 import type { FloorServiceFilter } from '../types/floor';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -110,6 +111,8 @@ export default function CreateReservationForTableForm({
   const [newPhone, setNewPhone]                 = useState('');
   const [newEmail, setNewEmail]                 = useState('');
   const [newVip, setNewVip]                     = useState(false);
+  const [newBirthday, setNewBirthday]           = useState('');
+  const [showBirthday, setShowBirthday]         = useState(false);
 
   const autoSelectedRef = useRef(false);
   const isWalkIn = clientType === 'walkin';
@@ -200,6 +203,8 @@ export default function CreateReservationForTableForm({
     setGuestMode('none');
     setSearchQuery('');
     setNewVip(false);
+    setShowBirthday(false);
+    setNewBirthday('');
   }, []);
 
   // ── Toggle client type ────────────────────────────────────────────────────
@@ -237,6 +242,25 @@ export default function CreateReservationForTableForm({
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || !timeSlot || !selectedShiftId) return;
     setError(null);
+
+    // Birthday validation
+    let birthdayToSubmit: string | null = null;
+    if (guestMode === 'new' && showBirthday && newBirthday.trim()) {
+      const bval = newBirthday.trim();
+      const parsed = parseDateString(bval);
+      if (!parsed) {
+        setError('Format anniversaire invalide. Utilisez AAAA-MM-JJ.');
+        return;
+      }
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      if (parsed > today) {
+        setError("L'anniversaire ne peut pas être dans le futur.");
+        return;
+      }
+      birthdayToSubmit = bval;
+    }
+
     const hasNewGuestInfo = newFirstName || newLastName || newPhone || newEmail;
     try {
       const id = await createReservation({
@@ -257,6 +281,7 @@ export default function CreateReservationForTableForm({
               phone:     newPhone.trim()     || undefined,
               email:     newEmail.trim()     || undefined,
               vip:       newVip,
+              birthday:  birthdayToSubmit,
             },
       });
       onSuccess(id);
@@ -267,6 +292,7 @@ export default function CreateReservationForTableForm({
     canSubmit, timeSlot, selectedShiftId, date, partySize, notes, status,
     selectedTableIds, isWalkIn, selectedGuestId,
     newFirstName, newLastName, newPhone, newEmail, newVip,
+    guestMode, showBirthday, newBirthday,
     createReservation, setError, onSuccess,
   ]);
 
@@ -497,8 +523,28 @@ export default function CreateReservationForTableForm({
                   thumbColor={newVip ? colors.gold : colors.sand}
                 />
               </View>
+              <View style={styles.vipRow}>
+                <Text style={styles.vipLabel}>Anniversaire</Text>
+                <Switch
+                  value={showBirthday}
+                  onValueChange={(v) => { setShowBirthday(v); setNewBirthday(''); }}
+                  trackColor={{ false: colors.border, true: colors.goldLight }}
+                  thumbColor={showBirthday ? colors.gold : colors.sand}
+                />
+              </View>
+              {showBirthday && (
+                <TextInput
+                  style={styles.input}
+                  value={newBirthday}
+                  onChangeText={setNewBirthday}
+                  placeholder="AAAA-MM-JJ (optionnel)"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="numeric"
+                  maxLength={10}
+                />
+              )}
               <TouchableOpacity
-                onPress={() => { setGuestMode('none'); setNewVip(false); }}
+                onPress={() => { setGuestMode('none'); setNewVip(false); setShowBirthday(false); setNewBirthday(''); }}
                 style={styles.textLink}
               >
                 <Text style={styles.textLinkText}>Annuler</Text>

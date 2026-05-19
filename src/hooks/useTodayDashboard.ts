@@ -27,6 +27,11 @@ export type DashboardStats = {
   cancelledAndNoshow: number;
   byStatus: Record<ReservationStatus, number>;
   nextReservation: DashboardReservation | null;
+  lunchCount: number;
+  lunchCovers: number;
+  dinnerCount: number;
+  dinnerCovers: number;
+  walkInCount: number;
 };
 
 const EMPTY_BY_STATUS: Record<ReservationStatus, number> = {
@@ -46,6 +51,11 @@ const INITIAL_STATS: DashboardStats = {
   cancelledAndNoshow: 0,
   byStatus: { ...EMPTY_BY_STATUS },
   nextReservation: null,
+  lunchCount: 0,
+  lunchCovers: 0,
+  dinnerCount: 0,
+  dinnerCovers: 0,
+  walkInCount: 0,
 };
 
 function computeStats(rows: DashboardReservation[]): DashboardStats {
@@ -53,6 +63,11 @@ function computeStats(rows: DashboardReservation[]): DashboardStats {
   const byStatus: Record<ReservationStatus, number> = { ...EMPTY_BY_STATUS };
   let totalCovers = 0;
   let nextReservation: DashboardReservation | null = null;
+  let lunchCount  = 0;
+  let lunchCovers = 0;
+  let dinnerCount  = 0;
+  let dinnerCovers = 0;
+  let walkInCount  = 0;
 
   for (const r of rows) {
     byStatus[r.status]++;
@@ -65,6 +80,26 @@ function computeStats(rows: DashboardReservation[]): DashboardStats {
     if (isUpcoming && (nextReservation === null || r.time_slot < nextReservation.time_slot)) {
       nextReservation = r;
     }
+
+    // Service breakdown — active reservations only
+    const isActive = r.status !== 'cancelled' && r.status !== 'noshow';
+    if (isActive) {
+      if (r.source === 'walkin') walkInCount++;
+
+      const shiftName = r.shifts?.name?.toLowerCase() ?? '';
+      const slot = r.time_slot.substring(0, 5);
+
+      const isLunch =
+        shiftName.includes('déjeuner') || shiftName.includes('lunch') || shiftName.includes('midi') ||
+        (slot >= '12:00' && slot <= '16:45');
+      const isDinner = !isLunch && (
+        shiftName.includes('dîner') || shiftName.includes('dinner') || shiftName.includes('soir') ||
+        (slot >= '17:00' && slot <= '23:45')
+      );
+
+      if (isLunch)       { lunchCount++;  lunchCovers  += r.party_size; }
+      else if (isDinner) { dinnerCount++; dinnerCovers += r.party_size; }
+    }
   }
 
   return {
@@ -75,6 +110,11 @@ function computeStats(rows: DashboardReservation[]): DashboardStats {
     cancelledAndNoshow: byStatus.cancelled + byStatus.noshow,
     byStatus,
     nextReservation,
+    lunchCount,
+    lunchCovers,
+    dinnerCount,
+    dinnerCovers,
+    walkInCount,
   };
 }
 

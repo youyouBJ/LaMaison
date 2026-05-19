@@ -189,6 +189,30 @@ export default function DashboardScreen(): React.JSX.Element {
             </View>
           </View>
 
+          {/* ── Services ── */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Services</Text>
+            <View style={styles.kpiRow}>
+              <StatCard label="Déjeuner"       value={stats.lunchCount}   accent={colors.gold} />
+              <View style={styles.kpiGap} />
+              <StatCard label="Couverts déj."  value={stats.lunchCovers} />
+            </View>
+            <View style={[styles.kpiRow, styles.kpiRowGap]}>
+              <StatCard label="Dîner"           value={stats.dinnerCount}  accent={colors.gold} />
+              <View style={styles.kpiGap} />
+              <StatCard label="Couverts dîn."  value={stats.dinnerCovers} />
+            </View>
+            {stats.walkInCount > 0 && (
+              <View style={[styles.kpiRow, styles.kpiRowGap]}>
+                <StatCard
+                  label="Walk-ins"
+                  value={stats.walkInCount}
+                  accent={colors.textSecondary}
+                />
+              </View>
+            )}
+          </View>
+
         </View>
       </ScrollView>
     </SafeAreaView>

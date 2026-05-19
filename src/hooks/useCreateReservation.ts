@@ -31,6 +31,7 @@ export type CreateReservationInput = {
     email?:     string;
     notes?:     string;
     vip?:       boolean;
+    birthday?:  string | null;
   };
 };
 
@@ -160,6 +161,7 @@ export function useCreateReservation() {
               email:         input.guest.email     ?? null,
               notes:         input.guest.notes     ?? null,
               vip:           input.guest.vip       ?? false,
+              birthday:      input.guest.birthday  ?? null,
               source:        'manual',
             })
             .select('id')

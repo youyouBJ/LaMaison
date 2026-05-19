@@ -27,6 +27,7 @@ export type UserProfile = {
   fullName: string;
   role: string;
   restaurantName: string;
+  email: string | null;
 };
 
 export type SettingsData = {
@@ -103,6 +104,7 @@ export function useSettingsOverview() {
           fullName:       profile.full_name,
           role:           profile.role,
           restaurantName: restaurantResult.data.name,
+          email:          authData.user.email ?? null,
         },
         shifts: shiftsResult.data ?? [],
         floor: {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useSettingsOverview } from '../../hooks/useSettingsOverview';
+import { supabase } from '../../lib/supabase';
 import StatCard from '../../components/StatCard';
 import type { ZoneSummary } from '../../hooks/useSettingsOverview';
 import type { Database } from '../../types/database';
@@ -146,6 +147,19 @@ function FeatureCard({ icon, label }: Feature): React.JSX.Element {
 
 export default function SettingsScreen(): React.JSX.Element {
   const { loading, error, data, refresh } = useSettingsOverview();
+  const [signingOut, setSigningOut]         = useState(false);
+  const [signOutError, setSignOutError]     = useState<string | null>(null);
+
+  const handleSignOut = async (): Promise<void> => {
+    setSigningOut(true);
+    setSignOutError(null);
+    const { error: signOutErr } = await supabase.auth.signOut();
+    if (signOutErr) {
+      setSignOutError(signOutErr.message);
+      setSigningOut(false);
+    }
+    // On success the RootNavigator's onAuthStateChange fires and unmounts this screen.
+  };
 
   if (loading) {
     return (
@@ -167,6 +181,15 @@ export default function SettingsScreen(): React.JSX.Element {
             <Text style={styles.errorMessage}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={refresh}>
               <Text style={styles.retryButtonText}>Réessayer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.signOutButtonSmall}
+              onPress={() => { void handleSignOut(); }}
+              disabled={signingOut}
+            >
+              {signingOut
+                ? <ActivityIndicator color={colors.cta} size="small" />
+                : <Text style={styles.signOutTextSmall}>Se déconnecter</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -286,6 +309,34 @@ export default function SettingsScreen(): React.JSX.Element {
               <FeatureCard key={f.label} icon={f.icon} label={f.label} />
             ))}
           </View>
+
+          {/* ── Session ── */}
+          <SectionHeader title="Session" />
+          <Card>
+            {userProfile.email ? (
+              <>
+                <InfoRow label="Email" value={userProfile.email} />
+                <Divider />
+              </>
+            ) : null}
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={() => { void handleSignOut(); }}
+              disabled={signingOut}
+            >
+              {signingOut ? (
+                <ActivityIndicator color={colors.cta} size="small" />
+              ) : (
+                <>
+                  <Ionicons name="log-out-outline" size={16} color={colors.cta} />
+                  <Text style={styles.signOutText}>Se déconnecter</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            {signOutError ? (
+              <Text style={styles.signOutError}>{signOutError}</Text>
+            ) : null}
+          </Card>
 
         </View>
       </ScrollView>
@@ -566,5 +617,41 @@ const styles = StyleSheet.create({
     color:     colors.textMuted,
     textAlign: 'center',
     padding:   spacing.sm,
+  },
+
+  // Sign-out
+  signOutButton: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'center',
+    gap:               spacing.sm,
+    paddingVertical:   spacing.md,
+    marginTop:         spacing.xs,
+    borderRadius:      radius.md,
+    borderWidth:       1,
+    borderColor:       colors.cta,
+    backgroundColor:   colors.ctaLight,
+    minHeight:         44,
+  },
+  signOutText: {
+    ...typography.bodyMedium,
+    color: colors.cta,
+  },
+  signOutError: {
+    ...typography.small,
+    color:     colors.cta,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  signOutButtonSmall: {
+    marginTop:       spacing.md,
+    alignItems:      'center',
+    paddingVertical: spacing.sm,
+    minHeight:       36,
+  },
+  signOutTextSmall: {
+    ...typography.small,
+    color:                colors.textMuted,
+    textDecorationLine:   'underline',
   },
 });
