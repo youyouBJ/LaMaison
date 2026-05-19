@@ -705,14 +705,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.statusFreeLight,
-    borderWidth: 1,
-    borderColor: colors.statusFree,
+    backgroundColor: colors.whatsapp,
     minHeight: 48,
   },
   contactBtnWaText: {
     ...typography.bodyMedium,
-    color: colors.statusFree,
+    color: colors.textOnDark,
   },
   contactBtnEmail: {
     borderRadius: radius.md,

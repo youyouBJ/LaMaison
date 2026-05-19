@@ -4,7 +4,7 @@ import type { ReservationStatus } from '../types/database';
 export function getReservationStatusLabel(status: ReservationStatus): string {
   const labels: Record<ReservationStatus, string> = {
     confirmed: 'Confirmée',
-    pending:   'En attente',
+    pending:   'En attente de confirmation',
     cancelled: 'Annulée',
     noshow:    'No-show',
     seated:    'À table',

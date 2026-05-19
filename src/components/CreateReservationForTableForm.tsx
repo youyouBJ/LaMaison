@@ -97,7 +97,7 @@ export default function CreateReservationForTableForm({
   const [clientType, setClientType]             = useState<ClientType>('identified');
 
   // ── Statut ────────────────────────────────────────────────────────────────
-  const [status, setStatus]                     = useState<StatusOption>('confirmed');
+  const [status, setStatus]                     = useState<StatusOption>('pending');
 
   // ── Notes ─────────────────────────────────────────────────────────────────
   const [notes, setNotes]                       = useState('');
@@ -213,7 +213,7 @@ export default function CreateReservationForTableForm({
       setStatus('seated');
       handleClearGuest();
     } else {
-      setStatus('confirmed');
+      setStatus('pending');
     }
   }, [handleClearGuest]);
 
@@ -295,7 +295,7 @@ export default function CreateReservationForTableForm({
       ]
     : [
         { value: 'confirmed', label: 'Confirmée' },
-        { value: 'pending',   label: 'En attente' },
+        { value: 'pending',   label: 'En attente de confirmation' },
       ];
 
   return (

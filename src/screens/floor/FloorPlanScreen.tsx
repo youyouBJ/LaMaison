@@ -66,7 +66,7 @@ const ACTION_COLORS: Record<ActionVariant, { bg: string; border: string; text: s
   confirm:  { bg: colors.goldLight,       border: colors.gold,       text: colors.gold },
   noshow:   { bg: colors.surface,         border: colors.border,     text: colors.textMuted },
   cancel:   { bg: colors.ctaLight,        border: colors.cta,        text: colors.cta },
-  whatsapp: { bg: colors.statusFreeLight, border: colors.statusFree, text: colors.statusFree },
+  whatsapp: { bg: colors.whatsapp,        border: colors.whatsapp,   text: colors.textOnDark },
   email:    { bg: colors.goldLight,       border: colors.gold,       text: colors.gold },
 };
 
@@ -361,9 +361,9 @@ function TableDetailPanel({
     if (res.status === 'pending' || res.status === 'confirmed') {
       message = buildReservationConfirmationMessage({ date: formattedDate, time, partySize: res.partySize });
     } else if (res.status === 'completed') {
-      void getByReservationId(res.id).then((result) => {
+      void getByReservationId(res.id).then(({ data: result, error: surveyErr }) => {
         if (!result) {
-          setWaFeedback({ ok: false, text: "Lien d'enquête introuvable. Ouvrez la fiche réservation pour en générer un." });
+          setWaFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
           setTimeout(() => setWaFeedback(null), 6000);
           return;
         }
@@ -407,9 +407,9 @@ function TableDetailPanel({
     if (res.status === 'pending' || res.status === 'confirmed') {
       emailParams = buildReservationConfirmationEmail({ date: formattedDate, time, partySize: res.partySize });
     } else {
-      void getByReservationId(res.id).then((result) => {
+      void getByReservationId(res.id).then(({ data: result, error: surveyErr }) => {
         if (!result) {
-          setEmailFeedback({ ok: false, text: "Lien d'enquête introuvable. Ouvrez la fiche réservation pour en générer un." });
+          setEmailFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
           setTimeout(() => setEmailFeedback(null), 6000);
           return;
         }

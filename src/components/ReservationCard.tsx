@@ -63,10 +63,10 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
       catch { return r.date; }
     })();
     if (r.status === 'completed') {
-      void getOrCreateSurveyLink(r).then((result) => {
+      void getOrCreateSurveyLink(r).then(({ data: result, error: surveyErr }) => {
         if (!result) {
-          setWaFeedback({ ok: false, text: "Lien d'enquête invalide." });
-          setTimeout(() => setWaFeedback(null), 5000);
+          setWaFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
+          setTimeout(() => setWaFeedback(null), 6000);
           return;
         }
         const message = buildSatisfactionMessage(result.url);
@@ -114,10 +114,10 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
       catch { return r.date; }
     })();
     if (r.status === 'completed') {
-      void getOrCreateSurveyLink(r).then((result) => {
+      void getOrCreateSurveyLink(r).then(({ data: result, error: surveyErr }) => {
         if (!result) {
-          setEmailFeedback({ ok: false, text: "Lien d'enquête invalide." });
-          setTimeout(() => setEmailFeedback(null), 5000);
+          setEmailFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
+          setTimeout(() => setEmailFeedback(null), 6000);
           return;
         }
         const { subject, body } = buildSatisfactionEmail(result.url);
@@ -339,16 +339,14 @@ const styles = StyleSheet.create({
     color: colors.gold,
   },
   waButton: {
-    backgroundColor: colors.statusFreeLight,
+    backgroundColor: colors.whatsapp,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.statusFree,
   },
   waButtonText: {
     ...typography.label,
-    color: colors.statusFree,
+    color: colors.textOnDark,
   },
   waButtonDisabled: {
     opacity: 0.5,

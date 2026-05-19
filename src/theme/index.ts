@@ -24,6 +24,9 @@ export const colors = {
   statusUnavailable:        '#9B9B9B',
   statusUnavailableLight:   '#F0EEEC',
 
+  whatsapp:                 '#25D366',
+  whatsappLight:            '#E8FBF0',
+
   textPrimary:              '#2C1810',
   textSecondary:            '#5C3317',
   textMuted:                '#C4A882',

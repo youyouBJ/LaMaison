@@ -12,9 +12,12 @@ export interface FeedbackSurveyLinkResult {
   token: string;
 }
 
-// Le token est une chaîne publique de 32 caractères alphanumériques.
-// Il ne contient aucune information client — il identifie uniquement la réservation
-// auprès de la RPC `submit_feedback_survey` (accessible en anon).
+// Discriminated union : soit les données, soit un message d'erreur précis.
+// Permet aux composants d'afficher l'erreur Supabase exacte plutôt qu'un message générique.
+export type SurveyLinkGetResult =
+  | { data: FeedbackSurveyLinkResult; error: null }
+  | { data: null; error: string };
+
 // feedback_survey_links not yet in generated types; typed explicitly via unknown intermediate.
 // These casts will become unnecessary after migration + type regeneration.
 type LinkRow = { token: string };
@@ -27,48 +30,42 @@ type FromFn = (table: string) => TableBuilder;
 
 export function useFeedbackSurveyLink() {
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
 
+  // getOrCreate : récupère le lien existant ou en crée un nouveau.
+  // Nécessite les champs complets de la réservation (restaurant_id, guest_id pour l'INSERT).
   const getOrCreate = useCallback(
-    async (reservation: ReservationWithJoins): Promise<FeedbackSurveyLinkResult | null> => {
+    async (reservation: ReservationWithJoins): Promise<SurveyLinkGetResult> => {
       if (!reservation.id) {
-        setError('Réservation sans identifiant.');
-        return null;
+        return { data: null, error: 'Réservation sans identifiant.' };
       }
 
       if (!getFeedbackBaseUrl()) {
-        setError("Lien d'enquête non configuré.");
-        return null;
+        return { data: null, error: "URL d'enquête non configurée dans feedbackSurvey.ts." };
       }
 
       setLoading(true);
-      setError(null);
 
       const from = supabase.from.bind(supabase) as unknown as FromFn;
 
       try {
-        // Vérifier si un lien existe déjà pour cette réservation
         const { data: existing, error: fetchError } = await from('feedback_survey_links')
           .select('token')
           .eq('reservation_id', reservation.id)
           .maybeSingle();
 
         if (fetchError) {
-          setError('Erreur lors de la vérification du lien.');
-          return null;
+          return { data: null, error: `Erreur réseau : ${fetchError.message}` };
         }
 
         if (existing) {
           if (!existing.token) {
-            setError("Token d'enquête invalide pour cette réservation.");
-            return null;
+            return { data: null, error: "Token d'enquête invalide en base." };
           }
           const url = buildFeedbackSurveyUrl(existing.token);
           if (!url) {
-            setError("URL d'enquête non configurée.");
-            return null;
+            return { data: null, error: "Impossible de construire l'URL avec le token existant." };
           }
-          return { url, token: existing.token };
+          return { data: { url, token: existing.token }, error: null };
         }
 
         // Créer un nouveau lien
@@ -82,16 +79,14 @@ export function useFeedbackSurveyLink() {
         });
 
         if (insertError) {
-          setError("Erreur lors de la création du lien d'enquête.");
-          return null;
+          return { data: null, error: `Erreur lors de la création : ${insertError.message}` };
         }
 
         const url = buildFeedbackSurveyUrl(token);
         if (!url) {
-          setError("URL d'enquête non configurée.");
-          return null;
+          return { data: null, error: "Impossible de construire l'URL après création." };
         }
-        return { url, token };
+        return { data: { url, token }, error: null };
       } finally {
         setLoading(false);
       }
@@ -99,22 +94,19 @@ export function useFeedbackSurveyLink() {
     [],
   );
 
-  // Lookup-only: ne crée pas de lien. Utilisé depuis les écrans qui n'ont pas
-  // les champs restaurant_id / guest_id (ex. FloorPlanScreen).
+  // getByReservationId : lookup-only, sans INSERT.
+  // Utilisé depuis les écrans qui n'ont pas restaurant_id/guest_id (ex. FloorPlanScreen).
   const getByReservationId = useCallback(
-    async (reservationId: string): Promise<FeedbackSurveyLinkResult | null> => {
+    async (reservationId: string): Promise<SurveyLinkGetResult> => {
       if (!reservationId) {
-        setError('Identifiant de réservation manquant.');
-        return null;
+        return { data: null, error: 'Identifiant de réservation manquant.' };
       }
 
       if (!getFeedbackBaseUrl()) {
-        setError("Lien d'enquête non configuré.");
-        return null;
+        return { data: null, error: "URL d'enquête non configurée dans feedbackSurvey.ts." };
       }
 
       setLoading(true);
-      setError(null);
 
       const from = supabase.from.bind(supabase) as unknown as FromFn;
 
@@ -125,22 +117,19 @@ export function useFeedbackSurveyLink() {
           .maybeSingle();
 
         if (fetchError) {
-          setError('Erreur lors de la vérification du lien.');
-          return null;
+          return { data: null, error: `Erreur réseau : ${fetchError.message}` };
         }
 
         if (!data || !data.token) {
-          setError("Aucun lien d'enquête. Ouvrez la fiche réservation pour en générer un.");
-          return null;
+          return { data: null, error: "Aucun lien d'enquête. Ouvrez la fiche réservation pour en générer un." };
         }
 
         const url = buildFeedbackSurveyUrl(data.token);
         if (!url) {
-          setError("URL d'enquête non configurée.");
-          return null;
+          return { data: null, error: "Impossible de construire l'URL avec le token." };
         }
 
-        return { url, token: data.token };
+        return { data: { url, token: data.token }, error: null };
       } finally {
         setLoading(false);
       }
@@ -148,7 +137,5 @@ export function useFeedbackSurveyLink() {
     [],
   );
 
-  const clearError = useCallback(() => setError(null), []);
-
-  return { getOrCreate, getByReservationId, loading, error, clearError };
+  return { getOrCreate, getByReservationId, loading };
 }

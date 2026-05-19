@@ -177,10 +177,10 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
     }
 
     // Satisfaction : on récupère/crée le lien d'abord
-    void getOrCreateSurveyLink(r).then((result) => {
+    void getOrCreateSurveyLink(r).then(({ data: result, error: surveyErr }) => {
       if (!result) {
-        setWhatsappFeedback({ ok: false, text: "Lien d'enquête non configuré." });
-        setTimeout(() => setWhatsappFeedback(null), 5000);
+        setWhatsappFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
+        setTimeout(() => setWhatsappFeedback(null), 6000);
         return;
       }
       const message = buildSatisfactionMessage(result.url);
@@ -223,10 +223,10 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
     }
 
     // Satisfaction : on récupère/crée le lien d'abord
-    void getOrCreateSurveyLink(r).then((result) => {
+    void getOrCreateSurveyLink(r).then(({ data: result, error: surveyErr }) => {
       if (!result) {
-        setEmailFeedback({ ok: false, text: "Lien d'enquête non configuré." });
-        setTimeout(() => setEmailFeedback(null), 5000);
+        setEmailFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
+        setTimeout(() => setEmailFeedback(null), 6000);
         return;
       }
       const { subject, body } = buildSatisfactionEmail(result.url);
@@ -321,12 +321,12 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                   <View style={styles.contactGroupButtons}>
                     <PrimaryButton
                       label="WhatsApp confirmation"
-                      variant="secondary"
+                      variant="whatsapp"
                       onPress={() => handleWhatsApp('confirmation')}
                     />
                     <PrimaryButton
                       label="WhatsApp enquête"
-                      variant="secondary"
+                      variant="whatsapp"
                       onPress={() => handleWhatsApp('satisfaction')}
                       loading={surveyLinkLoading}
                       disabled={surveyLinkLoading}

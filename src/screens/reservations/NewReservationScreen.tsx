@@ -65,7 +65,7 @@ const INITIAL_FORM: FormState = {
   guestEmail:        '',
   guestVip:          false,
   selectedTableIds:  [],
-  status:            'confirmed',
+  status:            'pending',
   isBirthday:        false,
   isEvent:           false,
   notes:             '',
@@ -511,7 +511,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                     onPress={() => setForm((prev) => ({ ...prev, status: s }))}
                   >
                     <Text style={[styles.statusOptionText, form.status === s && styles.statusOptionTextActive]}>
-                      {s === 'confirmed' ? 'Confirmée' : 'En attente'}
+                      {s === 'confirmed' ? 'Confirmée' : 'En attente de confirmation'}
                     </Text>
                   </TouchableOpacity>
                 ))}

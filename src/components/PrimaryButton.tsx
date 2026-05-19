@@ -2,7 +2,7 @@ import React from 'react';
 import { TouchableOpacity, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { colors, typography, spacing, radius } from '../theme';
 
-type Variant = 'primary' | 'secondary' | 'danger';
+type Variant = 'primary' | 'secondary' | 'danger' | 'whatsapp';
 
 type Props = {
   label: string;
@@ -21,6 +21,8 @@ export default function PrimaryButton({
 }: Props): React.JSX.Element {
   const isDisabled = disabled || loading;
 
+  const indicatorColor = variant === 'secondary' ? colors.cta : colors.textOnDark;
+
   return (
     <TouchableOpacity
       style={[styles.btn, styles[variant], isDisabled && styles.disabled]}
@@ -29,10 +31,7 @@ export default function PrimaryButton({
       activeOpacity={0.75}
     >
       {loading ? (
-        <ActivityIndicator
-          color={variant === 'secondary' ? colors.cta : colors.textOnDark}
-          size="small"
-        />
+        <ActivityIndicator color={indicatorColor} size="small" />
       ) : (
         <Text style={[styles.label, styles[`label_${variant}` as const]]}>{label}</Text>
       )}
@@ -62,6 +61,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.cta,
   },
+  whatsapp: {
+    backgroundColor: colors.whatsapp,
+  },
   disabled: {
     opacity: 0.5,
   },
@@ -76,5 +78,8 @@ const styles = StyleSheet.create({
   },
   label_danger: {
     color: colors.cta,
+  },
+  label_whatsapp: {
+    color: colors.textOnDark,
   },
 });

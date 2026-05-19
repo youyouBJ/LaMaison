@@ -233,7 +233,7 @@ const CHIP_STYLES: Record<ActionChipVariant, { bg: string; border: string; text:
   left:     { bg: colors.statusUnavailableLight, border: colors.statusUnavailable, text: colors.statusUnavailable },
   waiting:  { bg: colors.surface,               border: colors.border,           text: colors.textSecondary },
   convert:  { bg: colors.goldLight,             border: colors.gold,             text: colors.gold },
-  whatsapp: { bg: colors.statusFreeLight,        border: colors.statusFree,       text: colors.statusFree },
+  whatsapp: { bg: colors.whatsapp,               border: colors.whatsapp,         text: colors.textOnDark },
 };
 
 function ActionChip({
