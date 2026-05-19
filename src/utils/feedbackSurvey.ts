@@ -10,7 +10,7 @@
 // Le token est public (32 chars alphanumériques aléatoires). Il identifie la réservation
 // sans exposer aucune donnée client. La RPC submit_feedback_survey est accessible en anon —
 // la sécurité repose sur l'opacité du token, pas sur une session authentifiée.
-export const LA_MAISON_FEEDBACK_BASE_URL = '';
+export const LA_MAISON_FEEDBACK_BASE_URL = 'https://lamaison-feedback.vercel.app/feedback';
 
 export function getFeedbackBaseUrl(): string | null {
   return LA_MAISON_FEEDBACK_BASE_URL || null;
