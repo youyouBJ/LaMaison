@@ -35,6 +35,7 @@ import {
   buildSatisfactionEmail,
   isValidEmail,
 } from '../../utils/email';
+import { useFeedbackSurveyLink } from '../../hooks/useFeedbackSurveyLink';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationDetail'>;
 
@@ -101,6 +102,8 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
   const [whatsappFeedback, setWhatsappFeedback] = useState<{ ok: boolean; text: string } | null>(null);
   const [emailFeedback, setEmailFeedback]       = useState<{ ok: boolean; text: string } | null>(null);
 
+  const { getOrCreate: getOrCreateSurveyLink, loading: surveyLinkLoading } = useFeedbackSurveyLink();
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -154,42 +157,92 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
   const handleWhatsApp = (type: 'confirmation' | 'satisfaction') => {
     const phone = r.guests?.phone ?? null;
     const time  = formatTimeSlot(r.time_slot);
-    const message = type === 'confirmation'
-      ? buildReservationConfirmationMessage({ date: dateLabel, time, partySize: r.party_size })
-      : buildSatisfactionMessage();
-    void openWhatsAppMessage(phone, message).then((opened) => {
-      setWhatsappFeedback(
-        opened
-          ? { ok: true, text: 'WhatsApp ouvert' }
-          : {
-              ok: false,
-              text: normalizePhoneForWhatsApp(phone)
-                ? "Impossible d'ouvrir WhatsApp."
-                : 'Numéro invalide.',
-            },
-      );
-      setTimeout(() => setWhatsappFeedback(null), 4000);
+
+    if (type === 'confirmation') {
+      const message = buildReservationConfirmationMessage({ date: dateLabel, time, partySize: r.party_size });
+      void openWhatsAppMessage(phone, message).then((opened) => {
+        setWhatsappFeedback(
+          opened
+            ? { ok: true, text: 'WhatsApp ouvert' }
+            : {
+                ok: false,
+                text: normalizePhoneForWhatsApp(phone)
+                  ? "Impossible d'ouvrir WhatsApp."
+                  : 'Numéro invalide.',
+              },
+        );
+        setTimeout(() => setWhatsappFeedback(null), 4000);
+      });
+      return;
+    }
+
+    // Satisfaction : on récupère/crée le lien d'abord
+    void getOrCreateSurveyLink(r).then((result) => {
+      if (!result) {
+        setWhatsappFeedback({ ok: false, text: "URL d'enquête non configurée." });
+        setTimeout(() => setWhatsappFeedback(null), 5000);
+        return;
+      }
+      const message = buildSatisfactionMessage(result.url);
+      void openWhatsAppMessage(phone, message).then((opened) => {
+        setWhatsappFeedback(
+          opened
+            ? { ok: true, text: 'WhatsApp ouvert' }
+            : {
+                ok: false,
+                text: normalizePhoneForWhatsApp(phone)
+                  ? "Impossible d'ouvrir WhatsApp."
+                  : 'Numéro invalide.',
+              },
+        );
+        setTimeout(() => setWhatsappFeedback(null), 4000);
+      });
     });
   };
 
   const handleEmail = (type: 'confirmation' | 'satisfaction') => {
     const email = r.guests?.email ?? null;
     const time  = formatTimeSlot(r.time_slot);
-    const { subject, body } = type === 'confirmation'
-      ? buildReservationConfirmationEmail({ date: dateLabel, time, partySize: r.party_size })
-      : buildSatisfactionEmail();
-    void openEmailMessage(email, subject, body).then((opened) => {
-      setEmailFeedback(
-        opened
-          ? { ok: true, text: 'Email ouvert' }
-          : {
-              ok: false,
-              text: email && isValidEmail(email)
-                ? "Impossible d'ouvrir l'application Mail."
-                : 'Email invalide.',
-            },
-      );
-      setTimeout(() => setEmailFeedback(null), 4000);
+
+    if (type === 'confirmation') {
+      const { subject, body } = buildReservationConfirmationEmail({ date: dateLabel, time, partySize: r.party_size });
+      void openEmailMessage(email, subject, body).then((opened) => {
+        setEmailFeedback(
+          opened
+            ? { ok: true, text: 'Email ouvert' }
+            : {
+                ok: false,
+                text: email && isValidEmail(email)
+                  ? "Impossible d'ouvrir l'application Mail."
+                  : 'Email invalide.',
+              },
+        );
+        setTimeout(() => setEmailFeedback(null), 4000);
+      });
+      return;
+    }
+
+    // Satisfaction : on récupère/crée le lien d'abord
+    void getOrCreateSurveyLink(r).then((result) => {
+      if (!result) {
+        setEmailFeedback({ ok: false, text: "URL d'enquête non configurée." });
+        setTimeout(() => setEmailFeedback(null), 5000);
+        return;
+      }
+      const { subject, body } = buildSatisfactionEmail(result.url);
+      void openEmailMessage(email, subject, body).then((opened) => {
+        setEmailFeedback(
+          opened
+            ? { ok: true, text: 'Email ouvert' }
+            : {
+                ok: false,
+                text: email && isValidEmail(email)
+                  ? "Impossible d'ouvrir l'application Mail."
+                  : 'Email invalide.',
+              },
+        );
+        setTimeout(() => setEmailFeedback(null), 4000);
+      });
     });
   };
 
@@ -275,6 +328,8 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                       label="WhatsApp enquête"
                       variant="secondary"
                       onPress={() => handleWhatsApp('satisfaction')}
+                      loading={surveyLinkLoading}
+                      disabled={surveyLinkLoading}
                     />
                   </View>
                 </View>
@@ -293,6 +348,8 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                       label="Email enquête"
                       variant="secondary"
                       onPress={() => handleEmail('satisfaction')}
+                      loading={surveyLinkLoading}
+                      disabled={surveyLinkLoading}
                     />
                   </View>
                 </View>

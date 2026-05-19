@@ -1,5 +1,4 @@
 import { Linking } from 'react-native';
-import { LA_MAISON_SURVEY_URL } from './whatsapp';
 
 export interface ReservationEmailParams {
   date: string;
@@ -71,20 +70,19 @@ export function buildGuestConfirmationEmail(): { subject: string; body: string }
   };
 }
 
-export function buildSatisfactionEmail(): { subject: string; body: string } {
-  const lines = [
-    'Bonjour,',
-    '',
-    "Merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment.",
-    '',
-    'Votre avis nous aiderait beaucoup.',
-  ];
-  if (LA_MAISON_SURVEY_URL) {
-    lines.push('', `Vous pouvez répondre ici : ${LA_MAISON_SURVEY_URL}`);
-  }
-  lines.push('', 'À très bientôt,', 'La Maison');
+export function buildSatisfactionEmail(surveyUrl: string): { subject: string; body: string } {
   return {
     subject: 'Votre avis nous intéresse - La Maison',
-    body: lines.join('\n'),
+    body: [
+      'Bonjour,',
+      '',
+      "Merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment.",
+      '',
+      'Votre avis nous aiderait beaucoup.',
+      `Vous pouvez répondre ici : ${surveyUrl}`,
+      '',
+      'À très bientôt,',
+      'La Maison',
+    ].join('\n'),
   };
 }

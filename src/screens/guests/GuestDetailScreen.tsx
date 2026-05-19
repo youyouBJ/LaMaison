@@ -42,6 +42,7 @@ import {
   buildGuestConfirmationEmail,
   buildSatisfactionEmail,
 } from '../../utils/email';
+import { getFeedbackBaseUrl } from '../../utils/feedbackSurvey';
 import type { GuestsStackParamList } from '../../navigation/GuestsNavigator';
 import type { ReservationWithDetail } from '../../hooks/useGuestDetail';
 
@@ -209,7 +210,19 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
 
   const handleWhatsApp = (type: 'confirmation' | 'enquete') => {
     const phone   = guest?.phone ?? null;
-    const message = type === 'confirmation' ? buildGuestConfirmationMessage() : buildSatisfactionMessage();
+    let message: string;
+    if (type === 'confirmation') {
+      message = buildGuestConfirmationMessage();
+    } else {
+      const surveyUrl = getFeedbackBaseUrl();
+      if (!surveyUrl) {
+        if (waTimer.current) clearTimeout(waTimer.current);
+        setWaFeedback({ ok: false, text: "URL d'enquête non configurée." });
+        waTimer.current = setTimeout(() => setWaFeedback(null), 5000);
+        return;
+      }
+      message = buildSatisfactionMessage(surveyUrl);
+    }
     void openWhatsAppMessage(phone, message).then((opened) => {
       if (waTimer.current) clearTimeout(waTimer.current);
       setWaFeedback(
@@ -228,9 +241,20 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
 
   const handleEmail = (type: 'confirmation' | 'enquete') => {
     const email = guest?.email ?? null;
-    const { subject, body } = type === 'confirmation'
-      ? buildGuestConfirmationEmail()
-      : buildSatisfactionEmail();
+    let emailParams: { subject: string; body: string };
+    if (type === 'confirmation') {
+      emailParams = buildGuestConfirmationEmail();
+    } else {
+      const surveyUrl = getFeedbackBaseUrl();
+      if (!surveyUrl) {
+        if (emailTimer.current) clearTimeout(emailTimer.current);
+        setEmailFeedback({ ok: false, text: "URL d'enquête non configurée." });
+        emailTimer.current = setTimeout(() => setEmailFeedback(null), 5000);
+        return;
+      }
+      emailParams = buildSatisfactionEmail(surveyUrl);
+    }
+    const { subject, body } = emailParams;
     void openEmailMessage(email, subject, body).then((opened) => {
       if (emailTimer.current) clearTimeout(emailTimer.current);
       setEmailFeedback(

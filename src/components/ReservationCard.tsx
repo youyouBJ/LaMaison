@@ -21,6 +21,7 @@ import {
   buildSatisfactionEmail,
   isValidEmail,
 } from '../utils/email';
+import { getFeedbackBaseUrl } from '../utils/feedbackSurvey';
 
 type Props = {
   reservation: ReservationWithJoins;
@@ -61,7 +62,13 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
     })();
     let message: string;
     if (r.status === 'completed') {
-      message = buildSatisfactionMessage();
+      const surveyUrl = getFeedbackBaseUrl();
+      if (!surveyUrl) {
+        setWaFeedback({ ok: false, text: "URL d'enquête non configurée." });
+        setTimeout(() => setWaFeedback(null), 5000);
+        return;
+      }
+      message = buildSatisfactionMessage(surveyUrl);
     } else if (r.status === 'seated') {
       message = buildReservationReminderMessage({ time, partySize: r.party_size });
     } else {
@@ -88,9 +95,19 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
       try { return formatReadableDate(new Date(`${r.date}T12:00:00`)); }
       catch { return r.date; }
     })();
-    const { subject, body } = r.status === 'completed'
-      ? buildSatisfactionEmail()
-      : buildReservationConfirmationEmail({ date: dateStr, time, partySize: r.party_size });
+    let emailParams: { subject: string; body: string };
+    if (r.status === 'completed') {
+      const surveyUrl = getFeedbackBaseUrl();
+      if (!surveyUrl) {
+        setEmailFeedback({ ok: false, text: "URL d'enquête non configurée." });
+        setTimeout(() => setEmailFeedback(null), 5000);
+        return;
+      }
+      emailParams = buildSatisfactionEmail(surveyUrl);
+    } else {
+      emailParams = buildReservationConfirmationEmail({ date: dateStr, time, partySize: r.party_size });
+    }
+    const { subject, body } = emailParams;
     void openEmailMessage(email, subject, body).then((opened) => {
       setEmailFeedback(
         opened

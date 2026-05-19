@@ -1,7 +1,5 @@
 import { Linking } from 'react-native';
 
-export const LA_MAISON_SURVEY_URL = '';
-
 export function normalizePhoneForWhatsApp(phone: string | null | undefined): string | null {
   if (!phone) return null;
 
@@ -79,10 +77,7 @@ export function buildGuestConfirmationMessage(): string {
   return "Bonjour, nous vous contactons de La Maison pour confirmer votre réservation. Merci de nous confirmer votre présence.";
 }
 
-export function buildSatisfactionMessage(): string {
+export function buildSatisfactionMessage(surveyUrl: string): string {
   const base = "Bonjour, merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment. Votre avis nous aiderait beaucoup.";
-  if (LA_MAISON_SURVEY_URL) {
-    return `${base} Vous pouvez répondre ici : ${LA_MAISON_SURVEY_URL}`;
-  }
-  return base;
+  return `${base}\nVous pouvez répondre ici : ${surveyUrl}`;
 }

@@ -35,6 +35,7 @@ import {
   buildSatisfactionEmail,
   isValidEmail,
 } from '../../utils/email';
+import { getFeedbackBaseUrl } from '../../utils/feedbackSurvey';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -354,11 +355,20 @@ function TableDetailPanel({
   const handleWhatsApp = (res: FloorPlanReservation) => {
     const phone = res.guestPhone;
     const time  = res.timeSlot.substring(0, 5);
-    const message = (res.status === 'pending' || res.status === 'confirmed')
-      ? buildReservationConfirmationMessage({ date: formattedDate, time, partySize: res.partySize })
-      : res.status === 'completed'
-        ? buildSatisfactionMessage()
-        : buildReservationReminderMessage({ time, partySize: res.partySize });
+    let message: string;
+    if (res.status === 'pending' || res.status === 'confirmed') {
+      message = buildReservationConfirmationMessage({ date: formattedDate, time, partySize: res.partySize });
+    } else if (res.status === 'completed') {
+      const surveyUrl = getFeedbackBaseUrl();
+      if (!surveyUrl) {
+        setWaFeedback({ ok: false, text: "URL d'enquête non configurée." });
+        setTimeout(() => setWaFeedback(null), 5000);
+        return;
+      }
+      message = buildSatisfactionMessage(surveyUrl);
+    } else {
+      message = buildReservationReminderMessage({ time, partySize: res.partySize });
+    }
     void openWhatsAppMessage(phone, message).then((opened) => {
       setWaFeedback(
         opened
@@ -376,9 +386,19 @@ function TableDetailPanel({
   const handleEmail = (res: FloorPlanReservation) => {
     const email = res.guestEmail;
     const time  = res.timeSlot.substring(0, 5);
-    const { subject, body } = (res.status === 'pending' || res.status === 'confirmed')
-      ? buildReservationConfirmationEmail({ date: formattedDate, time, partySize: res.partySize })
-      : buildSatisfactionEmail();
+    let emailParams: { subject: string; body: string };
+    if (res.status === 'pending' || res.status === 'confirmed') {
+      emailParams = buildReservationConfirmationEmail({ date: formattedDate, time, partySize: res.partySize });
+    } else {
+      const surveyUrl = getFeedbackBaseUrl();
+      if (!surveyUrl) {
+        setEmailFeedback({ ok: false, text: "URL d'enquête non configurée." });
+        setTimeout(() => setEmailFeedback(null), 5000);
+        return;
+      }
+      emailParams = buildSatisfactionEmail(surveyUrl);
+    }
+    const { subject, body } = emailParams;
     void openEmailMessage(email, subject, body).then((opened) => {
       setEmailFeedback(
         opened
