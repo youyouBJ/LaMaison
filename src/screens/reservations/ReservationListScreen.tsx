@@ -14,6 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useReservations } from '../../hooks/useReservations';
+import { useWaitlistCount } from '../../hooks/useWaitlistCount';
 import ReservationCard from '../../components/ReservationCard';
 import DateSelector from '../../components/DateSelector';
 import { FilterChip } from '../../components/FilterChip';
@@ -83,6 +84,8 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
   const [searchQuery, setSearchQuery]       = useState('');
   const [isFocused, setIsFocused]           = useState(false);
   const [serviceFilter, setServiceFilter]   = useState<ReservationServiceFilter>('all');
+
+  const { count: waitlistWaitingCount } = useWaitlistCount(selectedDate, serviceFilter);
 
   // Étape 1 : filtrage par service
   const reservationsForService = useMemo(() => {
@@ -164,14 +167,23 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
               <Text style={styles.headerTitle}>Planning</Text>
             </View>
             <View style={styles.headerButtons}>
-              <TouchableOpacity
-                style={styles.waitlistButton}
-                onPress={() => navigation.navigate('Waitlist')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name={'time-outline' as IoniconsName} size={16} color={colors.gold} />
-                <Text style={styles.waitlistButtonText}>Attente</Text>
-              </TouchableOpacity>
+              <View style={styles.waitlistBtnWrapper}>
+                <TouchableOpacity
+                  style={styles.waitlistButton}
+                  onPress={() => navigation.navigate('Waitlist')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={'time-outline' as IoniconsName} size={16} color={colors.gold} />
+                  <Text style={styles.waitlistButtonText}>Attente</Text>
+                </TouchableOpacity>
+                {waitlistWaitingCount > 0 ? (
+                  <View style={styles.waitlistBadge}>
+                    <Text style={styles.waitlistBadgeText}>
+                      {waitlistWaitingCount > 99 ? '99+' : waitlistWaitingCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
               <TouchableOpacity
                 style={styles.newButton}
                 onPress={() => navigation.navigate('NewReservation')}
@@ -342,6 +354,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  waitlistBtnWrapper: {
+    position: 'relative',
+  },
   waitlistButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -354,6 +369,26 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
   },
   waitlistButtonText: { ...typography.bodyMedium, color: colors.gold },
+  waitlistBadge: {
+    position: 'absolute',
+    top: -7,
+    right: -7,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.cta,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: colors.background,
+  },
+  waitlistBadgeText: {
+    ...typography.label,
+    color: colors.textOnDark,
+    fontSize: 10,
+    lineHeight: 13,
+  },
   newButton: {
     flexDirection: 'row',
     alignItems: 'center',
