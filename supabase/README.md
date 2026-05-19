@@ -14,15 +14,17 @@ Configuration et setup de la base de données Supabase pour le projet La Maison.
 
 ## Étapes à suivre après le premier clone
 
-### 1. Appliquer la migration SQL
+### 1. Appliquer les migrations SQL
 
-1. Ouvre le **Supabase Dashboard**
-2. Va dans **SQL Editor**
-3. Crée un **New query**
-4. Copie-colle l'intégralité du fichier `supabase/migrations/001_initial_schema.sql`
-5. Clique sur **Run** (▶)
+Dans le **SQL Editor** du Dashboard Supabase, exécuter les fichiers dans l'ordre :
 
-La migration est **idempotente** : tu peux la relancer sans risque si nécessaire.
+| # | Fichier | Contenu |
+|---|---|---|
+| 1 | `supabase/migrations/001_initial_schema.sql` | Schema complet, RLS, fonctions, seeds (restaurant + shifts) |
+| 2 | `supabase/migrations/002_reservation_tables.sql` | Table `reservation_tables` pour le multi-tables |
+| 3 | `supabase/migrations/003_waitlist_shift_time.sql` | Colonnes `shift_id` et `time_slot` sur `waitlist` |
+
+Chaque migration est **idempotente** : tu peux la relancer sans risque.
 
 > **Si une exécution précédente a échoué** (ex : erreur "relation does not exist"), recolle le fichier complet corrigé et relance. Les `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS` et `WHERE NOT EXISTS` sur les seeds évitent tout conflit avec ce qui a déjà été créé.
 
@@ -34,6 +36,7 @@ Vérifie ensuite dans **Table Editor** que les tables suivantes sont créées :
 - `shifts`
 - `guests`
 - `reservations`
+- `reservation_tables`
 - `waitlist`
 - `notifications_log`
 
@@ -132,7 +135,8 @@ npx tsc --noEmit
 | `shifts` | Services (Déjeuner, Dîner). Règles de créneaux et de durée. |
 | `guests` | Base clients. Téléphone = identifiant métier principal. |
 | `reservations` | Réservations liées à guests, tables, shifts. |
-| `waitlist` | Liste d'attente. Synchronisée via Realtime. |
+| `reservation_tables` | Jointure N:N réservation ↔ tables (multi-tables, migration 002). |
+| `waitlist` | Liste d'attente. `shift_id` et `time_slot` ajoutés migration 003. Synchronisée via Realtime. |
 | `notifications_log` | Journal immuable des SMS/WhatsApp/Email envoyés. |
 
 ### Rôles staff
@@ -205,7 +209,7 @@ Les tables suivantes sont publiées dans `supabase_realtime` pour la synchronisa
 - `waitlist`
 - `notifications_log`
 
-L'intégration Realtime dans l'app sera ajoutée dans les modules Dashboard, Plan de salle et Réservations.
+Réservations, plan de salle et waitlist sont synchronisés en temps réel. Chaque channel déclenche un refetch complet pour garantir la cohérence avec les joins.
 
 ---
 
