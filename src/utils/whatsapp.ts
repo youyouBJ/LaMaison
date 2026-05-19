@@ -57,7 +57,16 @@ export function buildReservationConfirmationMessage(
 ): string {
   const { date, time, partySize } = params;
   const persons = `${partySize} personne${partySize > 1 ? 's' : ''}`;
-  return `Bonjour, nous vous contactons de La Maison pour confirmer votre réservation du ${date} à ${time} pour ${persons}. Merci de nous confirmer votre présence.`;
+  return [
+    'Bonjour,',
+    '',
+    `Nous vous contactons de La Maison afin de confirmer votre réservation du ${date} à ${time} pour ${persons}.`,
+    '',
+    'Merci de bien vouloir nous confirmer votre présence.',
+    '',
+    'À très bientôt,',
+    "L'équipe La Maison",
+  ].join('\n');
 }
 
 export function buildReservationReminderMessage(
@@ -77,10 +86,30 @@ export function buildGuestGenericMessage(): string {
 }
 
 export function buildGuestConfirmationMessage(): string {
-  return "Bonjour, nous vous contactons de La Maison pour confirmer votre réservation. Merci de nous confirmer votre présence.";
+  return [
+    'Bonjour,',
+    '',
+    'Nous vous contactons de La Maison afin de confirmer votre réservation.',
+    '',
+    'Merci de bien vouloir nous confirmer votre présence.',
+    '',
+    'À très bientôt,',
+    "L'équipe La Maison",
+  ].join('\n');
 }
 
 export function buildSatisfactionMessage(surveyUrl: string): string {
-  const base = "Bonjour, merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment. Votre avis nous aiderait beaucoup.";
-  return `${base}\nVous pouvez répondre ici : ${surveyUrl}`;
+  return [
+    'Bonjour,',
+    '',
+    "Merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment parmi nous.",
+    '',
+    "Votre avis nous aiderait beaucoup à améliorer l'expérience La Maison.",
+    '',
+    'Vous pouvez répondre à notre courte enquête ici :',
+    surveyUrl,
+    '',
+    'Merci pour votre retour,',
+    "L'équipe La Maison",
+  ].join('\n');
 }

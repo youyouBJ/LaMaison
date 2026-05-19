@@ -47,12 +47,12 @@ export function buildReservationConfirmationEmail(
     body: [
       'Bonjour,',
       '',
-      `Nous vous contactons de La Maison pour confirmer votre réservation du ${date} à ${time} pour ${persons}.`,
+      `Nous vous contactons de La Maison afin de confirmer votre réservation du ${date} à ${time} pour ${persons}.`,
       '',
-      'Merci de nous confirmer votre présence.',
+      'Merci de bien vouloir nous confirmer votre présence.',
       '',
       'À très bientôt,',
-      'La Maison',
+      "L'équipe La Maison",
     ].join('\n'),
   };
 }
@@ -63,12 +63,12 @@ export function buildGuestConfirmationEmail(): { subject: string; body: string }
     body: [
       'Bonjour,',
       '',
-      'Nous vous contactons de La Maison pour confirmer votre réservation.',
+      'Nous vous contactons de La Maison afin de confirmer votre réservation.',
       '',
-      'Merci de nous confirmer votre présence.',
+      'Merci de bien vouloir nous confirmer votre présence.',
       '',
       'À très bientôt,',
-      'La Maison',
+      "L'équipe La Maison",
     ].join('\n'),
   };
 }
@@ -79,13 +79,15 @@ export function buildSatisfactionEmail(surveyUrl: string): { subject: string; bo
     body: [
       'Bonjour,',
       '',
-      "Merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment.",
+      "Merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment parmi nous.",
       '',
-      'Votre avis nous aiderait beaucoup.',
-      `Vous pouvez répondre ici : ${surveyUrl}`,
+      "Votre avis nous aiderait beaucoup à améliorer l'expérience La Maison.",
       '',
-      'À très bientôt,',
-      'La Maison',
+      'Vous pouvez répondre à notre courte enquête ici :',
+      surveyUrl,
+      '',
+      'Merci pour votre retour,',
+      "L'équipe La Maison",
     ].join('\n'),
   };
 }

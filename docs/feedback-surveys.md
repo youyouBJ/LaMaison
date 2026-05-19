@@ -70,34 +70,70 @@ La Maison collectait historiquement les avis clients via SevenRooms. L'objectif 
 | `src/utils/email.ts` | `buildSatisfactionEmail(surveyUrl)` |
 | `src/screens/reservations/ReservationDetailScreen.tsx` | Boutons enquête avec flux getOrCreate |
 
-## Configuration requise
+## Configuration de l'URL publique
 
-### URL publique
+### Statut actuel
 
-La constante `LA_MAISON_FEEDBACK_BASE_URL` dans `src/utils/feedbackSurvey.ts` est actuellement vide.
+Le formulaire web est prêt dans `feedback-web/`. Il doit être déployé et son URL publique doit être renseignée dans `src/utils/feedbackSurvey.ts` pour que les boutons WhatsApp/Email enquête fonctionnent.
 
-Tant qu'elle est vide :
+Tant que `LA_MAISON_FEEDBACK_BASE_URL` est vide :
 - `buildFeedbackSurveyUrl()` retourne `null`.
-- `useFeedbackSurveyLink.getOrCreate()` retourne `null` avec `error = "URL d'enquête non configurée."`.
-- Les boutons enquête affichent le message d'erreur — aucun message WhatsApp/email n'est ouvert.
+- `useFeedbackSurveyLink.getOrCreate()` retourne `null`.
+- Les boutons enquête affichent "Lien d'enquête non configuré." — aucun message n'est ouvert.
 
-Une fois l'URL disponible, renseigner la constante :
+Une fois déployé, renseigner la constante dans `src/utils/feedbackSurvey.ts` :
 ```typescript
-// src/utils/feedbackSurvey.ts
-export const LA_MAISON_FEEDBACK_BASE_URL = 'https://lamaison.app/feedback';
+export const LA_MAISON_FEEDBACK_BASE_URL = 'https://lamaison-feedback.vercel.app/feedback';
+```
+Les boutons WhatsApp et Email enquête inclueront alors automatiquement le lien.
+
+### Mini app web — feedback-web/
+
+La page publique est une mini app Vite + React + TypeScript dans `feedback-web/`.
+
+**Lancer localement :**
+```bash
+cd feedback-web
+npm install
+cp .env.example .env        # puis remplir avec les vraies valeurs
+npm run dev                 # http://localhost:5173/feedback/<token>
 ```
 
-### Exposition publique du formulaire
+**Variables d'environnement (fichier .env) :**
+```
+VITE_SUPABASE_URL=https://nosflczsevtrxnyienyn.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon key depuis Supabase Dashboard → Settings → API>
+```
 
-`FeedbackSurveyForm` est un composant React Native autonome. Il est prêt à être intégré dans :
+Ne jamais utiliser la clé `service_role` côté web.
 
-**Option A — Expo Web** : ajouter une route `app/feedback/[token].tsx` (si le projet est migré vers Expo Router).
+**Vérifier le build :**
+```bash
+cd feedback-web
+npm run build
+```
 
-**Option B — Mini app web dédiée** : créer un projet Next.js ou Vite séparé qui importe les mêmes types et appelle la même RPC Supabase avec le token en query param.
+**Déployer sur Vercel :**
+1. Créer un nouveau projet sur [vercel.com](https://vercel.com).
+2. Connecter le dépôt GitHub ; sélectionner `feedback-web/` comme **Root Directory**.
+3. Ajouter les variables d'environnement `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` dans Vercel → Settings → Environment Variables.
+4. Déployer. Vercel détecte Vite automatiquement.
+5. L'URL publique ressemble à `https://lamaison-feedback.vercel.app`.
 
-**Option C — Vercel / Netlify** : déployer Option B sur une URL propre (ex: `feedback.lamaison.app`).
+**Configurer l'URL dans l'app mobile :**
 
-Le composant ne dépend que de `supabase`, `theme`, et `types/feedback` — il peut être porté sans réécriture majeure.
+Dans `src/utils/feedbackSurvey.ts`, remplacer la constante vide :
+```typescript
+export const LA_MAISON_FEEDBACK_BASE_URL = 'https://lamaison-feedback.vercel.app/feedback';
+```
+
+Le lien final envoyé au client sera : `https://lamaison-feedback.vercel.app/feedback/<token>`
+
+### Configuration requise (ancienne section)
+
+`LA_MAISON_FEEDBACK_BASE_URL` dans `src/utils/feedbackSurvey.ts` est actuellement vide.
+
+Une fois l'URL publique prête (Vercel ou autre), renseigner cette constante. Les boutons WhatsApp et Email enquête fonctionneront immédiatement sans autre modification.
 
 ## Limites V1
 

@@ -37,7 +37,7 @@ export function useFeedbackSurveyLink() {
       }
 
       if (!getFeedbackBaseUrl()) {
-        setError("URL d'enquête non configurée.");
+        setError("Lien d'enquête non configuré.");
         return null;
       }
 

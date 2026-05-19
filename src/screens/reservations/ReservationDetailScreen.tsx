@@ -179,7 +179,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
     // Satisfaction : on récupère/crée le lien d'abord
     void getOrCreateSurveyLink(r).then((result) => {
       if (!result) {
-        setWhatsappFeedback({ ok: false, text: "URL d'enquête non configurée." });
+        setWhatsappFeedback({ ok: false, text: "Lien d'enquête non configuré." });
         setTimeout(() => setWhatsappFeedback(null), 5000);
         return;
       }
@@ -225,7 +225,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
     // Satisfaction : on récupère/crée le lien d'abord
     void getOrCreateSurveyLink(r).then((result) => {
       if (!result) {
-        setEmailFeedback({ ok: false, text: "URL d'enquête non configurée." });
+        setEmailFeedback({ ok: false, text: "Lien d'enquête non configuré." });
         setTimeout(() => setEmailFeedback(null), 5000);
         return;
       }
