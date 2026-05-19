@@ -27,12 +27,15 @@ import {
   normalizePhoneForWhatsApp,
   buildReservationConfirmationMessage,
   buildReservationReminderMessage,
+  buildSatisfactionMessage,
 } from '../../utils/whatsapp';
 import {
   openEmailMessage,
   buildReservationConfirmationEmail,
+  buildSatisfactionEmail,
   isValidEmail,
 } from '../../utils/email';
+import { useFeedbackSurveyLink } from '../../hooks/useFeedbackSurveyLink';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -344,6 +347,8 @@ function TableDetailPanel({
   const [waFeedback, setWaFeedback]       = useState<{ ok: boolean; text: string } | null>(null);
   const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const { getByReservationId } = useFeedbackSurveyLink();
+
   const formattedDate = (() => {
     try { return formatReadableDate(new Date(`${selectedDate}T12:00:00`)); }
     catch { return selectedDate; }
@@ -356,8 +361,27 @@ function TableDetailPanel({
     if (res.status === 'pending' || res.status === 'confirmed') {
       message = buildReservationConfirmationMessage({ date: formattedDate, time, partySize: res.partySize });
     } else if (res.status === 'completed') {
-      setWaFeedback({ ok: false, text: "Pour l'enquête satisfaction, ouvrez la fiche réservation." });
-      setTimeout(() => setWaFeedback(null), 5000);
+      void getByReservationId(res.id).then((result) => {
+        if (!result) {
+          setWaFeedback({ ok: false, text: "Lien d'enquête introuvable. Ouvrez la fiche réservation pour en générer un." });
+          setTimeout(() => setWaFeedback(null), 6000);
+          return;
+        }
+        const message = buildSatisfactionMessage(result.url);
+        void openWhatsAppMessage(phone, message).then((opened) => {
+          setWaFeedback(
+            opened
+              ? { ok: true, text: 'WhatsApp ouvert' }
+              : {
+                  ok: false,
+                  text: normalizePhoneForWhatsApp(phone)
+                    ? "Impossible d'ouvrir WhatsApp."
+                    : 'Numéro invalide.',
+                },
+          );
+          setTimeout(() => setWaFeedback(null), 4000);
+        });
+      });
       return;
     } else {
       message = buildReservationReminderMessage({ time, partySize: res.partySize });
@@ -383,8 +407,27 @@ function TableDetailPanel({
     if (res.status === 'pending' || res.status === 'confirmed') {
       emailParams = buildReservationConfirmationEmail({ date: formattedDate, time, partySize: res.partySize });
     } else {
-      setEmailFeedback({ ok: false, text: "Pour l'enquête satisfaction, ouvrez la fiche réservation." });
-      setTimeout(() => setEmailFeedback(null), 5000);
+      void getByReservationId(res.id).then((result) => {
+        if (!result) {
+          setEmailFeedback({ ok: false, text: "Lien d'enquête introuvable. Ouvrez la fiche réservation pour en générer un." });
+          setTimeout(() => setEmailFeedback(null), 6000);
+          return;
+        }
+        const { subject, body } = buildSatisfactionEmail(result.url);
+        void openEmailMessage(email, subject, body).then((opened) => {
+          setEmailFeedback(
+            opened
+              ? { ok: true, text: 'Email ouvert' }
+              : {
+                  ok: false,
+                  text: email && isValidEmail(email)
+                    ? "Impossible d'ouvrir l'application Mail."
+                    : 'Email invalide.',
+                },
+          );
+          setTimeout(() => setEmailFeedback(null), 4000);
+        });
+      });
       return;
     }
     const { subject, body } = emailParams;

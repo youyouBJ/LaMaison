@@ -36,3 +36,11 @@ export function buildFeedbackSurveyUrl(token: string): string | null {
   if (!base) return null;
   return joinUrl(base, token);
 }
+
+export function isFeedbackSurveyUrlValid(url: string): boolean {
+  const base = getFeedbackBaseUrl();
+  if (!base || !url) return false;
+  const prefix = base.endsWith('/') ? base : `${base}/`;
+  if (!url.startsWith(prefix)) return false;
+  return url.slice(prefix.length).length > 0;
+}

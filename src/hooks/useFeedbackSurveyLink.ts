@@ -99,7 +99,56 @@ export function useFeedbackSurveyLink() {
     [],
   );
 
+  // Lookup-only: ne crée pas de lien. Utilisé depuis les écrans qui n'ont pas
+  // les champs restaurant_id / guest_id (ex. FloorPlanScreen).
+  const getByReservationId = useCallback(
+    async (reservationId: string): Promise<FeedbackSurveyLinkResult | null> => {
+      if (!reservationId) {
+        setError('Identifiant de réservation manquant.');
+        return null;
+      }
+
+      if (!getFeedbackBaseUrl()) {
+        setError("Lien d'enquête non configuré.");
+        return null;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      const from = supabase.from.bind(supabase) as unknown as FromFn;
+
+      try {
+        const { data, error: fetchError } = await from('feedback_survey_links')
+          .select('token')
+          .eq('reservation_id', reservationId)
+          .maybeSingle();
+
+        if (fetchError) {
+          setError('Erreur lors de la vérification du lien.');
+          return null;
+        }
+
+        if (!data || !data.token) {
+          setError("Aucun lien d'enquête. Ouvrez la fiche réservation pour en générer un.");
+          return null;
+        }
+
+        const url = buildFeedbackSurveyUrl(data.token);
+        if (!url) {
+          setError("URL d'enquête non configurée.");
+          return null;
+        }
+
+        return { url, token: data.token };
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
   const clearError = useCallback(() => setError(null), []);
 
-  return { getOrCreate, loading, error, clearError };
+  return { getOrCreate, getByReservationId, loading, error, clearError };
 }
