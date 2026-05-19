@@ -15,6 +15,12 @@ import {
   buildReservationReminderMessage,
   buildSatisfactionMessage,
 } from '../utils/whatsapp';
+import {
+  openEmailMessage,
+  buildReservationConfirmationEmail,
+  buildSatisfactionEmail,
+  isValidEmail,
+} from '../utils/email';
 
 type Props = {
   reservation: ReservationWithJoins;
@@ -33,17 +39,19 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
   const isEvent     = isEventReservation(r.notes);
   const needsCall   = reservationNeedsPhoneConfirmation(r);
   const phone       = r.guests?.phone ?? null;
+  const email       = r.guests?.email ?? null;
 
-  const [waFeedback, setWaFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  const [waFeedback, setWaFeedback]       = useState<{ ok: boolean; text: string } | null>(null);
+  const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
   const handleCall = () => {
     if (phone) { void Linking.openURL(`tel:${phone}`); }
   };
 
-  const showWhatsApp =
-    phone !== null &&
-    r.status !== 'cancelled' &&
-    r.status !== 'noshow';
+  const isTerminalStatus = r.status === 'cancelled' || r.status === 'noshow';
+
+  const showWhatsApp = phone !== null && !isTerminalStatus;
+  const showEmail    = !phone && email !== null && !isTerminalStatus;
 
   const handleWhatsApp = () => {
     const time    = formatTimeSlot(r.time_slot);
@@ -71,6 +79,30 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
             },
       );
       setTimeout(() => setWaFeedback(null), 4000);
+    });
+  };
+
+  const handleEmailChip = () => {
+    const time    = formatTimeSlot(r.time_slot);
+    const dateStr = (() => {
+      try { return formatReadableDate(new Date(`${r.date}T12:00:00`)); }
+      catch { return r.date; }
+    })();
+    const { subject, body } = r.status === 'completed'
+      ? buildSatisfactionEmail()
+      : buildReservationConfirmationEmail({ date: dateStr, time, partySize: r.party_size });
+    void openEmailMessage(email, subject, body).then((opened) => {
+      setEmailFeedback(
+        opened
+          ? { ok: true, text: 'Email ouvert' }
+          : {
+              ok: false,
+              text: email && isValidEmail(email)
+                ? "Impossible d'ouvrir l'application Mail."
+                : 'Email invalide.',
+            },
+      );
+      setTimeout(() => setEmailFeedback(null), 4000);
     });
   };
 
@@ -114,6 +146,13 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
                 </Text>
               </TouchableOpacity>
             ) : null}
+            {showEmail ? (
+              <TouchableOpacity style={styles.emailButton} onPress={handleEmailChip} activeOpacity={0.75}>
+                <Text style={styles.emailButtonText}>
+                  {r.status === 'completed' ? 'Avis email' : 'Email'}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
             {phone ? (
               <TouchableOpacity style={styles.callButton} onPress={handleCall} activeOpacity={0.75}>
                 <Text style={styles.callButtonText}>Appeler</Text>
@@ -124,6 +163,11 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
         {waFeedback ? (
           <Text style={[styles.waFeedbackText, waFeedback.ok ? styles.waFeedbackOk : styles.waFeedbackErr]}>
             {waFeedback.text}
+          </Text>
+        ) : null}
+        {emailFeedback ? (
+          <Text style={[styles.waFeedbackText, emailFeedback.ok ? styles.waFeedbackOk : styles.waFeedbackErr]}>
+            {emailFeedback.text}
           </Text>
         ) : null}
       </View>
@@ -248,6 +292,18 @@ const styles = StyleSheet.create({
   waButtonText: {
     ...typography.label,
     color: colors.statusFree,
+  },
+  emailButton: {
+    backgroundColor: colors.goldLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  emailButtonText: {
+    ...typography.label,
+    color: colors.gold,
   },
   waFeedbackText: {
     ...typography.small,

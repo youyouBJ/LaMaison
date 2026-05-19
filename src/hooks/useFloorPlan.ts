@@ -329,6 +329,7 @@ export function useFloorPlan(): UseFloorPlanResult {
       source:      res.source,
       guestName,
       guestPhone:  res.guests?.phone ?? null,
+      guestEmail:  res.guests?.email ?? null,
       guestVip:    res.guests?.vip ?? false,
       shiftName:   res.shifts?.name ?? null,
       notes:       res.notes,

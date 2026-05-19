@@ -267,12 +267,12 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                   <Text style={styles.contactGroupLabel}>WhatsApp</Text>
                   <View style={styles.contactGroupButtons}>
                     <PrimaryButton
-                      label="Demande de confirmation"
+                      label="WhatsApp confirmation"
                       variant="secondary"
                       onPress={() => handleWhatsApp('confirmation')}
                     />
                     <PrimaryButton
-                      label="Enquête satisfaction"
+                      label="WhatsApp enquête"
                       variant="secondary"
                       onPress={() => handleWhatsApp('satisfaction')}
                     />
@@ -280,17 +280,17 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                 </View>
               ) : null}
 
-              {r.guests?.email ? (
+              {r.guests?.email && r.status !== 'cancelled' && r.status !== 'noshow' ? (
                 <View style={styles.contactGroup}>
                   <Text style={styles.contactGroupLabel}>Email</Text>
                   <View style={styles.contactGroupButtons}>
                     <PrimaryButton
-                      label="Demande de confirmation"
+                      label="Email confirmation"
                       variant="secondary"
                       onPress={() => handleEmail('confirmation')}
                     />
                     <PrimaryButton
-                      label="Enquête satisfaction"
+                      label="Email enquête"
                       variant="secondary"
                       onPress={() => handleEmail('satisfaction')}
                     />
@@ -298,6 +298,13 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                 </View>
               ) : null}
             </SectionCard>
+          ) : null}
+
+          {/* ── Message aucun contact ── */}
+          {!r.guests?.phone && !r.guests?.email ? (
+            <View style={styles.noContactHint}>
+              <Text style={styles.noContactHintText}>Aucun contact disponible pour ce client.</Text>
+            </View>
           ) : null}
 
           {/* ── Détails réservation ── */}
@@ -603,6 +610,17 @@ const styles = StyleSheet.create({
   },
   contactGroupButtons: {
     gap: spacing.sm,
+  },
+
+  // No contact hint
+  noContactHint: {
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  noContactHintText: {
+    ...typography.small,
+    color: colors.textMuted,
+    fontStyle: 'italic',
   },
 
   // Correction section

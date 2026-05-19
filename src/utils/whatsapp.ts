@@ -75,6 +75,10 @@ export function buildGuestGenericMessage(): string {
   return 'Bonjour, nous vous contactons de La Maison.';
 }
 
+export function buildGuestConfirmationMessage(): string {
+  return "Bonjour, nous vous contactons de La Maison pour confirmer votre réservation. Merci de nous confirmer votre présence.";
+}
+
 export function buildSatisfactionMessage(): string {
   const base = "Bonjour, merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment. Votre avis nous aiderait beaucoup.";
   if (LA_MAISON_SURVEY_URL) {

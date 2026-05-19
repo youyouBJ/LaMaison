@@ -55,6 +55,22 @@ export function buildReservationConfirmationEmail(
   };
 }
 
+export function buildGuestConfirmationEmail(): { subject: string; body: string } {
+  return {
+    subject: 'Confirmation de votre réservation - La Maison',
+    body: [
+      'Bonjour,',
+      '',
+      'Nous vous contactons de La Maison pour confirmer votre réservation.',
+      '',
+      'Merci de nous confirmer votre présence.',
+      '',
+      'À très bientôt,',
+      'La Maison',
+    ].join('\n'),
+  };
+}
+
 export function buildSatisfactionEmail(): { subject: string; body: string } {
   const lines = [
     'Bonjour,',

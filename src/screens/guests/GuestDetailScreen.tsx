@@ -33,8 +33,15 @@ import { formatTimeSlot } from '../../utils/date';
 import {
   openWhatsAppMessage,
   normalizePhoneForWhatsApp,
-  buildGuestGenericMessage,
+  buildGuestConfirmationMessage,
+  buildSatisfactionMessage,
 } from '../../utils/whatsapp';
+import {
+  openEmailMessage,
+  isValidEmail,
+  buildGuestConfirmationEmail,
+  buildSatisfactionEmail,
+} from '../../utils/email';
 import type { GuestsStackParamList } from '../../navigation/GuestsNavigator';
 import type { ReservationWithDetail } from '../../hooks/useGuestDetail';
 
@@ -136,13 +143,15 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
     notes:            '',
     marketing_opt_in: false,
   });
-  const [saveSuccess, setSaveSuccess]   = useState(false);
-  const [vipUpdating, setVipUpdating]   = useState(false);
-  const [waFeedback, setWaFeedback]     = useState<{ ok: boolean; text: string } | null>(null);
+  const [saveSuccess, setSaveSuccess]     = useState(false);
+  const [vipUpdating, setVipUpdating]     = useState(false);
+  const [waFeedback, setWaFeedback]       = useState<{ ok: boolean; text: string } | null>(null);
+  const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
   const [deletePending, setDeletePending] = useState(false);
-  const formInitialized                 = useRef(false);
-  const successTimer                    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const waTimer                         = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const formInitialized                   = useRef(false);
+  const successTimer                      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const waTimer                           = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emailTimer                        = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (guest && !formInitialized.current) {
@@ -162,6 +171,7 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
     return () => {
       if (successTimer.current) clearTimeout(successTimer.current);
       if (waTimer.current)      clearTimeout(waTimer.current);
+      if (emailTimer.current)   clearTimeout(emailTimer.current);
     };
   }, []);
 
@@ -197,9 +207,9 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
     if (phone) { void Linking.openURL(`tel:${phone}`); }
   };
 
-  const handleWhatsAppContact = () => {
+  const handleWhatsApp = (type: 'confirmation' | 'enquete') => {
     const phone   = guest?.phone ?? null;
-    const message = buildGuestGenericMessage();
+    const message = type === 'confirmation' ? buildGuestConfirmationMessage() : buildSatisfactionMessage();
     void openWhatsAppMessage(phone, message).then((opened) => {
       if (waTimer.current) clearTimeout(waTimer.current);
       setWaFeedback(
@@ -213,6 +223,27 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
             },
       );
       waTimer.current = setTimeout(() => setWaFeedback(null), 4000);
+    });
+  };
+
+  const handleEmail = (type: 'confirmation' | 'enquete') => {
+    const email = guest?.email ?? null;
+    const { subject, body } = type === 'confirmation'
+      ? buildGuestConfirmationEmail()
+      : buildSatisfactionEmail();
+    void openEmailMessage(email, subject, body).then((opened) => {
+      if (emailTimer.current) clearTimeout(emailTimer.current);
+      setEmailFeedback(
+        opened
+          ? { ok: true, text: 'Email ouvert' }
+          : {
+              ok: false,
+              text: email && isValidEmail(email)
+                ? "Impossible d'ouvrir l'application Mail."
+                : 'Email invalide.',
+            },
+      );
+      emailTimer.current = setTimeout(() => setEmailFeedback(null), 4000);
     });
   };
 
@@ -293,6 +324,7 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
 
   const guestName  = formatGuestName(guest?.first_name, guest?.last_name);
   const hasPhone   = Boolean(guest?.phone);
+  const hasEmail   = Boolean(guest?.email);
   const isVip      = guest?.vip ?? false;
 
   return (
@@ -357,7 +389,7 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
             </SectionCard>
 
             {/* ── Contact ── */}
-            {hasPhone ? (
+            {(hasPhone || hasEmail) ? (
               <SectionCard title="Contact">
                 {waFeedback ? (
                   <View style={[styles.waBanner, waFeedback.ok ? styles.waBannerOk : styles.waBannerErr]}>
@@ -366,22 +398,64 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
                     </Text>
                   </View>
                 ) : null}
-                <View style={styles.contactRow}>
-                  <TouchableOpacity
-                    style={styles.contactBtn}
-                    onPress={handleCall}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.contactBtnText}>Appeler</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.contactBtnWa}
-                    onPress={handleWhatsAppContact}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.contactBtnWaText}>WhatsApp</Text>
-                  </TouchableOpacity>
-                </View>
+                {emailFeedback ? (
+                  <View style={[styles.waBanner, emailFeedback.ok ? styles.waBannerOk : styles.waBannerErr]}>
+                    <Text style={[styles.waBannerText, emailFeedback.ok ? styles.waBannerTextOk : styles.waBannerTextErr]}>
+                      {emailFeedback.text}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {hasPhone ? (
+                  <View style={styles.contactGroup}>
+                    <Text style={styles.contactGroupLabel}>Téléphone</Text>
+                    <View style={styles.contactStack}>
+                      <TouchableOpacity
+                        style={styles.contactBtn}
+                        onPress={handleCall}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.contactBtnText}>Appeler</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.contactBtnWa}
+                        onPress={() => handleWhatsApp('confirmation')}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.contactBtnWaText}>WhatsApp confirmation</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.contactBtnWa}
+                        onPress={() => handleWhatsApp('enquete')}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.contactBtnWaText}>WhatsApp enquête</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
+
+                {hasEmail ? (
+                  <View style={styles.contactGroup}>
+                    <Text style={styles.contactGroupLabel}>Email</Text>
+                    <View style={styles.contactStack}>
+                      <TouchableOpacity
+                        style={styles.contactBtnEmail}
+                        onPress={() => handleEmail('confirmation')}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.contactBtnEmailText}>Email confirmation</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.contactBtnEmail}
+                        onPress={() => handleEmail('enquete')}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.contactBtnEmailText}>Email enquête</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
               </SectionCard>
             ) : null}
 
@@ -619,12 +693,18 @@ const styles = StyleSheet.create({
   },
 
   // Contact section
-  contactRow: {
-    flexDirection: 'row',
+  contactGroup: {
+    marginBottom: spacing.md,
+  },
+  contactGroupLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  contactStack: {
     gap: spacing.sm,
   },
   contactBtn: {
-    flex: 1,
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     alignItems: 'center',
@@ -639,7 +719,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   contactBtnWa: {
-    flex: 1,
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     alignItems: 'center',
@@ -652,6 +731,20 @@ const styles = StyleSheet.create({
   contactBtnWaText: {
     ...typography.bodyMedium,
     color: colors.statusFree,
+  },
+  contactBtnEmail: {
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.goldLight,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    minHeight: 48,
+  },
+  contactBtnEmailText: {
+    ...typography.bodyMedium,
+    color: colors.gold,
   },
   waBanner: {
     borderRadius: radius.sm,

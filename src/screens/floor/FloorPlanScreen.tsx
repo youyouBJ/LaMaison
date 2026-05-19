@@ -27,7 +27,14 @@ import {
   normalizePhoneForWhatsApp,
   buildReservationConfirmationMessage,
   buildReservationReminderMessage,
+  buildSatisfactionMessage,
 } from '../../utils/whatsapp';
+import {
+  openEmailMessage,
+  buildReservationConfirmationEmail,
+  buildSatisfactionEmail,
+  isValidEmail,
+} from '../../utils/email';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -50,7 +57,7 @@ const LEGEND: { status: string; color: string; label: string }[] = [
 
 // ─── Action button ────────────────────────────────────────────────────────────
 
-type ActionVariant = 'seat' | 'complete' | 'confirm' | 'noshow' | 'cancel' | 'whatsapp';
+type ActionVariant = 'seat' | 'complete' | 'confirm' | 'noshow' | 'cancel' | 'whatsapp' | 'email';
 
 const ACTION_COLORS: Record<ActionVariant, { bg: string; border: string; text: string }> = {
   seat:     { bg: colors.cta,             border: colors.cta,        text: colors.textOnDark },
@@ -59,6 +66,7 @@ const ACTION_COLORS: Record<ActionVariant, { bg: string; border: string; text: s
   noshow:   { bg: colors.surface,         border: colors.border,     text: colors.textMuted },
   cancel:   { bg: colors.ctaLight,        border: colors.cta,        text: colors.cta },
   whatsapp: { bg: colors.statusFreeLight, border: colors.statusFree, text: colors.statusFree },
+  email:    { bg: colors.goldLight,       border: colors.gold,       text: colors.gold },
 };
 
 function ActionButton({
@@ -335,7 +343,8 @@ function TableDetailPanel({
   onNoShow: (id: string) => void;
   onCancel: (id: string) => void;
 }): React.JSX.Element {
-  const [waFeedback, setWaFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  const [waFeedback, setWaFeedback]       = useState<{ ok: boolean; text: string } | null>(null);
+  const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
   const formattedDate = (() => {
     try { return formatReadableDate(new Date(`${selectedDate}T12:00:00`)); }
@@ -347,7 +356,9 @@ function TableDetailPanel({
     const time  = res.timeSlot.substring(0, 5);
     const message = (res.status === 'pending' || res.status === 'confirmed')
       ? buildReservationConfirmationMessage({ date: formattedDate, time, partySize: res.partySize })
-      : buildReservationReminderMessage({ time, partySize: res.partySize });
+      : res.status === 'completed'
+        ? buildSatisfactionMessage()
+        : buildReservationReminderMessage({ time, partySize: res.partySize });
     void openWhatsAppMessage(phone, message).then((opened) => {
       setWaFeedback(
         opened
@@ -362,6 +373,27 @@ function TableDetailPanel({
       setTimeout(() => setWaFeedback(null), 4000);
     });
   };
+  const handleEmail = (res: FloorPlanReservation) => {
+    const email = res.guestEmail;
+    const time  = res.timeSlot.substring(0, 5);
+    const { subject, body } = (res.status === 'pending' || res.status === 'confirmed')
+      ? buildReservationConfirmationEmail({ date: formattedDate, time, partySize: res.partySize })
+      : buildSatisfactionEmail();
+    void openEmailMessage(email, subject, body).then((opened) => {
+      setEmailFeedback(
+        opened
+          ? { ok: true, text: 'Email ouvert' }
+          : {
+              ok: false,
+              text: email && isValidEmail(email)
+                ? "Impossible d'ouvrir l'application Mail."
+                : 'Email invalide.',
+            },
+      );
+      setTimeout(() => setEmailFeedback(null), 4000);
+    });
+  };
+
   const STATUS_LABEL: Record<string, string> = {
     free:        'Libre',
     reserved:    'Réservée',
@@ -438,6 +470,20 @@ function TableDetailPanel({
             />
             <Text style={[waFeedback.ok ? styles.successText : styles.errorBannerText]}>
               {waFeedback.text}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Email feedback */}
+        {emailFeedback ? (
+          <View style={[emailFeedback.ok ? styles.successBanner : styles.errorBanner]}>
+            <Ionicons
+              name={(emailFeedback.ok ? 'checkmark-circle-outline' : 'alert-circle-outline') as IoniconsName}
+              size={15}
+              color={emailFeedback.ok ? colors.statusFree : colors.cta}
+            />
+            <Text style={[emailFeedback.ok ? styles.successText : styles.errorBannerText]}>
+              {emailFeedback.text}
             </Text>
           </View>
         ) : null}
@@ -528,6 +574,19 @@ function TableDetailPanel({
                         }
                         variant="whatsapp"
                         onPress={() => handleWhatsApp(res)}
+                      />
+                    ) : null}
+                    {!res.guestPhone && res.guestEmail ? (
+                      <ActionButton
+                        label={
+                          (res.status === 'pending' || res.status === 'confirmed')
+                            ? 'Confirmer Email'
+                            : res.status === 'completed'
+                              ? 'Avis Email'
+                              : 'Email'
+                        }
+                        variant="email"
+                        onPress={() => handleEmail(res)}
                       />
                     ) : null}
                   </View>
