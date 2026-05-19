@@ -170,6 +170,9 @@ export function useCreateReservation() {
       }
 
       // ── Créer la réservation ──────────────────────────────────────────────
+      if (__DEV__) {
+        console.log('[createReservation] status envoyé à Supabase :', input.status);
+      }
       const { data: newRes, error: resError } = await supabase
         .from('reservations')
         .insert({
