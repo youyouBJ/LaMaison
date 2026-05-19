@@ -518,7 +518,17 @@ function TableDetailPanel({
                       <ActionButton label="Annuler" variant="cancel" onPress={() => onCancel(res.id)} />
                     )}
                     {res.guestPhone ? (
-                      <ActionButton label="WhatsApp" variant="whatsapp" onPress={() => handleWhatsApp(res)} />
+                      <ActionButton
+                        label={
+                          (res.status === 'pending' || res.status === 'confirmed')
+                            ? 'Confirmer WhatsApp'
+                            : res.status === 'completed'
+                              ? 'Avis WhatsApp'
+                              : 'WhatsApp'
+                        }
+                        variant="whatsapp"
+                        onPress={() => handleWhatsApp(res)}
+                      />
                     ) : null}
                   </View>
                 )}

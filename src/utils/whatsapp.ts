@@ -1,6 +1,6 @@
 import { Linking } from 'react-native';
 
-export const LA_MAISON_REVIEW_URL = '';
+export const LA_MAISON_SURVEY_URL = '';
 
 export function normalizePhoneForWhatsApp(phone: string | null | undefined): string | null {
   if (!phone) return null;
@@ -76,8 +76,9 @@ export function buildGuestGenericMessage(): string {
 }
 
 export function buildSatisfactionMessage(): string {
-  if (LA_MAISON_REVIEW_URL) {
-    return `Bonjour, merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment. Votre avis nous aiderait beaucoup : ${LA_MAISON_REVIEW_URL}`;
+  const base = "Bonjour, merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment. Votre avis nous aiderait beaucoup.";
+  if (LA_MAISON_SURVEY_URL) {
+    return `${base} Vous pouvez répondre ici : ${LA_MAISON_SURVEY_URL}`;
   }
-  return "Bonjour, merci d'avoir choisi La Maison. Nous espérons que vous avez passé un excellent moment. Votre avis nous aiderait beaucoup.";
+  return base;
 }

@@ -109,7 +109,9 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
           <View style={styles.bottomActions}>
             {showWhatsApp ? (
               <TouchableOpacity style={styles.waButton} onPress={handleWhatsApp} activeOpacity={0.75}>
-                <Text style={styles.waButtonText}>WhatsApp</Text>
+                <Text style={styles.waButtonText}>
+                  {(r.status === 'pending' || r.status === 'confirmed') ? 'Confirmer' : r.status === 'completed' ? 'Avis' : 'WhatsApp'}
+                </Text>
               </TouchableOpacity>
             ) : null}
             {phone ? (

@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -26,9 +27,14 @@ import {
   openWhatsAppMessage,
   normalizePhoneForWhatsApp,
   buildReservationConfirmationMessage,
-  buildReservationReminderMessage,
   buildSatisfactionMessage,
 } from '../../utils/whatsapp';
+import {
+  openEmailMessage,
+  buildReservationConfirmationEmail,
+  buildSatisfactionEmail,
+  isValidEmail,
+} from '../../utils/email';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationDetail'>;
 
@@ -93,6 +99,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
 
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [whatsappFeedback, setWhatsappFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  const [emailFeedback, setEmailFeedback]       = useState<{ ok: boolean; text: string } | null>(null);
 
   if (loading) {
     return (
@@ -139,17 +146,17 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
     }
   })();
 
-  const handleWhatsApp = (type: 'confirmation' | 'reminder' | 'satisfaction') => {
+  const handleCall = () => {
+    const phone = r.guests?.phone;
+    if (phone) { void Linking.openURL(`tel:${phone}`); }
+  };
+
+  const handleWhatsApp = (type: 'confirmation' | 'satisfaction') => {
     const phone = r.guests?.phone ?? null;
     const time  = formatTimeSlot(r.time_slot);
-    let message: string;
-    if (type === 'confirmation') {
-      message = buildReservationConfirmationMessage({ date: dateLabel, time, partySize: r.party_size });
-    } else if (type === 'reminder') {
-      message = buildReservationReminderMessage({ time, partySize: r.party_size });
-    } else {
-      message = buildSatisfactionMessage();
-    }
+    const message = type === 'confirmation'
+      ? buildReservationConfirmationMessage({ date: dateLabel, time, partySize: r.party_size })
+      : buildSatisfactionMessage();
     void openWhatsAppMessage(phone, message).then((opened) => {
       setWhatsappFeedback(
         opened
@@ -162,6 +169,27 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
             },
       );
       setTimeout(() => setWhatsappFeedback(null), 4000);
+    });
+  };
+
+  const handleEmail = (type: 'confirmation' | 'satisfaction') => {
+    const email = r.guests?.email ?? null;
+    const time  = formatTimeSlot(r.time_slot);
+    const { subject, body } = type === 'confirmation'
+      ? buildReservationConfirmationEmail({ date: dateLabel, time, partySize: r.party_size })
+      : buildSatisfactionEmail();
+    void openEmailMessage(email, subject, body).then((opened) => {
+      setEmailFeedback(
+        opened
+          ? { ok: true, text: 'Email ouvert' }
+          : {
+              ok: false,
+              text: email && isValidEmail(email)
+                ? "Impossible d'ouvrir l'application Mail."
+                : 'Email invalide.',
+            },
+      );
+      setTimeout(() => setEmailFeedback(null), 4000);
     });
   };
 
@@ -210,37 +238,65 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
             </View>
           </SectionCard>
 
-          {/* ── Contact WhatsApp ── */}
-          {r.guests?.phone && r.status !== 'cancelled' && r.status !== 'noshow' ? (
-            <SectionCard title="Contact WhatsApp">
+          {/* ── Contact client ── */}
+          {(r.guests?.phone || r.guests?.email) ? (
+            <SectionCard title="Contact client">
               {whatsappFeedback ? (
-                <View style={[styles.waBanner, whatsappFeedback.ok ? styles.waBannerOk : styles.waBannerErr]}>
-                  <Text style={[styles.waBannerText, whatsappFeedback.ok ? styles.waBannerTextOk : styles.waBannerTextErr]}>
+                <View style={[styles.contactBanner, whatsappFeedback.ok ? styles.contactBannerOk : styles.contactBannerErr]}>
+                  <Text style={[styles.contactBannerText, whatsappFeedback.ok ? styles.contactBannerTextOk : styles.contactBannerTextErr]}>
                     {whatsappFeedback.text}
                   </Text>
                 </View>
               ) : null}
-              <View style={styles.waGrid}>
-                {(r.status === 'pending' || r.status === 'confirmed') ? (
-                  <PrimaryButton
-                    label="Demander confirmation"
-                    variant="secondary"
-                    onPress={() => handleWhatsApp('confirmation')}
-                  />
-                ) : null}
-                {(r.status === 'pending' || r.status === 'confirmed' || r.status === 'seated') ? (
-                  <PrimaryButton
-                    label="Envoyer rappel"
-                    variant="secondary"
-                    onPress={() => handleWhatsApp('reminder')}
-                  />
-                ) : null}
-                <PrimaryButton
-                  label="Demander un avis"
-                  variant="secondary"
-                  onPress={() => handleWhatsApp('satisfaction')}
-                />
-              </View>
+              {emailFeedback ? (
+                <View style={[styles.contactBanner, emailFeedback.ok ? styles.contactBannerOk : styles.contactBannerErr]}>
+                  <Text style={[styles.contactBannerText, emailFeedback.ok ? styles.contactBannerTextOk : styles.contactBannerTextErr]}>
+                    {emailFeedback.text}
+                  </Text>
+                </View>
+              ) : null}
+
+              {r.guests?.phone ? (
+                <View style={styles.contactGroup}>
+                  <PrimaryButton label="Appeler" variant="secondary" onPress={handleCall} />
+                </View>
+              ) : null}
+
+              {r.guests?.phone && r.status !== 'cancelled' && r.status !== 'noshow' ? (
+                <View style={styles.contactGroup}>
+                  <Text style={styles.contactGroupLabel}>WhatsApp</Text>
+                  <View style={styles.contactGroupButtons}>
+                    <PrimaryButton
+                      label="Demande de confirmation"
+                      variant="secondary"
+                      onPress={() => handleWhatsApp('confirmation')}
+                    />
+                    <PrimaryButton
+                      label="Enquête satisfaction"
+                      variant="secondary"
+                      onPress={() => handleWhatsApp('satisfaction')}
+                    />
+                  </View>
+                </View>
+              ) : null}
+
+              {r.guests?.email ? (
+                <View style={styles.contactGroup}>
+                  <Text style={styles.contactGroupLabel}>Email</Text>
+                  <View style={styles.contactGroupButtons}>
+                    <PrimaryButton
+                      label="Demande de confirmation"
+                      variant="secondary"
+                      onPress={() => handleEmail('confirmation')}
+                    />
+                    <PrimaryButton
+                      label="Enquête satisfaction"
+                      variant="secondary"
+                      onPress={() => handleEmail('satisfaction')}
+                    />
+                  </View>
+                </View>
+              ) : null}
             </SectionCard>
           ) : null}
 
@@ -524,26 +580,30 @@ const styles = StyleSheet.create({
   actionsGrid: { gap: spacing.sm },
   actionBtnWrapper: {},
 
-  // WhatsApp section
-  waBanner: {
+  // Contact client section
+  contactBanner: {
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     marginBottom: spacing.md,
     borderWidth: 1,
   },
-  waBannerOk: {
-    backgroundColor: colors.statusFreeLight,
-    borderColor: colors.statusFree,
+  contactBannerOk:      { backgroundColor: colors.statusFreeLight, borderColor: colors.statusFree },
+  contactBannerErr:     { backgroundColor: colors.ctaLight,        borderColor: colors.cta },
+  contactBannerText:    { ...typography.small, fontFamily: typography.bodyMedium.fontFamily },
+  contactBannerTextOk:  { color: colors.statusFree },
+  contactBannerTextErr: { color: colors.cta },
+  contactGroup: {
+    marginBottom: spacing.md,
   },
-  waBannerErr: {
-    backgroundColor: colors.ctaLight,
-    borderColor: colors.cta,
+  contactGroupLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
   },
-  waBannerText: { ...typography.small, fontFamily: typography.bodyMedium.fontFamily },
-  waBannerTextOk:  { color: colors.statusFree },
-  waBannerTextErr: { color: colors.cta },
-  waGrid: { gap: spacing.sm },
+  contactGroupButtons: {
+    gap: spacing.sm,
+  },
 
   // Correction section
   correctionToggle: {
