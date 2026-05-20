@@ -12,7 +12,8 @@
     "tables:update-capacities": "tsx scripts/update-table-capacities.ts",
     "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit",
     "crm:audit": "tsx scripts/audit-guests-quality.ts",
-    "crm:audit:summary": "tsx scripts/summarize-crm-audit.ts"
+    "crm:audit:summary": "tsx scripts/summarize-crm-audit.ts",
+    "crm:merge:preview": "tsx scripts/prepare-crm-merge-preview.ts"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

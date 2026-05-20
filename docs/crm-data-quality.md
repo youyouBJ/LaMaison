@@ -203,19 +203,79 @@ L'audit V1 est **strictement en lecture seule** et sert à prioriser le travail 
 
 ---
 
-## Prochaine étape : outil de fusion contrôlée avec validation humaine (V2)
+## Étape 3 : prévisualisation de fusion (crm:merge:preview)
+
+Le script `prepare-crm-merge-preview.ts` lit `crm-quality-audit.json` et génère une prévisualisation complète des fusions potentielles, sans aucune écriture Supabase.
+
+### Périmètre inclus
+
+- `duplicate_phone_high_confidence` ou `duplicate_email_high_confidence`
+- Noms similaires (même prénom OU même nom sur toutes les fiches du groupe)
+- Groupe ≤ 5 fiches
+
+**Exclus** : possible_name_duplicate seul, dirty_name, groupes hôtel/conciergerie (noms très différents), groupes > 5 fiches.
+
+### Règles de choix du master
+
+Le master (fiche de référence à conserver) est sélectionné selon ce barème de priorité :
+
+| Critère | Poids |
+|---------|-------|
+| VIP = true | +100 |
+| avg_rating (par point) | +10 |
+| Email présent | +5 |
+| Nombre de visites (×0.1) | variable |
+| Complétude des données | +1 par champ non nul |
+| Tiebreaker : created_at le plus ancien | — |
+
+La raison de sélection est écrite en clair dans chaque ligne du rapport (`master_selection_reason`).
+
+Si Supabase n'est pas disponible (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants), le script utilise uniquement email, phone et complétude de données pour sélectionner le master.
+
+### Niveaux de risque
+
+| Risque | Critère | Action |
+|--------|---------|--------|
+| `low` | Taille 2, prénom ET nom identiques | `ready_for_review` |
+| `medium` | Taille 2 (nom partiel), ou taille 3-4 | `human_validation_required` |
+| `high` | Taille 5 | `human_validation_required` |
+
+### Données fusionnées prévisualisées (non appliquées)
+
+Pour chaque groupe, le rapport inclut `merged_data_preview` :
+- `first_name` / `last_name` : du master
+- `phone` : téléphone partagé
+- `email` : meilleur email disponible dans le groupe
+- `vip` : `true` si **au moins une** fiche est VIP
+- `avg_rating` : **meilleur** rating non nul du groupe
+- `notes_merge_required` : `true` si plusieurs notes distinctes à concaténer manuellement
+- `tags_merge_required` : `true` si plusieurs jeux de tags à fusionner
+
+### Résultats (mai 2026)
+
+| Métrique | Valeur |
+|----------|--------|
+| Groupes analysés | 1 366 |
+| ready_for_review | 242 |
+| human_validation_required | 1 124 |
+| Match téléphone exact | 1 032 |
+| Match email exact | 228 |
+| Match téléphone + email exact | 106 |
+
+---
+
+## Prochaine étape : outil de validation humaine et application contrôlée (V4)
 
 Un script ou écran dédié permettrait de :
 
-1. Charger les groupes `high_confidence_cleanup` depuis `crm-quality-summary.json`.
+1. Charger les groupes `ready_for_review` depuis `crm-merge-plan-preview.json`.
 2. Pour chaque groupe, afficher les fiches côte à côte avec leurs réservations.
-3. Permettre à l'admin de **confirmer** (fusionner) ou **rejeter** (marquer comme homonymes).
+3. Permettre à l'admin de **confirmer** (fusionner) ou **rejeter** (marquer comme homonymes distincts).
 4. Déclencher la fusion Supabase de manière contrôlée :
-   - Sélectionner la fiche maître (la plus complète).
    - Rerouter `reservations.guest_id` vers la fiche maître.
-   - Fusionner tags, notes, ratings.
-   - Supprimer les doublons confirmés.
-5. Logger chaque action pour auditabilité.
+   - Fusionner tags et notes.
+   - Marquer les doublons comme `merged_into: master_id` (soft delete recommandé).
+5. Logger chaque action de fusion pour auditabilité et rollback.
 
 ---
 
@@ -233,11 +293,14 @@ Un script ou écran dédié permettrait de :
 ## Commandes
 
 ```bash
-# Étape 1 — Lancer l'audit complet (lecture seule, ~5 min)
+# Étape 1 — Audit complet (lecture seule, ~5 min)
 npm run crm:audit
 
-# Étape 2 — Générer la synthèse priorisée (lecture seule, instantané)
+# Étape 2 — Synthèse priorisée (lecture seule, instantané)
 npm run crm:audit:summary
+
+# Étape 3 — Prévisualisation des fusions (lecture seule, enrichissement Supabase optionnel)
+npm run crm:merge:preview
 
 # Vérifier les types TypeScript
 npm run typecheck:scripts
@@ -246,3 +309,4 @@ npm run typecheck:scripts
 Rapports générés :
 - `reports/crm-quality-audit.json` / `.csv` — toutes les issues brutes
 - `reports/crm-quality-summary.json` / `.csv` — synthèse priorisée + top 100
+- `reports/crm-merge-plan-preview.json` / `.csv` — prévisualisation des fusions avec master recommandé
