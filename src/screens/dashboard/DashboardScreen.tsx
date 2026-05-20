@@ -13,7 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useTodayDashboard, type DashboardReservation } from '../../hooks/useTodayDashboard';
-import { useDashboardExtended, type ClientStats } from '../../hooks/useDashboardExtended';
+import { useDashboardExtended, type ClientStats, type SevenRoomsStats } from '../../hooks/useDashboardExtended';
 import {
   usePeriodStats,
   PERIOD_OPTIONS,
@@ -342,15 +342,22 @@ function ServicesSection({
 
 function SatisfactionSection({
   data,
-  loading,
+  sevenRooms,
+  periodLoading,
+  extLoading,
 }: {
   data: PeriodFeedbackStats | null;
-  loading: boolean;
+  sevenRooms: SevenRoomsStats;
+  periodLoading: boolean;
+  extLoading: boolean;
 }): React.JSX.Element {
   return (
     <View style={styles.section}>
       <SectionHeader title="Satisfaction" />
-      {loading ? (
+
+      {/* ── Sous-section : Enquêtes reçues ── */}
+      <Text style={styles.subSectionLabel}>Enquêtes reçues</Text>
+      {periodLoading ? (
         <View style={styles.extLoadingCard}>
           <ActivityIndicator color={colors.sand} size="small" />
         </View>
@@ -361,8 +368,8 @@ function SatisfactionSection({
         />
       ) : data.total === 0 ? (
         <EmptyCard
-          title="Aucun avis reçu sur cette période"
-          subtitle="Les avis apparaîtront ici dès réception du premier retour client."
+          title="Aucune nouvelle enquête reçue sur cette période"
+          subtitle="Les avis issus du formulaire apparaîtront ici."
         />
       ) : (
         <>
@@ -393,6 +400,32 @@ function SatisfactionSection({
             </View>
           ) : null}
         </>
+      )}
+
+      {/* ── Sous-section : Import SevenRooms ── */}
+      <Text style={styles.subSectionLabel}>Import SevenRooms</Text>
+      {extLoading ? (
+        <View style={styles.extLoadingCard}>
+          <ActivityIndicator color={colors.sand} size="small" />
+        </View>
+      ) : sevenRooms.count === 0 ? (
+        <EmptyCard title="Aucune note importée disponible" />
+      ) : (
+        <View style={styles.srCard}>
+          <KpiRow>
+            <StatCard label="Clients notés" value={sevenRooms.count} accent={colors.gold} />
+            <KpiGap />
+            <StatCard
+              label="Rating moyen"
+              value={0}
+              valueText={`${fmtRating(sevenRooms.avgRating)} / 5`}
+              accent={colors.gold}
+            />
+          </KpiRow>
+          <Text style={styles.srNote}>
+            Données importées depuis SevenRooms. Non filtrées par période tant que l'historique détaillé n'est pas importé.
+          </Text>
+        </View>
       )}
     </View>
   );
@@ -570,7 +603,12 @@ export default function DashboardScreen(): React.JSX.Element {
           <ServicesSection data={period.reservations} loading={periodLoading} />
 
           {/* ── Satisfaction ── */}
-          <SatisfactionSection data={period.feedback} loading={periodLoading} />
+          <SatisfactionSection
+            data={period.feedback}
+            sevenRooms={ext.sevenRooms}
+            periodLoading={periodLoading}
+            extLoading={extLoading}
+          />
 
           {/* ── Clients ── */}
           <ClientSection data={ext.clients} loading={extLoading} />
@@ -877,6 +915,23 @@ const styles = StyleSheet.create({
     fontFamily: typography.stat.fontFamily,
     fontSize:   typography.body.fontSize,
     color:      colors.textPrimary,
+  },
+
+  // Satisfaction sub-sections
+  subSectionLabel: {
+    ...typography.label,
+    color:        colors.textMuted,
+    marginTop:    spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  srCard: {
+    // No extra wrapper needed — KpiRow + srNote are sufficient
+  },
+  srNote: {
+    ...typography.small,
+    color:      colors.textMuted,
+    marginTop:  spacing.sm,
+    fontStyle:  'italic',
   },
 
   // Satisfaction comment

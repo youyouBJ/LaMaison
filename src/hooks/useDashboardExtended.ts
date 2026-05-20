@@ -14,9 +14,15 @@ export type ClientStats = {
   withRating: number;
 };
 
+export type SevenRoomsStats = {
+  count: number;
+  avgRating: number | null;
+};
+
 export type ExtendedStats = {
   waitlistPending: number;
   clients: ClientStats;
+  sevenRooms: SevenRoomsStats;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -24,6 +30,7 @@ export type ExtendedStats = {
 const INITIAL_STATS: ExtendedStats = {
   waitlistPending: 0,
   clients: { total: 0, vip: 0, withPhone: 0, withEmail: 0, withoutPhone: 0, withoutEmail: 0, withRating: 0 },
+  sevenRooms: { count: 0, avgRating: null },
 };
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -43,7 +50,9 @@ export function useDashboardExtended(restaurantId: string | null) {
       withEmailRes,
       withoutPhoneRes,
       withoutEmailRes,
-      withRatingRes,
+      // Fetch only avg_rating values for rated guests — replaces the head:true count query.
+      // Loads ~1 number per rated client, acceptable volume (expected ≤ 5 000 rows).
+      avgRatingRes,
     ] = await Promise.all([
       // Waitlist en attente aujourd'hui
       supabase
@@ -71,9 +80,23 @@ export function useDashboardExtended(restaurantId: string | null) {
       // Clients sans email
       supabase.from('guests').select('*', { count: 'exact', head: true }).eq('restaurant_id', resId).is('email', null),
 
-      // Clients avec note importée
-      supabase.from('guests').select('*', { count: 'exact', head: true }).eq('restaurant_id', resId).not('avg_rating', 'is', null),
+      // avg_rating SevenRooms — colonne seule, guests notés uniquement
+      supabase
+        .from('guests')
+        .select('avg_rating')
+        .eq('restaurant_id', resId)
+        .not('avg_rating', 'is', null),
     ]);
+
+    // Compute SevenRooms stats from fetched avg_rating values
+    const ratingRows  = (avgRatingRes.data as { avg_rating: number | null }[] | null) ?? [];
+    const validRatings = ratingRows
+      .map(r => r.avg_rating)
+      .filter((v): v is number => v !== null);
+
+    const srAvg = validRatings.length > 0
+      ? Math.round((validRatings.reduce((a, b) => a + b, 0) / validRatings.length) * 10) / 10
+      : null;
 
     setStats({
       waitlistPending: waitlistRes.count ?? 0,
@@ -84,7 +107,11 @@ export function useDashboardExtended(restaurantId: string | null) {
         withEmail:    withEmailRes.count    ?? 0,
         withoutPhone: withoutPhoneRes.count ?? 0,
         withoutEmail: withoutEmailRes.count ?? 0,
-        withRating:   withRatingRes.count   ?? 0,
+        withRating:   validRatings.length,
+      },
+      sevenRooms: {
+        count:     validRatings.length,
+        avgRating: srAvg,
       },
     });
   }, []);
