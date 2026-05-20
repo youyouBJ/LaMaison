@@ -7,7 +7,7 @@ import DashboardScreen from '../screens/dashboard/DashboardScreen';
 import FloorPlanScreen from '../screens/floor/FloorPlanScreen';
 import ReservationsNavigator from './ReservationsNavigator';
 import GuestsNavigator from './GuestsNavigator';
-import SettingsScreen from '../screens/settings/SettingsScreen';
+import AdminNavigator from './AdminNavigator';
 
 export type MainTabsParamList = {
   Dashboard: undefined;
@@ -105,7 +105,7 @@ export default function MainTabs(): React.JSX.Element {
       />
       <Tab.Screen
         name="Settings"
-        component={SettingsScreen}
+        component={AdminNavigator}
         options={{
           tabBarLabel: 'Admin',
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (

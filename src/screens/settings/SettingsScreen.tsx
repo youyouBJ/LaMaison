@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useSettingsOverview } from '../../hooks/useSettingsOverview';
 import { supabase } from '../../lib/supabase';
@@ -25,62 +26,21 @@ import {
 import { useDashboardExtended, type SevenRoomsStats } from '../../hooks/useDashboardExtended';
 import { getReservationStatusColors, getReservationStatusLabel } from '../../utils/reservationStatus';
 import StatCard from '../../components/StatCard';
-import type { ZoneSummary, GuestCounts } from '../../hooks/useSettingsOverview';
-import type { Database, ReservationStatus } from '../../types/database';
+import type { AdminStackParamList } from '../../navigation/AdminNavigator';
+import type { ReservationStatus } from '../../types/database';
 
-type ShiftRow = Database['public']['Tables']['shifts']['Row'];
-type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const ROLE_LABELS: Record<string, string> = {
-  admin:   'Admin',
-  manager: 'Manager',
-  host:    'Hôte',
-  waiter:  'Serveur',
+type Props = {
+  navigation: NativeStackNavigationProp<AdminStackParamList, 'AdminMain'>;
 };
 
-const DAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_ORDER: ReservationStatus[] = [
   'confirmed', 'pending', 'seated',
   'completed', 'cancelled', 'noshow',
 ];
 
-type Feature = { icon: IoniconsName; label: string };
-const FEATURES: Feature[] = [
-  { icon: 'logo-whatsapp',      label: 'WhatsApp Business' },
-  { icon: 'mail-outline',       label: 'Email Resend' },
-  { icon: 'chatbubble-outline', label: 'SMS secours' },
-  { icon: 'card-outline',       label: 'Stripe abonnements' },
-  { icon: 'business-outline',   label: 'Multi-restaurants' },
-  { icon: 'map-outline',        label: 'Éditeur plan avancé' },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatDays(days: number[]): string {
-  if (days.length === 0) return '–';
-  if (days.length === 7) return 'Tous les jours';
-  const sorted = [...days].sort((a, b) => a - b);
-  const labels = sorted.map(d => DAY_SHORT[d] ?? `J${d}`);
-  let consecutive = true;
-  for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i] !== sorted[i - 1] + 1) { consecutive = false; break; }
-  }
-  if (consecutive && sorted.length >= 3) {
-    return `${labels[0]}–${labels[labels.length - 1]}`;
-  }
-  return labels.join(', ');
-}
-
-function formatTime(t: string): string {
-  return t.length >= 5 ? t.substring(0, 5) : t;
-}
-
-function getRoleLabel(role: string): string {
-  return ROLE_LABELS[role] ?? role;
-}
 
 function fmtRating(v: number | null): string {
   if (v === null) return '—';
@@ -92,84 +52,15 @@ function fmtPct(v: number | null): string {
   return `${v} %`;
 }
 
-// ─── Base sub-components ──────────────────────────────────────────────────────
-
-function InfoRow({ label, value }: { label: string; value: string }): React.JSX.Element {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue} numberOfLines={2}>{value}</Text>
-    </View>
-  );
-}
-
-function Divider(): React.JSX.Element {
-  return <View style={styles.divider} />;
-}
-
-function SectionHeader({ title }: { title: string }): React.JSX.Element {
-  return <Text style={styles.sectionTitle}>{title}</Text>;
-}
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Card({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <View style={styles.card}>{children}</View>;
 }
 
-function ShiftCard({ shift }: { shift: ShiftRow }): React.JSX.Element {
-  const days  = formatDays(shift.days_of_week);
-  const start = formatTime(shift.start_time);
-  const end   = formatTime(shift.end_time);
-  return (
-    <View style={styles.shiftCard}>
-      <View style={styles.shiftHeader}>
-        <Text style={styles.shiftName}>{shift.name}</Text>
-        <View style={styles.shiftBadge}>
-          <Text style={styles.shiftBadgeText}>{days}</Text>
-        </View>
-      </View>
-      <Text style={styles.shiftHours}>{start}–{end}</Text>
-      <View style={styles.shiftMeta}>
-        <View style={styles.shiftMetaItem}>
-          <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-          <Text style={styles.shiftMetaText}>Slot {shift.slot_duration} min</Text>
-        </View>
-        <View style={styles.shiftMetaDot} />
-        <View style={styles.shiftMetaItem}>
-          <Ionicons name="people-outline" size={12} color={colors.textMuted} />
-          <Text style={styles.shiftMetaText}>{shift.max_covers_per_slot} couverts max</Text>
-        </View>
-      </View>
-    </View>
-  );
+function SectionHeader({ title }: { title: string }): React.JSX.Element {
+  return <Text style={styles.sectionTitle}>{title}</Text>;
 }
-
-function ZoneRow({ zone }: { zone: ZoneSummary }): React.JSX.Element {
-  return (
-    <View style={styles.zoneRow}>
-      <View style={styles.zoneIcon}>
-        <Ionicons name="grid-outline" size={14} color={colors.gold} />
-      </View>
-      <Text style={styles.zoneName} numberOfLines={1}>{zone.name}</Text>
-      <Text style={styles.zoneCount}>
-        {zone.tableCount} table{zone.tableCount > 1 ? 's' : ''}
-      </Text>
-    </View>
-  );
-}
-
-function FeatureCard({ icon, label }: Feature): React.JSX.Element {
-  return (
-    <View style={styles.featureCard}>
-      <Ionicons name={icon} size={20} color={colors.sand} />
-      <Text style={styles.featureLabel} numberOfLines={2}>{label}</Text>
-      <View style={styles.featureBadge}>
-        <Text style={styles.featureBadgeText}>Bientôt</Text>
-      </View>
-    </View>
-  );
-}
-
-// ─── Pilotage sub-components ──────────────────────────────────────────────────
 
 function PeriodSelectorAdmin({
   active,
@@ -230,12 +121,12 @@ function PeriodKpiSection({
       <View style={styles.kpiRow}>
         <StatCard label="Confirmées" value={data.confirmed} accent={colors.gold} />
         <View style={styles.kpiGap} />
-        <StatCard label="Terminées" value={data.completed} />
+        <StatCard label="Terminées"  value={data.completed} />
       </View>
       <View style={styles.kpiRow}>
         <StatCard label="En attente" value={data.pending} />
         <View style={styles.kpiGap} />
-        <StatCard label="À table" value={data.seated} accent={colors.cta} />
+        <StatCard label="À table"    value={data.seated} accent={colors.cta} />
       </View>
       <View style={styles.kpiRow}>
         <StatCard
@@ -254,7 +145,7 @@ function PeriodKpiSection({
       </View>
       {data.uniqueGuests > 0 && (
         <View style={styles.kpiRow}>
-          <StatCard label="Walk-ins" value={data.walkIns} />
+          <StatCard label="Walk-ins"        value={data.walkIns} />
           <View style={styles.kpiGap} />
           <StatCard label="Clients uniques" value={data.uniqueGuests} />
         </View>
@@ -295,12 +186,12 @@ function ServicesSection({
   return (
     <>
       <View style={styles.kpiRow}>
-        <StatCard label="Déjeuner" value={data.lunchCount} accent={colors.gold} />
+        <StatCard label="Déjeuner"      value={data.lunchCount}  accent={colors.gold} />
         <View style={styles.kpiGap} />
         <StatCard label="Couverts déj." value={data.lunchCovers} />
       </View>
       <View style={styles.kpiRow}>
-        <StatCard label="Dîner" value={data.dinnerCount} accent={colors.gold} />
+        <StatCard label="Dîner"         value={data.dinnerCount}  accent={colors.gold} />
         <View style={styles.kpiGap} />
         <StatCard label="Couverts dîn." value={data.dinnerCovers} />
       </View>
@@ -380,11 +271,10 @@ function SatisfactionSection({
 
   return (
     <>
-      {/* ── Enquêtes de la période ── */}
       {hasFeedback && feedbackData !== null ? (
         <>
           <View style={styles.kpiRow}>
-            <StatCard label="Avis reçus"    value={feedbackData.total} accent={colors.gold} />
+            <StatCard label="Avis reçus"    value={feedbackData.total}  accent={colors.gold} />
             <View style={styles.kpiGap} />
             <StatCard
               label="Note moyenne"
@@ -430,7 +320,6 @@ function SatisfactionSection({
         </Card>
       )}
 
-      {/* ── Historique importé — affiché séparément si disponible ── */}
       {hasSR && (
         <View style={styles.srHistoryCard}>
           <Text style={styles.srHistoryTitle}>Historique satisfaction</Text>
@@ -502,11 +391,9 @@ function CustomDateInputs({
 
 function GuestsDataSection({
   periodGuests,
-  globalGuests,
   periodLoading,
 }: {
   periodGuests: PeriodGuestStats;
-  globalGuests: GuestCounts;
   periodLoading: boolean;
 }): React.JSX.Element {
   if (periodLoading) {
@@ -518,8 +405,6 @@ function GuestsDataSection({
   }
   return (
     <>
-      {/* ── Sur la période ── */}
-      <Text style={styles.guestGroupLabel}>Sur la période</Text>
       <View style={styles.kpiRow}>
         <StatCard label="Clients uniques" value={periodGuests.uniqueReserving} />
         <View style={styles.kpiGap} />
@@ -528,40 +413,26 @@ function GuestsDataSection({
       <View style={styles.kpiRow}>
         <StatCard label="VIP période" value={periodGuests.vipReserving} accent={colors.gold} />
       </View>
-
-      {/* ── Base globale ── */}
-      <Text style={styles.guestGroupLabel}>Base globale</Text>
-      <View style={styles.kpiRow}>
-        <StatCard label="Clients"   value={globalGuests.total} />
-        <View style={styles.kpiGap} />
-        <StatCard label="VIP total" value={globalGuests.vip} accent={colors.gold} />
-      </View>
-      <View style={styles.kpiRow}>
-        <StatCard label="Avec email" value={globalGuests.withEmail} />
-      </View>
     </>
   );
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export default function SettingsScreen(): React.JSX.Element {
+export default function SettingsScreen({ navigation }: Props): React.JSX.Element {
   const { loading, error, data, refresh } = useSettingsOverview();
   const [signingOut, setSigningOut]       = useState(false);
-  const [signOutError, setSignOutError]   = useState<string | null>(null);
   const [activePeriod, setActivePeriod]   = useState<DashboardPeriod>('month');
   const [customStart, setCustomStart]     = useState('');
   const [customEnd, setCustomEnd]         = useState('');
 
-  // restaurantId is null while settings load — hooks handle null gracefully
   const restaurantId = data?.restaurant.id ?? null;
 
-  // Validate custom dates — only pass valid range to the hook
-  const customStartParsed  = parseDateString(customStart);
-  const customEndParsed    = parseDateString(customEnd);
-  const customDatesValid   = customStartParsed !== null && customEndParsed !== null && customStart <= customEnd;
-  const hookCustomStart    = activePeriod === 'custom' && customDatesValid ? customStart : undefined;
-  const hookCustomEnd      = activePeriod === 'custom' && customDatesValid ? customEnd   : undefined;
+  const customStartParsed = parseDateString(customStart);
+  const customEndParsed   = parseDateString(customEnd);
+  const customDatesValid  = customStartParsed !== null && customEndParsed !== null && customStart <= customEnd;
+  const hookCustomStart   = activePeriod === 'custom' && customDatesValid ? customStart : undefined;
+  const hookCustomEnd     = activePeriod === 'custom' && customDatesValid ? customEnd   : undefined;
 
   const customError: string | null = activePeriod !== 'custom' ? null
     : customStart.length > 0 && customStartParsed === null ? 'Date de début invalide (format AAAA-MM-JJ).'
@@ -580,17 +451,11 @@ export default function SettingsScreen(): React.JSX.Element {
 
   const handleSignOut = async (): Promise<void> => {
     setSigningOut(true);
-    setSignOutError(null);
     try {
-      const { error: signOutErr } = await supabase.auth.signOut();
-      if (signOutErr) {
-        setSignOutError(signOutErr.message);
-        setSigningOut(false);
-      }
-      // On success the RootNavigator's onAuthStateChange fires and unmounts this screen.
+      await supabase.auth.signOut();
     } catch (e) {
-      console.error('[Settings] signOut threw:', e);
-      setSignOutError('Erreur lors de la déconnexion.');
+      console.error('[Admin] signOut threw:', e);
+    } finally {
       setSigningOut(false);
     }
   };
@@ -606,7 +471,7 @@ export default function SettingsScreen(): React.JSX.Element {
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement des paramètres…</Text>
+          <Text style={styles.loadingText}>Chargement…</Text>
         </View>
       </SafeAreaView>
     );
@@ -617,7 +482,7 @@ export default function SettingsScreen(): React.JSX.Element {
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Impossible de charger les paramètres</Text>
+            <Text style={styles.errorTitle}>Impossible de charger</Text>
             <Text style={styles.errorMessage}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={handleRefreshAll}>
               <Text style={styles.retryButtonText}>Réessayer</Text>
@@ -639,8 +504,6 @@ export default function SettingsScreen(): React.JSX.Element {
 
   if (!data) return <SafeAreaView style={styles.safe} />;
 
-  const { restaurant, userProfile, shifts, floor, guests } = data;
-
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
@@ -653,12 +516,22 @@ export default function SettingsScreen(): React.JSX.Element {
           {/* ── Header ── */}
           <Text style={styles.headerLabel}>Admin</Text>
           <Text style={styles.headerTitle}>Administration</Text>
-          <Text style={styles.headerSub}>Configuration & pilotage · {restaurant.name}</Text>
+          <Text style={styles.headerSub}>Pilotage · {data.restaurant.name}</Text>
 
-          {/* ── Refresh button ── */}
-          <TouchableOpacity style={styles.refreshButton} onPress={handleRefreshAll}>
-            <Ionicons name="refresh-outline" size={16} color={colors.cta} />
-            <Text style={styles.refreshButtonText}>Actualiser</Text>
+          {/* ── Entrée Paramètres ── */}
+          <TouchableOpacity
+            style={styles.settingsEntryCard}
+            onPress={() => { navigation.navigate('AdminSettings'); }}
+            activeOpacity={0.75}
+          >
+            <View style={styles.settingsEntryIcon}>
+              <Ionicons name="settings-outline" size={20} color={colors.gold} />
+            </View>
+            <View style={styles.settingsEntryContent}>
+              <Text style={styles.settingsEntryTitle}>Paramètres</Text>
+              <Text style={styles.settingsEntrySub}>Restaurant, compte, services et configuration</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
 
           {/* ── Pilotage avancé ── */}
@@ -680,7 +553,6 @@ export default function SettingsScreen(): React.JSX.Element {
           <Text style={styles.subSectionLabel}>Clients</Text>
           <GuestsDataSection
             periodGuests={period.guests}
-            globalGuests={guests}
             periodLoading={periodLoading}
           />
 
@@ -698,109 +570,11 @@ export default function SettingsScreen(): React.JSX.Element {
             extLoading={extLoading}
           />
 
-          {/* ── Restaurant ── */}
-          <SectionHeader title="Restaurant" />
-          <Card>
-            <InfoRow label="Nom"       value={restaurant.name} />
-            {restaurant.address ? (
-              <>
-                <Divider />
-                <InfoRow label="Adresse"   value={restaurant.address} />
-              </>
-            ) : null}
-            {restaurant.phone ? (
-              <>
-                <Divider />
-                <InfoRow label="Téléphone" value={restaurant.phone} />
-              </>
-            ) : null}
-            {restaurant.email ? (
-              <>
-                <Divider />
-                <InfoRow label="Email"     value={restaurant.email} />
-              </>
-            ) : null}
-            <Divider />
-            <InfoRow label="Fuseau"       value={restaurant.timezone} />
-            <Divider />
-            <InfoRow label="Réservations" value="Téléphone uniquement" />
-          </Card>
-
-          {/* ── Compte staff ── */}
-          <SectionHeader title="Compte" />
-          <Card>
-            <InfoRow label="Nom"        value={userProfile.fullName} />
-            <Divider />
-            <InfoRow label="Rôle"       value={getRoleLabel(userProfile.role)} />
-            <Divider />
-            <InfoRow label="Restaurant" value={userProfile.restaurantName} />
-          </Card>
-
-          {/* ── Services ── */}
-          <SectionHeader title="Services" />
-          {shifts.length === 0 ? (
-            <Card>
-              <Text style={styles.emptyText}>Aucun service configuré.</Text>
-            </Card>
-          ) : (
-            shifts.map((shift, idx) => (
-              <ShiftCard key={shift.id ?? idx} shift={shift} />
-            ))
-          )}
-
-          {/* ── Plan de salle ── */}
-          <SectionHeader title="Plan de salle" />
-          <View style={styles.kpiRow}>
-            <StatCard label="Tables" value={floor.totalTables} accent={colors.gold} />
-            <View style={styles.kpiGap} />
-            <StatCard label="Zones" value={floor.zoneCount} />
-          </View>
-          {floor.zones.length > 0 && (
-            <Card>
-              {floor.zones.map((z, idx) => (
-                <React.Fragment key={z.name}>
-                  {idx > 0 && <Divider />}
-                  <ZoneRow zone={z} />
-                </React.Fragment>
-              ))}
-            </Card>
-          )}
-
-          {/* ── Fonctionnalités à venir ── */}
-          <SectionHeader title="Fonctionnalités à venir" />
-          <View style={styles.featureGrid}>
-            {FEATURES.map((f) => (
-              <FeatureCard key={f.label} icon={f.icon} label={f.label} />
-            ))}
-          </View>
-
-          {/* ── Session ── */}
-          <SectionHeader title="Session" />
-          <Card>
-            {userProfile.email ? (
-              <>
-                <InfoRow label="Email" value={userProfile.email} />
-                <Divider />
-              </>
-            ) : null}
-            <TouchableOpacity
-              style={styles.signOutButton}
-              onPress={() => { void handleSignOut(); }}
-              disabled={signingOut}
-            >
-              {signingOut ? (
-                <ActivityIndicator color={colors.cta} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="log-out-outline" size={16} color={colors.cta} />
-                  <Text style={styles.signOutText}>Se déconnecter</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            {signOutError ? (
-              <Text style={styles.signOutError}>{signOutError}</Text>
-            ) : null}
-          </Card>
+          {/* ── Actions rapides ── */}
+          <TouchableOpacity style={styles.refreshButton} onPress={handleRefreshAll}>
+            <Ionicons name="refresh-outline" size={16} color={colors.cta} />
+            <Text style={styles.refreshButtonText}>Actualiser</Text>
+          </TouchableOpacity>
 
         </View>
       </ScrollView>
@@ -893,28 +667,43 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
 
-  // Refresh button
-  refreshButton: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    alignSelf:         'flex-start',
-    gap:               spacing.xs,
-    paddingVertical:   spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor:   colors.ctaLight,
-    borderRadius:      radius.md,
-    marginBottom:      spacing.xl,
+  // Paramètres entry card
+  settingsEntryCard: {
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    padding:         spacing.lg,
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.md,
+    marginBottom:    spacing.xl,
+    ...CARD_SHADOW,
   },
-  refreshButtonText: {
+  settingsEntryIcon: {
+    width:           40,
+    height:          40,
+    borderRadius:    radius.md,
+    backgroundColor: colors.goldLight,
+    alignItems:      'center',
+    justifyContent:  'center',
+    flexShrink:      0,
+  },
+  settingsEntryContent: {
+    flex: 1,
+  },
+  settingsEntryTitle: {
     ...typography.bodyMedium,
-    color: colors.cta,
+    color:        colors.textPrimary,
+    marginBottom: 2,
+  },
+  settingsEntrySub: {
+    ...typography.small,
+    color: colors.textMuted,
   },
 
   // Section headers
   sectionTitle: {
     ...typography.h2,
     color:        colors.textPrimary,
-    marginTop:    spacing.xxl,
     marginBottom: spacing.md,
   },
 
@@ -926,38 +715,10 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
   },
 
-  // Info rows
-  infoRow: {
-    flexDirection:   'row',
-    alignItems:      'flex-start',
-    paddingVertical: spacing.sm,
-    gap:             spacing.sm,
-  },
-  infoLabel: {
-    ...typography.label,
-    color:      colors.textMuted,
-    width:      96,
-    marginTop:  2,
-    flexShrink: 0,
-  },
-  infoValue: {
-    ...typography.body,
-    color: colors.textPrimary,
-    flex:  1,
-  },
-  divider: {
-    height:           1,
-    backgroundColor:  colors.borderLight,
-    marginHorizontal: -spacing.lg,
-  },
-
   // KPI grid
   kpiRow: {
     flexDirection: 'row',
     marginBottom:  spacing.sm,
-  },
-  kpiRowGap: {
-    marginTop: 0,
   },
   kpiGap: {
     width: spacing.sm,
@@ -973,7 +734,7 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
   },
 
-  // Empty state (inside Card)
+  // Empty state
   emptyText: {
     ...typography.body,
     color:     colors.textMuted,
@@ -981,7 +742,7 @@ const styles = StyleSheet.create({
     padding:   spacing.sm,
   },
 
-  // Period selector — wrapping layout so all chips stay visible
+  // Period selector
   periodRow: {
     flexDirection: 'row',
     flexWrap:      'wrap',
@@ -1016,17 +777,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
 
-  // Lighter labels inside GuestsDataSection to distinguish period vs global
-  guestGroupLabel: {
-    ...typography.small,
-    color:        colors.textMuted,
-    marginTop:    spacing.md,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-
-  // Status breakdown — single column list, badge + count per row
+  // Status breakdown
   statusCard: {
     backgroundColor: colors.surface,
     borderRadius:    radius.lg,
@@ -1057,7 +808,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
 
-  // Satisfaction — historique importé (compact, non-technique)
+  // Satisfaction — historique importé
   srHistoryCard: {
     backgroundColor: colors.surfaceWarm,
     borderRadius:    radius.md,
@@ -1087,7 +838,7 @@ const styles = StyleSheet.create({
     color:      colors.textPrimary,
   },
 
-  // Période personnalisée — champs date
+  // Custom date inputs
   customDateBlock: {
     marginTop:    spacing.sm,
     marginBottom: spacing.xs,
@@ -1122,12 +873,12 @@ const styles = StyleSheet.create({
 
   // Satisfaction — last comment
   commentCard: {
-    backgroundColor:  colors.surfaceWarm,
-    borderRadius:     radius.lg,
-    padding:          spacing.lg,
-    marginTop:        spacing.sm,
-    borderLeftWidth:  3,
-    borderLeftColor:  colors.gold,
+    backgroundColor: colors.surfaceWarm,
+    borderRadius:    radius.lg,
+    padding:         spacing.lg,
+    marginTop:       spacing.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.gold,
   },
   commentLabel: {
     ...typography.label,
@@ -1140,142 +891,24 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Shift cards
-  shiftCard: {
-    backgroundColor: colors.surface,
-    borderRadius:    radius.lg,
-    padding:         spacing.lg,
-    marginBottom:    spacing.sm,
-    ...CARD_SHADOW,
-  },
-  shiftHeader: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-    marginBottom:   spacing.xs,
-  },
-  shiftName: {
-    ...typography.bodyMedium,
-    color: colors.textPrimary,
-  },
-  shiftBadge: {
-    backgroundColor:   colors.goldLight,
-    borderRadius:      radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical:   2,
-  },
-  shiftBadgeText: {
-    ...typography.label,
-    color: colors.gold,
-  },
-  shiftHours: {
-    ...typography.h2,
-    color:        colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  shiftMeta: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.sm,
-  },
-  shiftMetaItem: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.xs,
-  },
-  shiftMetaText: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-  shiftMetaDot: {
-    width:           3,
-    height:          3,
-    borderRadius:    2,
-    backgroundColor: colors.sandLight,
-  },
-
-  // Zone rows
-  zoneRow: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    paddingVertical: spacing.sm,
-    gap:             spacing.sm,
-  },
-  zoneIcon: {
-    width:           28,
-    height:          28,
-    borderRadius:    radius.sm,
-    backgroundColor: colors.goldLight,
-    alignItems:      'center',
-    justifyContent:  'center',
-    flexShrink:      0,
-  },
-  zoneName: {
-    ...typography.body,
-    color: colors.textPrimary,
-    flex:  1,
-  },
-  zoneCount: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-
-  // Feature grid
-  featureGrid: {
-    flexDirection: 'row',
-    flexWrap:      'wrap',
-    gap:           spacing.sm,
-    marginBottom:  spacing.sm,
-  },
-  featureCard: {
-    backgroundColor: colors.surface,
-    borderRadius:    radius.lg,
-    padding:         spacing.lg,
-    width:           '48%',
-    gap:             spacing.sm,
-    alignItems:      'flex-start',
-    ...CARD_SHADOW,
-  },
-  featureLabel: {
-    ...typography.bodyMedium,
-    color: colors.textSecondary,
-    flex:  1,
-  },
-  featureBadge: {
-    backgroundColor:   colors.borderLight,
-    borderRadius:      radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical:   2,
-  },
-  featureBadgeText: {
-    ...typography.label,
-    color: colors.textMuted,
-  },
-
-  // Sign-out
-  signOutButton: {
+  // Refresh button (actions rapides)
+  refreshButton: {
     flexDirection:     'row',
     alignItems:        'center',
-    justifyContent:    'center',
-    gap:               spacing.sm,
-    paddingVertical:   spacing.md,
-    marginTop:         spacing.xs,
-    borderRadius:      radius.md,
-    borderWidth:       1,
-    borderColor:       colors.cta,
+    alignSelf:         'flex-start',
+    gap:               spacing.xs,
+    paddingVertical:   spacing.sm,
+    paddingHorizontal: spacing.md,
     backgroundColor:   colors.ctaLight,
-    minHeight:         44,
+    borderRadius:      radius.md,
+    marginTop:         spacing.xl,
   },
-  signOutText: {
+  refreshButtonText: {
     ...typography.bodyMedium,
     color: colors.cta,
   },
-  signOutError: {
-    ...typography.small,
-    color:     colors.cta,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-  },
+
+  // Sign-out (error state)
   signOutButtonSmall: {
     marginTop:       spacing.md,
     alignItems:      'center',
@@ -1284,7 +917,7 @@ const styles = StyleSheet.create({
   },
   signOutTextSmall: {
     ...typography.small,
-    color:               colors.textMuted,
-    textDecorationLine:  'underline',
+    color:              colors.textMuted,
+    textDecorationLine: 'underline',
   },
 });
