@@ -77,7 +77,6 @@ export type PeriodFeedbackStats = {
 export type PeriodGuestStats = {
   uniqueReserving: number;
   walkIns: number;
-  newGuests: number;
   vipReserving: number;
 };
 
@@ -125,7 +124,7 @@ const EMPTY_RES: PeriodReservationStats = {
 const INITIAL_STATS: PeriodStatsResult = {
   reservations: { ...EMPTY_RES },
   feedback: null,
-  guests: { uniqueReserving: 0, walkIns: 0, newGuests: 0, vipReserving: 0 },
+  guests: { uniqueReserving: 0, walkIns: 0, vipReserving: 0 },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -227,7 +226,7 @@ export function usePeriodStats(restaurantId: string | null, period: DashboardPer
     const myId           = ++fetchIdRef.current;
     const { start, end } = getPeriodDateRange(p);
 
-    const [resResult, fbResult, newGuestsResult] = await Promise.all([
+    const [resResult, fbResult] = await Promise.all([
       supabase
         .from('reservations')
         .select('status, party_size, notes, guest_id, source, time_slot')
@@ -242,14 +241,6 @@ export function usePeriodStats(restaurantId: string | null, period: DashboardPer
         .select('rating_overall, rating_food, rating_drinks, rating_service, rating_ambience, recommended, comment, created_at')
         .eq('restaurant_id', resId)
         .order('created_at', { ascending: false }),
-
-      // Count guests created in the period (no row data loaded)
-      supabase
-        .from('guests')
-        .select('*', { count: 'exact', head: true })
-        .eq('restaurant_id', resId)
-        .gte('created_at', start)
-        .lt('created_at', addDaysToDateString(end, 1)),
     ]);
 
     // Discard stale responses when the period changed mid-flight
@@ -299,7 +290,6 @@ export function usePeriodStats(restaurantId: string | null, period: DashboardPer
       guests: {
         uniqueReserving: resStats.uniqueGuests,
         walkIns:         resStats.walkIns,
-        newGuests:       newGuestsResult.count ?? 0,
         vipReserving,
       },
     });

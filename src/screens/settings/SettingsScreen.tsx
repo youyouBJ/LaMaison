@@ -499,26 +499,26 @@ function GuestsDataSection({
   }
   return (
     <>
+      {/* ── Sur la période ── */}
+      <Text style={styles.guestGroupLabel}>Sur la période</Text>
       <View style={styles.kpiRow}>
-        <StatCard label="Clients uniques"  value={periodGuests.uniqueReserving} />
+        <StatCard label="Clients uniques" value={periodGuests.uniqueReserving} />
         <View style={styles.kpiGap} />
-        <StatCard label="Nouveaux clients" value={periodGuests.newGuests} />
+        <StatCard label="Walk-ins"        value={periodGuests.walkIns} />
       </View>
       <View style={styles.kpiRow}>
-        <StatCard label="Walk-ins" value={periodGuests.walkIns} />
-        <View style={styles.kpiGap} />
-        <StatCard label="VIP"      value={periodGuests.vipReserving} accent={colors.gold} />
+        <StatCard label="VIP période" value={periodGuests.vipReserving} accent={colors.gold} />
       </View>
-      <Text style={styles.subSectionLabel}>Base clients</Text>
+
+      {/* ── Base globale ── */}
+      <Text style={styles.guestGroupLabel}>Base globale</Text>
       <View style={styles.kpiRow}>
-        <StatCard label="Total clients" value={globalGuests.total} />
+        <StatCard label="Clients"   value={globalGuests.total} />
         <View style={styles.kpiGap} />
-        <StatCard label="VIP"           value={globalGuests.vip} accent={colors.gold} />
+        <StatCard label="VIP total" value={globalGuests.vip} accent={colors.gold} />
       </View>
       <View style={styles.kpiRow}>
-        <StatCard label="Avec téléphone" value={globalGuests.withPhone} />
-        <View style={styles.kpiGap} />
-        <StatCard label="Avec email"     value={globalGuests.withEmail} />
+        <StatCard label="Avec email" value={globalGuests.withEmail} />
       </View>
     </>
   );
@@ -627,7 +627,7 @@ export default function SettingsScreen(): React.JSX.Element {
           <Text style={styles.subSectionLabel}>Réservations</Text>
           <PeriodKpiSection data={period.reservations} loading={periodLoading} />
 
-          <Text style={styles.subSectionLabel}>Données clients</Text>
+          <Text style={styles.subSectionLabel}>Clients</Text>
           <GuestsDataSection
             periodGuests={period.guests}
             globalGuests={guests}
@@ -966,6 +966,16 @@ const styles = StyleSheet.create({
     color:        colors.textMuted,
     marginTop:    spacing.lg,
     marginBottom: spacing.sm,
+  },
+
+  // Lighter labels inside GuestsDataSection to distinguish period vs global
+  guestGroupLabel: {
+    ...typography.small,
+    color:        colors.textMuted,
+    marginTop:    spacing.md,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
   },
 
   // Status breakdown
