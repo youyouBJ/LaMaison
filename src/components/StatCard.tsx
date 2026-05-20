@@ -6,13 +6,14 @@ type Props = {
   label: string;
   value: number;
   accent?: string;
+  valueText?: string;
 };
 
-export default function StatCard({ label, value, accent }: Props): React.JSX.Element {
+export default function StatCard({ label, value, accent, valueText }: Props): React.JSX.Element {
   return (
     <View style={styles.card}>
       <Text style={[styles.value, accent ? { color: accent } : null]}>
-        {value}
+        {valueText ?? value}
       </Text>
       <Text style={styles.label} numberOfLines={1}>{label}</Text>
     </View>

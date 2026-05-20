@@ -107,10 +107,10 @@ export default function MainTabs(): React.JSX.Element {
         name="Settings"
         component={SettingsScreen}
         options={{
-          tabBarLabel: 'Paramètres',
+          tabBarLabel: 'Admin',
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
             <Ionicons
-              name={(focused ? 'settings' : 'settings-outline') as IoniconsName}
+              name={(focused ? 'shield-checkmark' : 'shield-checkmark-outline') as IoniconsName}
               size={TAB_ICON_SIZE}
               color={color}
             />

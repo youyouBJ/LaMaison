@@ -217,9 +217,9 @@ export default function SettingsScreen(): React.JSX.Element {
         <View style={styles.container}>
 
           {/* ── Header ── */}
-          <Text style={styles.headerLabel}>Paramètres</Text>
-          <Text style={styles.headerTitle}>Configuration</Text>
-          <Text style={styles.headerSub}>{restaurant.name}</Text>
+          <Text style={styles.headerLabel}>Admin</Text>
+          <Text style={styles.headerTitle}>Administration</Text>
+          <Text style={styles.headerSub}>Configuration & pilotage · {restaurant.name}</Text>
 
           {/* ── Refresh button ── */}
           <TouchableOpacity style={styles.refreshButton} onPress={refresh}>

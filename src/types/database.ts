@@ -431,6 +431,93 @@ export interface Database {
         Relationships: [];
       };
 
+      // ── feedback_survey_links ─────────────────────────────────────────────
+      // Ajouté dans 004_feedback_surveys.sql
+      feedback_survey_links: {
+        Row: {
+          id:             string;
+          restaurant_id:  string;
+          reservation_id: string | null;
+          guest_id:       string | null;
+          token:          string;
+          expires_at:     string;
+          used_at:        string | null;
+          created_at:     string;
+        };
+        Insert: {
+          id?:             string;
+          restaurant_id:   string;
+          reservation_id?: string | null;
+          guest_id?:       string | null;
+          token?:          string;
+          expires_at?:     string;
+          used_at?:        string | null;
+          created_at?:     string;
+        };
+        Update: {
+          id?:             string;
+          restaurant_id?:  string;
+          reservation_id?: string | null;
+          guest_id?:       string | null;
+          token?:          string;
+          expires_at?:     string;
+          used_at?:        string | null;
+          created_at?:     string;
+        };
+        Relationships: [];
+      };
+
+      // ── feedback_surveys ──────────────────────────────────────────────────
+      // Ajouté dans 004_feedback_surveys.sql
+      feedback_surveys: {
+        Row: {
+          id:              string;
+          restaurant_id:   string;
+          reservation_id:  string | null;
+          guest_id:        string | null;
+          link_id:         string | null;
+          rating_overall:  number;
+          rating_food:     number | null;
+          rating_drinks:   number | null;
+          rating_service:  number | null;
+          rating_ambience: number | null;
+          recommended:     boolean | null;
+          comment:         string | null;
+          created_at:      string;
+        };
+        Insert: {
+          id?:              string;
+          restaurant_id:    string;
+          reservation_id?:  string | null;
+          guest_id?:        string | null;
+          link_id?:         string | null;
+          rating_overall:   number;
+          rating_food?:     number | null;
+          rating_drinks?:   number | null;
+          rating_service?:  number | null;
+          rating_ambience?: number | null;
+          recommended?:     boolean | null;
+          comment?:         string | null;
+          created_at?:      string;
+        };
+        Update: {
+          id?:              string;
+          restaurant_id?:   string;
+          reservation_id?:  string | null;
+          guest_id?:        string | null;
+          link_id?:         string | null;
+          rating_overall?:  number;
+          rating_food?:     number | null;
+          rating_drinks?:   number | null;
+          rating_service?:  number | null;
+          rating_ambience?: number | null;
+          recommended?:     boolean | null;
+          comment?:         string | null;
+          created_at?:      string;
+        };
+        Relationships: [];
+      };
+
       // ── notifications_log ────────────────────────────────────────────────
       notifications_log: {
         Row: {

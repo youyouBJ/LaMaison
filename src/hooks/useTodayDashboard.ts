@@ -71,7 +71,6 @@ function computeStats(rows: DashboardReservation[]): DashboardStats {
 
   for (const r of rows) {
     byStatus[r.status]++;
-    totalCovers += r.party_size;
 
     const isUpcoming =
       (r.status === 'confirmed' || r.status === 'pending') &&
@@ -81,9 +80,10 @@ function computeStats(rows: DashboardReservation[]): DashboardStats {
       nextReservation = r;
     }
 
-    // Service breakdown — active reservations only
+    // Covers and service breakdown — active reservations only (not cancelled/noshow)
     const isActive = r.status !== 'cancelled' && r.status !== 'noshow';
     if (isActive) {
+      totalCovers += r.party_size;
       if (r.source === 'walkin') walkInCount++;
 
       const shiftName = r.shifts?.name?.toLowerCase() ?? '';
