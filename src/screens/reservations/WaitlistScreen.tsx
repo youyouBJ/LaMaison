@@ -399,7 +399,14 @@ export default function WaitlistScreen({ navigation }: Props): React.JSX.Element
           {/* ── Header ── */}
           <View style={styles.headerRow}>
             <View>
-              <Text style={styles.headerLabel}>Réservations</Text>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => { navigation.goBack(); }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={'chevron-back' as IoniconsName} size={16} color={colors.cta} />
+                <Text style={styles.backButtonText}>Réservations</Text>
+              </TouchableOpacity>
               <Text style={styles.headerTitle}>Liste d'attente</Text>
             </View>
             <TouchableOpacity
@@ -551,7 +558,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginBottom: spacing.xl,
   },
-  headerLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing.xs },
+  backButton: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing.xs,
+    marginBottom:  spacing.xs,
+    alignSelf:     'flex-start',
+  },
+  backButtonText: {
+    ...typography.label,
+    color: colors.cta,
+  },
   headerTitle: { ...typography.h1, color: colors.textPrimary },
   addButton: {
     flexDirection: 'row',

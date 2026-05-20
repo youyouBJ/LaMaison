@@ -184,33 +184,33 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
               <Text style={styles.headerLabel}>Réservations</Text>
               <Text style={styles.headerTitle}>Planning</Text>
             </View>
-            <View style={styles.headerButtons}>
-              <View style={styles.waitlistBtnWrapper}>
-                <TouchableOpacity
-                  style={styles.waitlistButton}
-                  onPress={() => navigation.navigate('Waitlist')}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name={'time-outline' as IoniconsName} size={16} color={colors.gold} />
-                  <Text style={styles.waitlistButtonText}>Attente</Text>
-                </TouchableOpacity>
-                {waitlistWaitingCount > 0 ? (
-                  <View style={styles.waitlistBadge}>
-                    <Text style={styles.waitlistBadgeText}>
-                      {waitlistWaitingCount > 99 ? '99+' : waitlistWaitingCount}
-                    </Text>
-                  </View>
-                ) : null}
+            <TouchableOpacity
+              style={styles.newButton}
+              onPress={() => navigation.navigate('NewReservation')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={'add' as IoniconsName} size={18} color={colors.textOnDark} />
+              <Text style={styles.newButtonText}>Nouvelle</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* ── Accès liste d'attente ── */}
+          <View style={styles.waitlistBtnWrapper}>
+            <TouchableOpacity
+              style={styles.waitlistButton}
+              onPress={() => navigation.navigate('Waitlist')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={'time-outline' as IoniconsName} size={16} color={colors.gold} />
+              <Text style={styles.waitlistButtonText}>En attente de table</Text>
+            </TouchableOpacity>
+            {waitlistWaitingCount > 0 ? (
+              <View style={styles.waitlistBadge}>
+                <Text style={styles.waitlistBadgeText}>
+                  {waitlistWaitingCount > 99 ? '99+' : waitlistWaitingCount}
+                </Text>
               </View>
-              <TouchableOpacity
-                style={styles.newButton}
-                onPress={() => navigation.navigate('NewReservation')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name={'add' as IoniconsName} size={18} color={colors.textOnDark} />
-                <Text style={styles.newButtonText}>Nouvelle</Text>
-              </TouchableOpacity>
-            </View>
+            ) : null}
           </View>
 
           {/* ── Sélecteur de date ── */}
@@ -404,17 +404,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.sm,
   },
   headerLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing.xs },
   headerTitle: { ...typography.h1, color: colors.textPrimary },
-  headerButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
   waitlistBtnWrapper: {
-    position: 'relative',
+    position:     'relative',
+    alignSelf:    'flex-start',
+    marginBottom: spacing.xl,
   },
   waitlistButton: {
     flexDirection: 'row',
