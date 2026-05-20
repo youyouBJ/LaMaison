@@ -280,17 +280,83 @@ Pour chaque groupe, le rapport inclut `merged_data_preview` :
 
 ---
 
-## Prochaine étape : outil de validation humaine et application contrôlée (V4)
+## Étape 4 : application contrôlée des fusions (crm:merge:dry-run / crm:merge:apply)
 
-Un script ou écran dédié permettrait de :
+Le script `apply-crm-merge-plan.ts` lit `crm-merge-plan-preview.json` et applique les fusions pour les groupes low risk dont le master a été sélectionné sur des données réelles.
 
-1. Charger les groupes `ready_for_review` depuis `crm-merge-plan-preview.json`.
+### Filtres d'éligibilité (V1)
+
+Un groupe est traité uniquement si **tous** ces critères sont remplis :
+
+| Critère | Valeur requise |
+|---------|----------------|
+| `recommended_action` | `ready_for_review` |
+| `risk_level` | `low` |
+| Taille du groupe | 2 fiches exactement |
+| `enrichment_partial` | `false` |
+| `master_selection_reason` | ne contient pas "défaut", "default" ou "partiel" |
+
+Sur les 242 groupes `ready_for_review` de la prévisualisation, **183 sont éligibles** (59 exclus car master choisi par défaut).
+
+### Modes d'exécution
+
+```bash
+# Simulation — lecture seule, aucune écriture
+npm run crm:merge:dry-run
+
+# Application réelle — confirmation explicite requise
+npm run crm:merge:apply -- --confirm=MERGE_LOW_RISK_CRM
+```
+
+Le token `--confirm=MERGE_LOW_RISK_CRM` est requis en mode `--apply`. Sans lui, le script s'arrête avec une erreur.
+
+### Ce que fait chaque fusion (mode APPLY)
+
+1. **Réassignation des foreign keys** : `reservations.guest_id`, `waitlist.guest_id`, `feedback_survey_links.guest_id`, `feedback_surveys.guest_id` → tous pointés vers le master.
+2. **Mise à jour du master** : téléphone, email, prénom, nom (si manquants sur le master), vip (union), avg_rating (meilleur non nul), birthday, last_visit (la plus récente), notes (concaténées avec `---`), tags (union lowercase dédupliquée triée).
+3. **Le doublon n'est pas supprimé (V1)** : la fiche reste dans la base mais n'a plus de réservations associées. Stratégie : `kept_as_is_v1`.
+
+### Niveaux de risque et guard-rails
+
+- Seuls les groupes `risk_level = low` sont traités.
+- Le script lit les données fraîches depuis Supabase avant chaque fusion (non basé sur le cache de la prévisualisation).
+- Si le master ou le doublon est introuvable en base, le groupe est marqué `skipped`.
+- Si une erreur survient sur une table FK, elle est loggée mais n'annule pas les autres étapes.
+
+### Limitation V1 : permissions Supabase
+
+La clé `service_role` a accès en lecture/écriture sur `guests`, mais les tables `reservations`, `waitlist`, `feedback_survey_links` et `feedback_surveys` peuvent être protégées par des politiques RLS. Si les GRANTs ne sont pas configurés :
+
+- En **DRY RUN** : les colonnes `res / wait / fb` affichent `?` — la simulation reste valide, seuls les comptes de rattachement sont inconnus.
+- En **APPLY** : les UPDATE sur ces tables échoueront avec `permission denied`. Le script les log et marque le groupe `failed`.
+
+Pour débloquer :
+```sql
+GRANT SELECT, UPDATE ON reservations TO service_role;
+GRANT SELECT, UPDATE ON waitlist TO service_role;
+GRANT SELECT, UPDATE ON feedback_survey_links TO service_role;
+GRANT SELECT, UPDATE ON feedback_surveys TO service_role;
+```
+
+### Rapports générés
+
+| Fichier | Contenu |
+|---------|---------|
+| `reports/crm-merge-dry-run.json` | Simulation complète avec prévisualisation des updates |
+| `reports/crm-merge-dry-run.csv` | Version CSV pour revue dans un tableur |
+| `reports/crm-merge-apply-result.json` | Résultats réels après application |
+| `reports/crm-merge-apply-result.csv` | Version CSV du résultat appliqué |
+
+---
+
+## Prochaine étape : outil de validation humaine (V2)
+
+Un écran dédié dans l'interface admin permettrait de :
+
+1. Charger les groupes `human_validation_required` depuis `crm-merge-plan-preview.json`.
 2. Pour chaque groupe, afficher les fiches côte à côte avec leurs réservations.
 3. Permettre à l'admin de **confirmer** (fusionner) ou **rejeter** (marquer comme homonymes distincts).
-4. Déclencher la fusion Supabase de manière contrôlée :
-   - Rerouter `reservations.guest_id` vers la fiche maître.
-   - Fusionner tags et notes.
-   - Marquer les doublons comme `merged_into: master_id` (soft delete recommandé).
+4. Déclencher la fusion Supabase de manière contrôlée.
 5. Logger chaque action de fusion pour auditabilité et rollback.
 
 ---
@@ -315,8 +381,14 @@ npm run crm:audit
 # Étape 2 — Synthèse priorisée (lecture seule, instantané)
 npm run crm:audit:summary
 
-# Étape 3 — Prévisualisation des fusions (lecture seule, enrichissement Supabase optionnel)
+# Étape 3 — Prévisualisation des fusions (lecture seule, enrichissement Supabase)
 npm run crm:merge:preview
+
+# Étape 4a — Simulation des fusions low risk (lecture seule)
+npm run crm:merge:dry-run
+
+# Étape 4b — Application réelle des fusions low risk (écriture Supabase)
+npm run crm:merge:apply -- --confirm=MERGE_LOW_RISK_CRM
 
 # Vérifier les types TypeScript
 npm run typecheck:scripts
@@ -326,3 +398,5 @@ Rapports générés :
 - `reports/crm-quality-audit.json` / `.csv` — toutes les issues brutes
 - `reports/crm-quality-summary.json` / `.csv` — synthèse priorisée + top 100
 - `reports/crm-merge-plan-preview.json` / `.csv` — prévisualisation des fusions avec master recommandé
+- `reports/crm-merge-dry-run.json` / `.csv` — simulation des fusions éligibles
+- `reports/crm-merge-apply-result.json` / `.csv` — résultats après application réelle

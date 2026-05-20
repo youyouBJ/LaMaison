@@ -13,7 +13,9 @@
     "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit",
     "crm:audit": "tsx scripts/audit-guests-quality.ts",
     "crm:audit:summary": "tsx scripts/summarize-crm-audit.ts",
-    "crm:merge:preview": "tsx scripts/prepare-crm-merge-preview.ts"
+    "crm:merge:preview": "tsx scripts/prepare-crm-merge-preview.ts",
+    "crm:merge:dry-run": "tsx scripts/apply-crm-merge-plan.ts --dry-run --limit=20",
+    "crm:merge:apply": "tsx scripts/apply-crm-merge-plan.ts --apply --limit=20"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
