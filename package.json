@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "import:sevenrooms": "tsx scripts/import-sevenrooms-guests.ts",
     "seed:floor": "tsx scripts/seed-floor-plan.ts",
+    "tables:update-capacities": "tsx scripts/update-table-capacities.ts",
     "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit"
   },
   "dependencies": {

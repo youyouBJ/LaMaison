@@ -39,10 +39,21 @@ Stack à ne jamais changer sauf décision explicite.
 - Session persistante (AsyncStorage)
 - Redirection automatique auth ↔ app
 
-### Dashboard
-- Vue du jour : couverts confirmés, taux d'occupation, réservations du soir
-- Statistiques via `useTodayDashboard`
-- KPI "À appeler aujourd'hui" : nombre de réservations du jour avec téléphone disponible, statut pending/confirmed, pas encore contactées
+### Accueil (Dashboard)
+- Vue opérationnelle du jour uniquement — realtime via `useTodayDashboard`
+- KPIs : total réservations, couverts actifs, confirmées, à table, en attente, terminées
+- Waitlist en attente du jour (via `useDashboardExtended`)
+- KPI "À appeler" : réservations du jour avec téléphone disponible, statut pending/confirmed
+- Liste "Prochaines arrivées" avec statut, VIP, table assignée
+- Actions rapides : Nouvelle réservation, Plan, Attente, Clients
+
+### Admin (pilotage avancé)
+- Sélecteur de période : Aujourd'hui / 7 jours / 30 jours / Mois / Année
+- KPIs réservations par période : total, couverts, confirmées, terminées, annulées, no-show, walk-ins, occasions
+- Répartition services : déjeuner / dîner avec couverts
+- Répartition statuts : grille visuelle avec taux d'annulation et no-show
+- Satisfaction client unifiée : note globale SevenRooms (clients notés avec `avg_rating > 0`) + enquêtes in-app par période
+- Configuration : restaurant, compte staff, services (shifts), plan de salle, données clients
 
 ### Réservations
 - Liste par date avec sélecteur calendrier
@@ -111,8 +122,12 @@ Stack à ne jamais changer sauf décision explicite.
 - Génération d'un token public de 32 caractères par réservation, sans données client exposées
 - Idempotent : une même réservation reçoit toujours le même lien
 - Envoi via WhatsApp ou email (manuel V1)
-- Formulaire : notes 1–5 sur 5 dimensions, recommandation Oui/Non, commentaire libre
-- URL de base configurable dans `src/utils/feedbackSurvey.ts` (non encore déployée en production)
+- Formulaire hébergé sur Vercel : `https://lamaison-feedback.vercel.app/feedback?token=<token>`
+- Notes 1–5 sur 5 dimensions (global, cuisine, boissons, service, ambiance), recommandation Oui/Non, commentaire libre
+- Réponses stockées dans `feedback_surveys`, agrégées dans Admin par période
+- Sources de satisfaction affichées séparément :
+  - **SevenRooms** : `guests.avg_rating > 0` (historique importé, toutes périodes)
+  - **In-app** : `feedback_surveys` filtré par période sélectionnée
 
 ### Suppression client
 - Vérification des données liées (réservations, entrées waitlist) avant toute suppression
@@ -346,5 +361,7 @@ git commit -m "feat: description du module"
 | [docs/reservations.md](docs/reservations.md) | Architecture réservations multi-tables |
 | [docs/development-workflow.md](docs/development-workflow.md) | Workflow de développement |
 | [docs/known-issues.md](docs/known-issues.md) | Problèmes connus et points de vigilance |
+| [docs/dashboard.md](docs/dashboard.md) | Architecture Accueil / Admin — KPIs, hooks, satisfaction |
+| [docs/feedback-surveys.md](docs/feedback-surveys.md) | Module enquête satisfaction (tokens, formulaire, agrégation) |
 | [supabase/README.md](supabase/README.md) | Setup Supabase détaillé (migrations, RLS, shifts) |
 | [BACKLOG.md](BACKLOG.md) | Backlog priorisé |

@@ -1,6 +1,6 @@
 # Backlog — La Maison
 
-Dernière mise à jour : 2026-05-19
+Dernière mise à jour : 2026-05-20
 
 ---
 
@@ -18,10 +18,29 @@ Dernière mise à jour : 2026-05-19
 - [x] Session persistante (AsyncStorage)
 - [x] Redirection automatique auth ↔ app
 
-### Dashboard
-- [x] Vue du jour : couverts, taux occupation, réservations soir
-- [x] Hook `useTodayDashboard`
+### Accueil (Dashboard — service du jour)
+- [x] Vue du jour : couverts actifs, confirmées, à table, en attente, terminées
+- [x] Hook `useTodayDashboard` avec realtime subscription
 - [x] KPI "À appeler aujourd'hui" (réservations du jour avec téléphone, statut pending/confirmed, non encore contactées)
+- [x] Waitlist en attente du jour via `useDashboardExtended`
+- [x] Liste "Prochaines arrivées" (max 8, triées par créneau)
+- [x] Actions rapides (Réservations, Plan, Attente, Clients)
+
+### Admin (pilotage avancé)
+- [x] Sélecteur de période : Aujourd'hui / 7 jours / 30 jours / Mois / Année
+- [x] KPIs réservations par période via `usePeriodStats`
+- [x] Répartition services (déjeuner / dîner) par période
+- [x] Répartition statuts par période avec taux annulation / no-show
+- [x] Satisfaction client unifiée : SevenRooms (`avg_rating > 0`) + enquêtes in-app par période
+- [x] Bug `avg_rating = 0` corrigé : les valeurs nulles et zéro sont exclues de la moyenne
+
+### Enquête satisfaction
+- [x] Token public 32 char par réservation (`feedback_survey_links`)
+- [x] Idempotent (même réservation = même lien)
+- [x] Envoi WhatsApp / email (manuel V1)
+- [x] Formulaire Vercel (`https://lamaison-feedback.vercel.app/feedback`)
+- [x] Table `feedback_surveys` : notes 5 dimensions + recommandation + commentaire
+- [x] Types TypeScript `feedback_surveys` dans `src/types/database.ts`
 
 ### Réservations
 - [x] Liste par date
@@ -85,7 +104,7 @@ Dernière mise à jour : 2026-05-19
 ## P0 — À faire avant go-live
 
 - [ ] **Navigation plan → détail réservation** : tapper une table réservée ouvre le détail de la réservation associée
-- [ ] **Paramètres admin** : shifts (horaires, créneaux), tables (capacité, zone), gestion staff
+- [x] **Paramètres admin V1** : restaurant (nom, adresse, tél, email, timezone), services (horaires, jours, slot, couverts max), tables (label, zone, capacité), réservations en lecture seule — voir `docs/settings.md`
 - [ ] **Tests end-to-end manuels** : parcours complet création/service/clôture d'une réservation
 - [ ] **Polish iPad** : vérifier les layouts sur grand écran (si iPad disponible)
 - [ ] **Go-live restaurant La Maison** : formation équipe, données réelles en prod

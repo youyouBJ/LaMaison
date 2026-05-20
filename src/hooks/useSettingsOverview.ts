@@ -4,6 +4,7 @@ import type { Database } from '../types/database';
 
 type RestaurantRow = Database['public']['Tables']['restaurants']['Row'];
 type ShiftRow      = Database['public']['Tables']['shifts']['Row'];
+type TableRow      = Database['public']['Tables']['tables']['Row'];
 
 export type ZoneSummary = {
   name: string;
@@ -36,6 +37,7 @@ export type SettingsData = {
   shifts: ShiftRow[];
   floor: FloorSummary;
   guests: GuestCounts;
+  tableRows: TableRow[];
 };
 
 export function useSettingsOverview() {
@@ -118,6 +120,7 @@ export function useSettingsOverview() {
           withPhone: phoneResult.count  ?? 0,
           withEmail: emailResult.count  ?? 0,
         },
+        tableRows,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue.');
