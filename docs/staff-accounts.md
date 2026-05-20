@@ -195,10 +195,15 @@ Supabase Auth → email "Réinitialiser le mot de passe" → utilisateur
 ### Section Équipe dans l'app
 
 - Admin → Paramètres → section "Équipe"
-- Visible uniquement pour les rôles `admin` et `manager` (conforme au RLS `users_select_own_or_team`)
+- **V1 : visible uniquement pour le compte owner `youssefbenjema@gmail.com`**
+  (même si un autre compte a le rôle `admin` ou `manager`, il ne voit pas cette section)
 - Chaque membre : nom, badge rôle, bouton "Renvoyer invitation"
 - Le bouton est désactivé pour l'utilisateur courant ("Vous")
-- Loading → "Invitation envoyée" ✓ → ou message d'erreur
+- Loading → **"Envoyée ✓"** pendant 30 secondes → revient automatiquement à "Renvoyer invitation"
+- Permet de renvoyer plusieurs fois sans recharger l'écran
+- En cas d'erreur : message rouge, bouton immédiatement disponible
+
+> La gestion équipe multi-admin (plusieurs owners) est prévue en V2.
 
 ### Déploiement de l'Edge Function
 

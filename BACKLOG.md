@@ -120,10 +120,10 @@ Dernière mise à jour : 2026-05-20
 
 ## P1 — Post go-live (comptes / équipe)
 
-- [x] **Section Équipe dans l'app** : liste des membres du restaurant (admins/managers), bouton "Renvoyer invitation" — `AdminSettingsScreen` + `useTeamMembers` + `useStaffInvite`
+- [x] **Section Équipe dans l'app** : visible uniquement pour le compte owner (`youssefbenjema@gmail.com`), bouton "Renvoyer invitation" avec reset 30s — `AdminSettingsScreen` + `useTeamMembers` + `useStaffInvite`
 - [x] **Edge Function `send-staff-invite`** : envoi sécurisé d'email d'invitation depuis l'app — service_role uniquement côté serveur, vérification rôle + restaurant
 - [ ] **Déployer `send-staff-invite`** : `supabase functions deploy send-staff-invite` + `supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...` — voir `docs/staff-accounts.md`
-- [ ] **Ajout/suppression de membres** : depuis l'app (section Équipe actuellement en lecture seule)
+- [ ] **Gestion équipe multi-admin (V2)** : visibilité section Équipe par rôle `admin` (pas seulement owner email hardcodé), ajout/suppression de membres depuis l'app
 - [ ] **Permissions fines `waiter`** : accès lectures uniquement, sans insert réservation
 - [ ] **Indicateur d'environnement** : badge "Environnement test" si `restaurantName === "La Maison Test"`
 

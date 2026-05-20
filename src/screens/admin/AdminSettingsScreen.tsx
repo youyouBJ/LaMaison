@@ -454,10 +454,12 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
     updateTable,
   } = useTableSettings(restaurantId);
 
-  // Team section (admins and managers only — matches users_select_own_or_team RLS policy)
-  const canManageTeam = localData?.userProfile.role === 'admin' || localData?.userProfile.role === 'manager';
+  // Section Équipe visible uniquement pour le compte owner (Youssef) — V1
+  // La gestion multi-admin est prévue en V2 (voir BACKLOG.md).
+  const OWNER_EMAIL = 'youssefbenjema@gmail.com';
+  const isOwnerAccount = localData?.userProfile.email === OWNER_EMAIL;
   const { members: teamMembers, loading: teamLoading, error: teamError } = useTeamMembers(
-    canManageTeam ? restaurantId : null,
+    isOwnerAccount ? restaurantId : null,
   );
   const { sendInvite, getStatus, getError: getInviteError } = useStaffInvite();
 
@@ -814,7 +816,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           </Card>
 
           {/* ── 3. Équipe ── */}
-          {canManageTeam && (
+          {isOwnerAccount && (
             <>
               <SectionHeader title="Équipe" />
               {teamLoading ? (
@@ -841,7 +843,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                           fullName={member.fullName}
                           role={member.role}
                           isSelf={isSelf}
-                          canInvite={canManageTeam}
+                          canInvite={isOwnerAccount}
                           status={getStatus(member.id)}
                           errorMsg={getInviteError(member.id)}
                           onInvite={id => { void sendInvite(id); }}
