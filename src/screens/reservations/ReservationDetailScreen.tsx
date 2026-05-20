@@ -16,7 +16,7 @@ import { formatReadableDate, formatTimeSlot } from '../../utils/date';
 import { getReservationStatusLabel, getReservationStatusColors } from '../../utils/reservationStatus';
 import StatusBadge from '../../components/StatusBadge';
 import SectionCard from '../../components/SectionCard';
-import VipBadge from '../../components/VipBadge';
+import ReservationBadges from '../../components/ReservationBadges';
 import PrimaryButton from '../../components/PrimaryButton';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { ReservationStatus } from '../../types/database';
@@ -287,8 +287,8 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                   <Text style={styles.guestMeta}>{r.guests.email}</Text>
                 ) : null}
               </View>
-              {isVip && <VipBadge />}
             </View>
+            <ReservationBadges isVip={isVip} isBirthday={isBirthday} isEvent={isEvent} />
           </SectionCard>
 
           {/* ── Contact client ── */}
@@ -371,22 +371,6 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
               <DetailRow label="Table" value={formatReservationTables(r.tables, r.reservation_tables)} />
               <DetailRow label="Statut" value={<StatusBadge status={r.status} />} />
               <DetailRow label="Origine" value={r.source} />
-              {(isBirthday || isEvent) ? (
-                <DetailRow label="Occasion" value={
-                  <View style={styles.occasionBadges}>
-                    {isBirthday ? (
-                      <View style={styles.birthdayBadge}>
-                        <Text style={styles.birthdayText}>Anniversaire</Text>
-                      </View>
-                    ) : null}
-                    {isEvent ? (
-                      <View style={styles.eventBadge}>
-                        <Text style={styles.eventText}>Événement</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                } />
-              ) : null}
               {cleanNotes ? <DetailRow label="Notes" value={cleanNotes} /> : null}
             </View>
           </SectionCard>
@@ -574,11 +558,13 @@ const styles = StyleSheet.create({
   // Reservation header
   resHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    rowGap: spacing.sm,
     marginBottom: spacing.xl,
   },
-  resHeaderTime: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  resHeaderTime: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexShrink: 0 },
   timeChip: {
     backgroundColor: colors.goldLight,
     borderRadius: radius.sm,
@@ -601,34 +587,10 @@ const styles = StyleSheet.create({
   statusPillText: { ...typography.label },
 
   // Guest
-  guestRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  guestRow: { flexDirection: 'row', alignItems: 'flex-start' },
   guestInfo: { flex: 1, gap: spacing.xs },
   guestName: { ...typography.bodyMedium, color: colors.textPrimary },
   guestMeta: { ...typography.small, color: colors.textMuted },
-  occasionBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    justifyContent: 'flex-end',
-  },
-  birthdayBadge: {
-    backgroundColor: colors.goldLight,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: colors.gold,
-  },
-  birthdayText: { ...typography.label, color: colors.gold },
-  eventBadge: {
-    backgroundColor: colors.ctaLight,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: colors.cta,
-  },
-  eventText: { ...typography.label, color: colors.cta },
 
   // Detail grid
   detailGrid: { gap: 0 },

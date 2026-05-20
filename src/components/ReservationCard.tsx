@@ -6,7 +6,7 @@ import { formatReservationTables } from '../utils/reservationTables';
 import { reservationNeedsPhoneConfirmation } from '../utils/reservationConfirmation';
 import { isBirthdayReservation, isEventReservation } from '../utils/reservationOccasion';
 import StatusBadge from './StatusBadge';
-import VipBadge from './VipBadge';
+import ReservationBadges from './ReservationBadges';
 import type { ReservationWithJoins } from '../types/reservations';
 import {
   openWhatsAppMessage,
@@ -161,17 +161,6 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
       <View style={styles.info}>
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{guestDisplayName(r)}</Text>
-          {isVip && <VipBadge small />}
-          {isBirthday && (
-            <View style={styles.birthdayBadge}>
-              <Text style={styles.birthdayText}>Anniversaire</Text>
-            </View>
-          )}
-          {isEvent && (
-            <View style={styles.eventBadge}>
-              <Text style={styles.eventText}>Événement</Text>
-            </View>
-          )}
           {needsCall && (
             <View style={styles.callBadge}>
               <Text style={styles.callBadgeText}>À appeler</Text>
@@ -183,9 +172,12 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
           {phone ? ` · ${phone}` : ''}
           {(r.tables ?? r.reservation_tables?.length) ? ` · ${formatReservationTables(r.tables, r.reservation_tables)}` : ''}
         </Text>
-        <View style={styles.bottomRow}>
+        <ReservationBadges isVip={isVip} isBirthday={isBirthday} isEvent={isEvent} />
+        <View style={styles.statusRow}>
           <StatusBadge status={r.status} />
-          <View style={styles.bottomActions}>
+        </View>
+        {(showWhatsApp || showEmail || phone) ? (
+          <View style={styles.actionsRow}>
             {showWhatsApp ? (
               <TouchableOpacity
                 style={[styles.waButton, surveyLoading && r.status === 'completed' ? styles.waButtonDisabled : null]}
@@ -216,7 +208,7 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
               </TouchableOpacity>
             ) : null}
           </View>
-        </View>
+        ) : null}
         {waFeedback ? (
           <Text style={[styles.waFeedbackText, waFeedback.ok ? styles.waFeedbackOk : styles.waFeedbackErr]}>
             {waFeedback.text}
@@ -275,34 +267,10 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     flex: 1,
   },
-  birthdayBadge: {
-    backgroundColor: colors.goldLight,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: colors.gold,
-  },
-  birthdayText: {
-    ...typography.label,
-    color: colors.gold,
-  },
-  eventBadge: {
-    backgroundColor: colors.ctaLight,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: colors.cta,
-  },
-  eventText: {
-    ...typography.label,
-    color: colors.cta,
-  },
   meta: {
     ...typography.small,
     color: colors.textMuted,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   callBadge: {
     backgroundColor: colors.ctaLight,
@@ -316,15 +284,15 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.cta,
   },
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  statusRow: {
+    marginTop: spacing.xs,
   },
-  bottomActions: {
+  actionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.xs,
+    marginTop: spacing.xs,
   },
   callButton: {
     backgroundColor: colors.goldLight,
