@@ -170,14 +170,102 @@ Renseignez-les dans `scripts/staff-accounts.config.ts` puis lancez le dry-run po
 
 ---
 
-## Ce qui reste à faire (V2)
+---
 
-- [ ] **Gestion équipe dans l'app** : liste des membres du staff (admins/managers seulement) avec ajout/suppression depuis l'app
-- [ ] **Permissions fines `waiter`** : accès lectures uniquement (sans insert réservation)
-- [ ] **Révocation de compte** : désactivation d'un auth user via le Dashboard Supabase
-- [ ] **Rotation des liens** : script pour regénérer les liens de configuration expirés
-- [ ] **Indicateur d'environnement** : badge "Environnement test" dans l'app si le restaurant s'appelle "La Maison Test"
+## Envoi d'invitation depuis l'app (Edge Function)
+
+### Architecture
+
+```
+App (admin/manager)
+  │  supabase.functions.invoke('send-staff-invite', { targetUserId })
+  ▼
+Edge Function  supabase/functions/send-staff-invite/index.ts
+  │  1. Valide JWT de l'appelant
+  │  2. Vérifie rôle admin/manager dans public.users
+  │  3. Vérifie que la cible appartient au même restaurant
+  │  4. Récupère l'email via auth.admin.getUserById (service_role côté serveur)
+  │  5. POST /auth/v1/recover → Supabase envoie l'email
+  ▼
+Supabase Auth → email "Réinitialiser le mot de passe" → utilisateur
+```
+
+**La `service_role` key reste uniquement dans l'Edge Function — jamais dans l'app mobile.**
+
+### Section Équipe dans l'app
+
+- Admin → Paramètres → section "Équipe"
+- Visible uniquement pour les rôles `admin` et `manager` (conforme au RLS `users_select_own_or_team`)
+- Chaque membre : nom, badge rôle, bouton "Renvoyer invitation"
+- Le bouton est désactivé pour l'utilisateur courant ("Vous")
+- Loading → "Invitation envoyée" ✓ → ou message d'erreur
+
+### Déploiement de l'Edge Function
+
+```bash
+# Installer Supabase CLI si nécessaire
+npm install -g supabase
+
+# Se connecter
+supabase login
+
+# Déployer la fonction
+supabase functions deploy send-staff-invite --project-ref nosflczsevtrxnyienyn
+
+# Configurer les secrets (une seule fois)
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<votre_service_role_key> \
+  --project-ref nosflczsevtrxnyienyn
+
+# Optionnel : URL de redirection après configuration du mot de passe
+supabase secrets set REDIRECT_URL=https://votre-app.com \
+  --project-ref nosflczsevtrxnyienyn
+```
+
+> SUPABASE_URL et SUPABASE_ANON_KEY sont fournis automatiquement par Supabase.
+> Ne jamais écrire la service_role key dans le code ou dans Git.
+
+### Variables de l'Edge Function
+
+| Variable | Source | Requis |
+|---|---|---|
+| `SUPABASE_URL` | Automatique (Supabase) | Oui |
+| `SUPABASE_ANON_KEY` | Automatique (Supabase) | Oui |
+| `SUPABASE_SERVICE_ROLE_KEY` | `supabase secrets set` | Oui |
+| `REDIRECT_URL` | `supabase secrets set` | Non |
+
+### Vérifications de sécurité de l'Edge Function
+
+| Vérification | Comportement en cas d'échec |
+|---|---|
+| JWT absent | 401 Non authentifié |
+| JWT invalide ou expiré | 401 Session invalide |
+| Profil public.users absent | 401 Profil introuvable |
+| Rôle host ou waiter | 403 Accès refusé |
+| targetUserId absent / invalide | 400 |
+| Cible dans un autre restaurant | 403 |
+| Aucun compte Auth pour cet ID | 404 |
+| Pas d'email sur le compte | 400 |
+| Erreur envoi email Supabase | 500 |
+
+### Scripts terminal (toujours disponibles en fallback)
+
+```bash
+npm run staff:prepare:dry-run
+npm run staff:prepare:apply -- --confirm=CREATE_STAFF_ACCOUNTS
+npm run test:seed:dry-run
+npm run test:seed:apply -- --confirm=CREATE_TEST_RESTAURANT
+```
 
 ---
 
-*Document créé le 2026-05-20.*
+## Ce qui reste à faire (V2)
+
+- [ ] **Ajout/suppression de membres** : depuis l'app (actuellement lecture seule dans Équipe)
+- [ ] **Permissions fines `waiter`** : accès lectures uniquement (sans insert réservation)
+- [ ] **Révocation de compte** : désactivation d'un auth user via le Dashboard Supabase
+- [ ] **Indicateur d'environnement** : badge "Environnement test" dans l'app si le restaurant s'appelle "La Maison Test"
+- [ ] **Email automatique (Resend)** : remplacement de l'SMTP intégré Supabase par Resend pour un meilleur contrôle des templates d'invitation
+
+---
+
+*Document créé le 2026-05-20. Mis à jour le 2026-05-21 (Edge Function send-staff-invite).*

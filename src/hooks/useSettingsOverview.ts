@@ -25,10 +25,11 @@ export type GuestCounts = {
 };
 
 export type UserProfile = {
-  fullName: string;
-  role: string;
+  id:             string;
+  fullName:       string;
+  role:           string;
   restaurantName: string;
-  email: string | null;
+  email:          string | null;
 };
 
 export type SettingsData = {
@@ -103,6 +104,7 @@ export function useSettingsOverview() {
       setData({
         restaurant: restaurantResult.data,
         userProfile: {
+          id:             authData.user.id,
           fullName:       profile.full_name,
           role:           profile.role,
           restaurantName: restaurantResult.data.name,

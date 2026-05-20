@@ -16,6 +16,8 @@ import { useSettingsOverview, type SettingsData } from '../../hooks/useSettingsO
 import { useRestaurantSettings } from '../../hooks/useRestaurantSettings';
 import { useShiftSettings } from '../../hooks/useShiftSettings';
 import { useTableSettings } from '../../hooks/useTableSettings';
+import { useTeamMembers }   from '../../hooks/useTeamMembers';
+import { useStaffInvite }   from '../../hooks/useStaffInvite';
 import { supabase } from '../../lib/supabase';
 import type { AdminStackParamList } from '../../navigation/AdminNavigator';
 import type { Database } from '../../types/database';
@@ -353,6 +355,72 @@ function ChannelRow({ channel }: { channel: Channel }): React.JSX.Element {
   );
 }
 
+function TeamMemberRow({
+  id,
+  fullName,
+  role,
+  isSelf,
+  canInvite,
+  status,
+  errorMsg,
+  onInvite,
+}: {
+  id:        string;
+  fullName:  string;
+  role:      string;
+  isSelf:    boolean;
+  canInvite: boolean;
+  status:    'idle' | 'loading' | 'success' | 'error';
+  errorMsg:  string | null;
+  onInvite:  (id: string) => void;
+}): React.JSX.Element {
+  const roleLabel = ROLE_LABELS[role] ?? role;
+
+  return (
+    <View style={styles.teamMemberRow}>
+      <View style={styles.teamMemberInfo}>
+        <Text style={styles.teamMemberName}>{fullName}</Text>
+        <View style={styles.teamMemberRoleBadge}>
+          <Text style={styles.teamMemberRoleText}>{roleLabel}</Text>
+        </View>
+        {errorMsg !== null && (
+          <Text style={styles.teamInviteError} numberOfLines={2}>{errorMsg}</Text>
+        )}
+      </View>
+
+      {canInvite && !isSelf && (
+        <TouchableOpacity
+          style={[
+            styles.inviteButton,
+            status === 'loading' && styles.inviteButtonDisabled,
+            status === 'success' && styles.inviteButtonSuccess,
+          ]}
+          onPress={() => { onInvite(id); }}
+          disabled={status === 'loading' || status === 'success'}
+          activeOpacity={0.8}
+        >
+          {status === 'loading' ? (
+            <ActivityIndicator color={colors.textOnDark} size="small" />
+          ) : status === 'success' ? (
+            <>
+              <Ionicons name="checkmark" size={13} color={colors.statusFree} />
+              <Text style={styles.inviteButtonSuccessText}>Envoyée</Text>
+            </>
+          ) : (
+            <Text style={styles.inviteButtonText}>Renvoyer invitation</Text>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {isSelf && (
+        <View style={styles.selfBadge}>
+          <Text style={styles.selfBadgeText}>Vous</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function AdminSettingsScreen({ navigation }: Props): React.JSX.Element {
@@ -385,6 +453,13 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
     savedId: savedTableId,
     updateTable,
   } = useTableSettings(restaurantId);
+
+  // Team section (admins and managers only — matches users_select_own_or_team RLS policy)
+  const canManageTeam = localData?.userProfile.role === 'admin' || localData?.userProfile.role === 'manager';
+  const { members: teamMembers, loading: teamLoading, error: teamError } = useTeamMembers(
+    canManageTeam ? restaurantId : null,
+  );
+  const { sendInvite, getStatus, getError: getInviteError } = useStaffInvite();
 
   // Sign-out
   const [signingOut, setSigningOut]     = useState(false);
@@ -738,7 +813,48 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             ) : null}
           </Card>
 
-          {/* ── 3. Services ── */}
+          {/* ── 3. Équipe ── */}
+          {canManageTeam && (
+            <>
+              <SectionHeader title="Équipe" />
+              {teamLoading ? (
+                <Card>
+                  <ActivityIndicator color={colors.gold} size="small" />
+                </Card>
+              ) : teamError !== null ? (
+                <Card>
+                  <Text style={styles.emptyText}>{teamError}</Text>
+                </Card>
+              ) : teamMembers.length === 0 ? (
+                <Card>
+                  <Text style={styles.emptyText}>Aucun membre trouvé.</Text>
+                </Card>
+              ) : (
+                <Card>
+                  {teamMembers.map((member, idx) => {
+                    const isSelf = member.id === localData?.userProfile.id;
+                    return (
+                      <React.Fragment key={member.id}>
+                        {idx > 0 && <Divider />}
+                        <TeamMemberRow
+                          id={member.id}
+                          fullName={member.fullName}
+                          role={member.role}
+                          isSelf={isSelf}
+                          canInvite={canManageTeam}
+                          status={getStatus(member.id)}
+                          errorMsg={getInviteError(member.id)}
+                          onInvite={id => { void sendInvite(id); }}
+                        />
+                      </React.Fragment>
+                    );
+                  })}
+                </Card>
+              )}
+            </>
+          )}
+
+          {/* ── 4. Services ── */}
           <SectionHeader title="Services" />
 
           {shifts.length === 0 ? (
@@ -847,7 +963,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             })
           )}
 
-          {/* ── 4. Tables ── */}
+          {/* ── 5. Tables ── */}
           <SectionHeader title="Tables" />
 
           <Card>
@@ -956,7 +1072,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             </>
           )}
 
-          {/* ── 5. Réservations ── */}
+          {/* ── 6. Réservations ── */}
           <SectionHeader title="Réservations" />
 
           <Card>
@@ -1007,7 +1123,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             </View>
           </Card>
 
-          {/* ── 6. Canaux et intégrations ── */}
+          {/* ── 7. Canaux et intégrations ── */}
           <SectionHeader title="Canaux et intégrations" />
           <Card>
             {CHANNELS.map((ch, idx) => (
@@ -1018,7 +1134,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             ))}
           </Card>
 
-          {/* ── 7. Session ── */}
+          {/* ── 8. Session ── */}
           <SectionHeader title="Session" />
           <Card>
             <TouchableOpacity
@@ -1593,6 +1709,81 @@ const styles = StyleSheet.create({
   },
   channelBadgeText: {
     ...typography.label,
+  },
+
+  // Team section
+  teamMemberRow: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    paddingVertical: spacing.sm,
+    gap:             spacing.sm,
+    minHeight:       48,
+  },
+  teamMemberInfo: {
+    flex: 1,
+    gap:  2,
+  },
+  teamMemberName: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
+  },
+  teamMemberRoleBadge: {
+    alignSelf:         'flex-start',
+    backgroundColor:   colors.goldLight,
+    borderRadius:      radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   1,
+    marginTop:         2,
+  },
+  teamMemberRoleText: {
+    ...typography.label,
+    color: colors.gold,
+  },
+  teamInviteError: {
+    ...typography.small,
+    color:     colors.cta,
+    marginTop: spacing.xs,
+  },
+  inviteButton: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing.xs,
+    paddingVertical:   spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius:      radius.md,
+    borderWidth:       1,
+    borderColor:       colors.cta,
+    backgroundColor:   colors.ctaLight,
+    flexShrink:        0,
+    minHeight:         36,
+  },
+  inviteButtonDisabled: {
+    opacity: 0.6,
+  },
+  inviteButtonSuccess: {
+    borderColor:     colors.statusFree,
+    backgroundColor: colors.statusFreeLight,
+  },
+  inviteButtonText: {
+    ...typography.small,
+    color:      colors.cta,
+    fontFamily: 'Inter_500Medium',
+  },
+  inviteButtonSuccessText: {
+    ...typography.small,
+    color:      colors.statusFree,
+    fontFamily: 'Inter_500Medium',
+  },
+  selfBadge: {
+    backgroundColor:   colors.borderLight,
+    borderRadius:      radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   2,
+    flexShrink:        0,
+  },
+  selfBadgeText: {
+    ...typography.label,
+    color: colors.textMuted,
   },
 
   // Session
