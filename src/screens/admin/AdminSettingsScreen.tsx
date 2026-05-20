@@ -401,6 +401,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
   const [shiftFormError, setShiftFormError] = useState<string | null>(null);
 
   // Table edit
+  const [tablesExpanded, setTablesExpanded] = useState(false);
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const [tableDraft, setTableDraft]         = useState<TableDraft>({ label: '', zone: '', capacity: '' });
   const [tableFormError, setTableFormError] = useState<string | null>(null);
@@ -515,6 +516,16 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
       },
     );
   }, [editingShiftId, shiftDraft, updateShift]);
+
+  const handleToggleTables = useCallback((): void => {
+    setTablesExpanded(prev => {
+      if (prev) {
+        setEditingTableId(null);
+        setTableFormError(null);
+      }
+      return !prev;
+    });
+  }, []);
 
   const handleStartEditTable = useCallback((table: TableRow): void => {
     setTableDraft({
@@ -839,79 +850,110 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           {/* ── 4. Tables ── */}
           <SectionHeader title="Tables" />
 
-          <View style={styles.planNotice}>
-            <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
-            <Text style={styles.planNoticeText}>
-              Position, forme et suppression des tables se gèrent dans le plan de salle. Seuls le nom, la zone et la capacité sont modifiables ici.
-            </Text>
-          </View>
-
-          {tablesByZone.length === 0 ? (
-            <Card>
-              <Text style={styles.emptyText}>Aucune table configurée.</Text>
-            </Card>
-          ) : (
-            tablesByZone.map(({ zone, tables }) => (
-              <View key={zone} style={styles.zoneBlock}>
-                <Text style={styles.zoneHeader}>{zone}</Text>
-                <Card>
-                  {tables.map((table, idx) => {
-                    const isEditing = editingTableId === table.id;
-                    const isSaving  = savingTableId  === table.id;
-                    const isSaved   = savedTableId   === table.id;
-
-                    return (
-                      <React.Fragment key={table.id}>
-                        {idx > 0 && <Divider />}
-
-                        {isEditing ? (
-                          <View style={styles.tableEditForm}>
-                            <View style={styles.twoColRow}>
-                              <View style={styles.twoColItem}>
-                                <EditInput
-                                  label="Numéro / Nom"
-                                  value={tableDraft.label}
-                                  onChangeText={v => { setTableDraft(p => ({ ...p, label: v })); }}
-                                  placeholder="T1"
-                                  autoCapitalize="none"
-                                />
-                              </View>
-                              <View style={styles.twoColItem}>
-                                <EditInput
-                                  label="Capacité"
-                                  value={tableDraft.capacity}
-                                  onChangeText={v => { setTableDraft(p => ({ ...p, capacity: v })); }}
-                                  placeholder="4"
-                                  keyboardType="numeric"
-                                />
-                              </View>
-                            </View>
-                            <ZoneChipPicker
-                              selected={tableDraft.zone}
-                              zones={availableZones}
-                              onSelect={zone => { setTableDraft(p => ({ ...p, zone })); }}
-                            />
-                            {tableFormError !== null && <FormError error={tableFormError} />}
-                            {tableSaveError !== null && <FormError error={tableSaveError} />}
-                            <ActionButtons onSave={handleSaveTable} onCancel={handleCancelTable} saving={isSaving} />
-                          </View>
-                        ) : (
-                          <View style={styles.tableRow}>
-                            <View style={styles.tableInfo}>
-                              <Text style={styles.tableLabel}>{table.label}</Text>
-                              <Text style={styles.tableMeta}>{table.capacity} pax</Text>
-                            </View>
-                            {isSaved
-                              ? <Text style={styles.savedText}>Enregistré</Text>
-                              : <EditButton onPress={() => { handleStartEditTable(table); }} />}
-                          </View>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </Card>
+          <Card>
+            <View style={styles.tableSummaryRow}>
+              <View style={styles.tableSummaryInfo}>
+                <Text style={styles.tableSummaryTitle}>Capacités, zones et libellés</Text>
+                <Text style={styles.tableSummaryMeta}>
+                  {localData.tableRows.length} table{localData.tableRows.length > 1 ? 's' : ''}
+                  {'  ·  '}
+                  {tablesByZone.length} zone{tablesByZone.length > 1 ? 's' : ''}
+                </Text>
               </View>
-            ))
+              <TouchableOpacity
+                style={styles.manageTablesButton}
+                onPress={handleToggleTables}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.manageTablesText}>
+                  {tablesExpanded ? 'Masquer' : 'Gérer les tables'}
+                </Text>
+                <Ionicons
+                  name={tablesExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={colors.cta}
+                />
+              </TouchableOpacity>
+            </View>
+          </Card>
+
+          {tablesExpanded && (
+            <>
+              <View style={styles.planNotice}>
+                <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+                <Text style={styles.planNoticeText}>
+                  Position, forme et suppression des tables se gèrent dans le plan de salle. Seuls le nom, la zone et la capacité sont modifiables ici.
+                </Text>
+              </View>
+
+              {tablesByZone.length === 0 ? (
+                <Card>
+                  <Text style={styles.emptyText}>Aucune table configurée.</Text>
+                </Card>
+              ) : (
+                tablesByZone.map(({ zone, tables }) => (
+                  <View key={zone} style={styles.zoneBlock}>
+                    <Text style={styles.zoneHeader}>{zone}</Text>
+                    <Card>
+                      {tables.map((table, idx) => {
+                        const isEditing = editingTableId === table.id;
+                        const isSaving  = savingTableId  === table.id;
+                        const isSaved   = savedTableId   === table.id;
+
+                        return (
+                          <React.Fragment key={table.id}>
+                            {idx > 0 && <Divider />}
+
+                            {isEditing ? (
+                              <View style={styles.tableEditForm}>
+                                <View style={styles.twoColRow}>
+                                  <View style={styles.twoColItem}>
+                                    <EditInput
+                                      label="Numéro / Nom"
+                                      value={tableDraft.label}
+                                      onChangeText={v => { setTableDraft(p => ({ ...p, label: v })); }}
+                                      placeholder="T1"
+                                      autoCapitalize="none"
+                                    />
+                                  </View>
+                                  <View style={styles.twoColItem}>
+                                    <EditInput
+                                      label="Capacité"
+                                      value={tableDraft.capacity}
+                                      onChangeText={v => { setTableDraft(p => ({ ...p, capacity: v })); }}
+                                      placeholder="4"
+                                      keyboardType="numeric"
+                                    />
+                                  </View>
+                                </View>
+                                <ZoneChipPicker
+                                  selected={tableDraft.zone}
+                                  zones={availableZones}
+                                  onSelect={z => { setTableDraft(p => ({ ...p, zone: z })); }}
+                                />
+                                {tableFormError !== null && <FormError error={tableFormError} />}
+                                {tableSaveError !== null && <FormError error={tableSaveError} />}
+                                <ActionButtons onSave={handleSaveTable} onCancel={handleCancelTable} saving={isSaving} />
+                              </View>
+                            ) : (
+                              <View style={styles.tableRow}>
+                                <View style={styles.tableInfo}>
+                                  <Text style={styles.tableLabel}>{table.label}</Text>
+                                  <Text style={styles.tableMeta}>{table.capacity} pax</Text>
+                                </View>
+                                {isSaved
+                                  ? <Text style={styles.savedText}>Enregistré</Text>
+                                  : <EditButton onPress={() => { handleStartEditTable(table); }} />}
+                              </View>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </Card>
+                  </View>
+                ))
+              )}
+            </>
           )}
 
           {/* ── 5. Réservations ── */}
@@ -1353,6 +1395,42 @@ const styles = StyleSheet.create({
     alignItems:     'center',
     justifyContent: 'space-between',
     marginTop:      spacing.md,
+  },
+
+  // Table summary (collapsed state)
+  tableSummaryRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    gap:            spacing.md,
+  },
+  tableSummaryInfo: {
+    flex: 1,
+  },
+  tableSummaryTitle: {
+    ...typography.bodyMedium,
+    color:        colors.textPrimary,
+    marginBottom: 2,
+  },
+  tableSummaryMeta: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  manageTablesButton: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing.xs,
+    paddingVertical:   spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius:      radius.md,
+    borderWidth:       1,
+    borderColor:       colors.cta,
+    backgroundColor:   colors.ctaLight,
+    flexShrink:        0,
+  },
+  manageTablesText: {
+    ...typography.bodyMedium,
+    color: colors.cta,
   },
 
   // Table section
