@@ -4,6 +4,9 @@
 > Tester aussi sur iPad quand disponible.  
 > Cocher chaque case uniquement après vérification réelle sur l'appareil.
 
+> **Note :** Cette checklist servira de base au futur document interactif TestFlight.  
+> Voir `BACKLOG.md` — tâche "Créer checklist interactive de test TestFlight".
+
 ---
 
 ## 1. Auth
