@@ -110,6 +110,20 @@ Dernière mise à jour : 2026-05-20
 - [ ] **Polish iPad** : vérifier les layouts sur grand écran (si iPad disponible)
 - [ ] **Go-live restaurant La Maison** : formation équipe, données réelles en prod
 
+### Comptes staff et environnement de test
+
+- [ ] **Fournir les emails staff** : renseigner les emails de Youssef, Anis, Nabil, iPad Resto et Testeur dans `scripts/staff-accounts.config.ts` — voir `docs/staff-accounts.md`
+- [ ] **Créer les comptes réels** : `npm run staff:prepare:apply -- --confirm=CREATE_STAFF_ACCOUNTS` après renseignement des emails — transmettre les liens de configuration (24h) à chaque personne
+- [ ] **Créer l'environnement test** : `npm run test:seed:apply -- --confirm=CREATE_TEST_RESTAURANT` — noter le restaurant_id test affiché
+
+---
+
+## P1 — Post go-live (comptes / équipe)
+
+- [ ] **Gestion équipe dans l'app** : liste des membres du staff (admins/managers) avec ajout/suppression depuis l'app — données déjà protégées par RLS
+- [ ] **Permissions fines `waiter`** : accès lectures uniquement, sans insert réservation
+- [ ] **Indicateur d'environnement** : badge "Environnement test" si `restaurantName === "La Maison Test"`
+
 ---
 
 ## P1 — Post go-live

@@ -16,7 +16,11 @@
     "crm:merge:preview": "tsx scripts/prepare-crm-merge-preview.ts",
     "crm:merge:dry-run": "tsx scripts/apply-crm-merge-plan.ts --dry-run --limit=20",
     "crm:merge:dry-run:related": "tsx scripts/apply-crm-merge-plan.ts --dry-run --only-with-related --limit=20",
-    "crm:merge:apply": "tsx scripts/apply-crm-merge-plan.ts --apply --limit=20"
+    "crm:merge:apply": "tsx scripts/apply-crm-merge-plan.ts --apply --limit=20",
+    "staff:prepare:dry-run": "tsx scripts/prepare-staff-accounts.ts",
+    "staff:prepare:apply": "tsx scripts/prepare-staff-accounts.ts --apply",
+    "test:seed:dry-run": "tsx scripts/seed-test-restaurant.ts",
+    "test:seed:apply": "tsx scripts/seed-test-restaurant.ts --apply"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
