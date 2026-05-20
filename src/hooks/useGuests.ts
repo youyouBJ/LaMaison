@@ -9,6 +9,10 @@ import { getTodayDateString } from '../utils/date';
 import type { GuestSortOption, GuestFilterState } from '../types/guests';
 import { DEFAULT_SORT, DEFAULT_FILTERS } from '../types/guests';
 
+function minSearchLength(q: string): number {
+  return /^\d+$/.test(q) ? 3 : 2;
+}
+
 type GuestRow = Database['public']['Tables']['guests']['Row'];
 
 type PageResult =
@@ -158,6 +162,14 @@ export function useGuests() {
   const hasMoreRef         = useRef(true);
   // Incremented on every reset so stale loadMore appends are discarded.
   const fetchGenerationRef = useRef(0);
+  // Refs kept in sync with state so debounce callbacks always see latest values.
+  const sortRef            = useRef<GuestSortOption>(DEFAULT_SORT);
+  const filtersRef         = useRef<GuestFilterState>(DEFAULT_FILTERS);
+  const debounceTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep mirror refs current on every render.
+  sortRef.current    = sort;
+  filtersRef.current = filters;
 
   const fetchPage = useCallback(async (
     resId: string,
@@ -223,6 +235,39 @@ export function useGuests() {
 
   useEffect(() => { void loadInitial(); }, [loadInitial]);
 
+  // Auto-search: fires on every query change, debounced 300 ms.
+  // Empty query resets immediately to the full paginated list.
+  useEffect(() => {
+    if (!initialLoadedRef.current) return;
+    const resId = restaurantIdRef.current;
+    if (!resId) return;
+
+    const q = query.trim();
+
+    if (q.length === 0) {
+      queryRef.current = '';
+      setLoading(true);
+      void fetchPage(resId, '', sortRef.current, filtersRef.current, 0, false).finally(() => setLoading(false));
+      return;
+    }
+
+    if (q.length < minSearchLength(q)) return;
+
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      queryRef.current = q;
+      setLoading(true);
+      void fetchPage(resId, q, sortRef.current, filtersRef.current, 0, false).finally(() => setLoading(false));
+    }, 300);
+
+    return () => {
+      if (debounceTimerRef.current !== null) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, [query, fetchPage]);
+
   // Auto-refetch (reset to page 0) when sort or filters change — only after initial load.
   useEffect(() => {
     if (!initialLoadedRef.current) return;
@@ -241,15 +286,11 @@ export function useGuests() {
     finally { setLoading(false); }
   }, [query, sort, filters, fetchPage]);
 
-  const clearSearch = useCallback(async (): Promise<void> => {
-    const resId = restaurantIdRef.current;
-    setQuery('');
+  const clearSearch = useCallback((): void => {
     queryRef.current = '';
-    if (!resId) return;
-    setLoading(true);
-    try { await fetchPage(resId, '', sort, filters, 0, false); }
-    finally { setLoading(false); }
-  }, [sort, filters, fetchPage]);
+    setQuery('');
+    // The auto-search effect detects query === '' and resets the list immediately.
+  }, []);
 
   const refresh = useCallback(async (): Promise<void> => {
     const resId = restaurantIdRef.current;

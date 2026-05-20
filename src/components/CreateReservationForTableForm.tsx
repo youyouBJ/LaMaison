@@ -518,7 +518,7 @@ export default function CreateReservationForTableForm({
                 style={styles.input}
                 value={searchQuery}
                 onChangeText={handleSearchGuests}
-                placeholder="Rechercher un client par nom, tél, email…"
+                placeholder="Rechercher par nom, téléphone ou email"
                 placeholderTextColor={colors.textMuted}
                 returnKeyType="search"
               />
@@ -544,6 +544,8 @@ export default function CreateReservationForTableForm({
                     </TouchableOpacity>
                   ))}
                 </View>
+              ) : !searchLoading && searchQuery.trim().length >= 2 ? (
+                <Text style={styles.noResultsHint}>Aucun client trouvé</Text>
               ) : null}
               <TouchableOpacity
                 style={styles.newGuestTrigger}
@@ -774,6 +776,12 @@ const styles = StyleSheet.create({
 
   // Guest — search
   searchSpinner: { marginTop: spacing.sm },
+  noResultsHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
+  },
   searchResults: {
     backgroundColor: colors.surface,
     borderRadius:    radius.md,

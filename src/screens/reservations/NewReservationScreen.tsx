@@ -175,10 +175,6 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
         : [...prev.selectedTableIds, tid],
     }));
 
-  const handleSearch = () => {
-    void searchGuests(form.guestSearchQuery);
-  };
-
   const handleSubmit = async () => {
     setValidationError(null);
     setError(null);
@@ -357,25 +353,25 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                 </View>
               ) : (
                 <View>
-                  {/* Recherche */}
+                  {/* Recherche automatique */}
                   <View style={styles.searchRow}>
                     <TextInput
                       style={styles.searchInput}
-                      placeholder="Téléphone, nom ou email"
+                      placeholder="Rechercher par nom, téléphone ou email"
                       placeholderTextColor={colors.textMuted}
                       value={form.guestSearchQuery}
-                      onChangeText={(t) => setForm((prev) => ({ ...prev, guestSearchQuery: t }))}
-                      onSubmitEditing={handleSearch}
+                      onChangeText={(t) => {
+                        setForm((prev) => ({ ...prev, guestSearchQuery: t }));
+                        searchGuests(t);
+                      }}
                       returnKeyType="search"
                       autoCapitalize="none"
                     />
-                    <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
-                      {searchLoading
-                        ? <ActivityIndicator color={colors.textOnDark} size="small" />
-                        : <Text style={styles.searchBtnText}>Chercher</Text>}
-                    </TouchableOpacity>
+                    {searchLoading ? (
+                      <ActivityIndicator color={colors.gold} size="small" />
+                    ) : null}
                   </View>
-                  {guestSearchResults.length > 0 && (
+                  {guestSearchResults.length > 0 ? (
                     <View style={styles.searchResults}>
                       {guestSearchResults.map((g) => (
                         <TouchableOpacity
@@ -391,7 +387,9 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                         </TouchableOpacity>
                       ))}
                     </View>
-                  )}
+                  ) : !searchLoading && form.guestSearchQuery.trim().length >= 2 ? (
+                    <Text style={styles.noResultsHint}>Aucun client trouvé</Text>
+                  ) : null}
 
                   {/* Nouveau client */}
                   <Text style={styles.newClientLabel}>Nouveau client</Text>
@@ -664,7 +662,7 @@ const styles = StyleSheet.create({
   },
 
   // Guest search
-  searchRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   searchInput: {
     flex: 1,
     ...typography.body,
@@ -676,16 +674,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  searchBtn: {
-    backgroundColor: colors.cta,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    justifyContent: 'center',
-    minWidth: 80,
-    alignItems: 'center',
+  noResultsHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginBottom: spacing.sm,
   },
-  searchBtnText: { ...typography.small, color: colors.textOnDark },
   searchResults: {
     borderRadius: radius.sm,
     borderWidth: 1,

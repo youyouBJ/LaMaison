@@ -66,13 +66,10 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
     toggleFilter,
     resetFilters,
     activeFilterCount,
-    search,
-    clearSearch,
     refresh,
   } = useGuests();
 
-  const handleSearch = (): void => { void search(); };
-  const handleClear = (): void => { void clearSearch(); };
+  const handleClear = (): void => { setQuery(''); };
   const handleRefresh = useCallback((): void => { void refresh(); }, [refresh]);
   const handleEndReached = useCallback((): void => {
     if (!loadingMore && hasMore) void loadMore();
@@ -191,25 +188,22 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
         <View style={styles.searchBarContent}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Téléphone, nom ou email"
+            placeholder="Rechercher par nom, téléphone ou email"
             placeholderTextColor={colors.textMuted}
             value={query}
             onChangeText={setQuery}
-            onSubmitEditing={handleSearch}
             returnKeyType="search"
             autoCapitalize="none"
             autoCorrect={false}
           />
+          {loading ? (
+            <ActivityIndicator color={colors.gold} size="small" />
+          ) : null}
           {query.length > 0 ? (
             <TouchableOpacity style={styles.clearBtn} onPress={handleClear}>
               <Text style={styles.clearBtnText}>Effacer</Text>
             </TouchableOpacity>
           ) : null}
-          <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
-            {loading
-              ? <ActivityIndicator color={colors.textOnDark} size="small" />
-              : <Text style={styles.searchBtnText}>Rechercher</Text>}
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -396,21 +390,6 @@ const styles = StyleSheet.create({
   clearBtnText: {
     ...typography.small,
     color: colors.textMuted,
-  },
-  searchBtn: {
-    backgroundColor: colors.cta,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 96,
-    minHeight: 36,
-  },
-  searchBtnText: {
-    ...typography.small,
-    color: colors.textOnDark,
-    fontFamily: typography.bodyMedium.fontFamily,
   },
 
   // Filter section

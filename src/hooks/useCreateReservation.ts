@@ -43,9 +43,10 @@ export function useCreateReservation() {
   const [tables, setTables]                         = useState<TableRow[]>([]);
   const [guestSearchResults, setGuestSearchResults] = useState<GuestRow[]>([]);
 
-  const restaurantIdRef = useRef<string | null>(null);
-  const userIdRef       = useRef<string | null>(null);
-  const shiftsRef       = useRef<ShiftRow[]>([]);
+  const restaurantIdRef  = useRef<string | null>(null);
+  const userIdRef        = useRef<string | null>(null);
+  const shiftsRef        = useRef<ShiftRow[]>([]);
+  const searchTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadInitialData = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -71,22 +72,40 @@ export function useCreateReservation() {
     }
   }, []);
 
-  const searchGuests = useCallback(async (query: string): Promise<void> => {
-    const resId = restaurantIdRef.current;
-    if (!resId || query.trim().length < 2) { setGuestSearchResults([]); return; }
-    setSearchLoading(true);
-    try {
-      const q = query.trim();
-      const { data } = await supabase
-        .from('guests')
-        .select('*')
-        .eq('restaurant_id', resId)
-        .or(`phone.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`)
-        .limit(10);
-      setGuestSearchResults(data ?? []);
-    } finally {
-      setSearchLoading(false);
+  const searchGuests = useCallback((query: string): void => {
+    const q = query.trim();
+
+    if (searchTimerRef.current !== null) {
+      clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = null;
     }
+
+    // min 3 digits for phone-only queries, min 2 chars otherwise
+    const minLen = /^\d+$/.test(q) ? 3 : 2;
+    if (q.length < minLen) {
+      setGuestSearchResults([]);
+      return;
+    }
+
+    searchTimerRef.current = setTimeout(() => {
+      searchTimerRef.current = null;
+      const resId = restaurantIdRef.current;
+      if (!resId) return;
+      setSearchLoading(true);
+      void (async () => {
+        try {
+          const { data } = await supabase
+            .from('guests')
+            .select('*')
+            .eq('restaurant_id', resId)
+            .or(`phone.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`)
+            .limit(10);
+          setGuestSearchResults(data ?? []);
+        } finally {
+          setSearchLoading(false);
+        }
+      })();
+    }, 300);
   }, []);
 
   const createReservation = useCallback(async (input: CreateReservationInput): Promise<string> => {
@@ -217,6 +236,12 @@ export function useCreateReservation() {
   const clearError = useCallback(() => setError(null), []);
 
   useEffect(() => { void loadInitialData(); }, [loadInitialData]);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current !== null) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
 
   return {
     loading,
