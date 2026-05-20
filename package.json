@@ -10,7 +10,8 @@
     "import:sevenrooms": "tsx scripts/import-sevenrooms-guests.ts",
     "seed:floor": "tsx scripts/seed-floor-plan.ts",
     "tables:update-capacities": "tsx scripts/update-table-capacities.ts",
-    "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit"
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit",
+    "crm:audit": "tsx scripts/audit-guests-quality.ts"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
