@@ -13,14 +13,17 @@
  *     Ils seront archivés ou supprimés dans une V2 après validation.
  *
  * Usage :
- *   npm run crm:merge:dry-run          # simule 20 groupes, aucune écriture
- *   npm run crm:merge:apply            # applique 20 groupes AVEC confirmation CLI
+ *   npm run crm:merge:dry-run               # simule 20 groupes, aucune écriture
+ *   npm run crm:merge:dry-run:related       # simule 20 groupes avec impact FK réel
+ *   npm run crm:merge:apply                 # applique 20 groupes AVEC confirmation CLI
  *
  *   Options :
- *     --dry-run                   mode simulation (défaut)
- *     --apply                     mode application réelle
- *     --confirm=MERGE_LOW_RISK_CRM  requis avec --apply
- *     --limit=N                   nombre de groupes à traiter (défaut : 20)
+ *     --dry-run                    mode simulation (défaut)
+ *     --apply                      mode application réelle
+ *     --confirm=MERGE_LOW_RISK_CRM requis avec --apply
+ *     --limit=N                    nombre de groupes à traiter (défaut : 20)
+ *     --only-with-related          ne traiter que les groupes dont le doublon
+ *                                  a au moins 1 réservation/waitlist/feedback lié
  */
 
 import { config as dotenvConfig } from 'dotenv';
@@ -46,6 +49,7 @@ interface CliOptions {
   mode: MergeMode;
   limit: number;
   confirmed: boolean;
+  onlyWithRelated: boolean;
 }
 
 interface MergeGroupPreview {
@@ -160,7 +164,9 @@ function parseArgs(): CliOptions {
   const confirmArg = args.find(a => a.startsWith('--confirm='));
   const confirmed = confirmArg?.split('=')[1] === CONFIRM_TOKEN;
 
-  return { mode, limit, confirmed };
+  const onlyWithRelated = args.includes('--only-with-related');
+
+  return { mode, limit, confirmed, onlyWithRelated };
 }
 
 // ─── Env guard ────────────────────────────────────────────────────────────────
@@ -366,7 +372,8 @@ async function reassignRelatedRows(
 async function processGroup(
   supabase: SupabaseClient,
   group: MergeGroupPreview,
-  mode: MergeMode
+  mode: MergeMode,
+  knownCounts?: RelatedCounts
 ): Promise<MergeResult> {
   const base: Pick<MergeResult, 'group_id' | 'mode' | 'master_guest_id' | 'duplicate_guest_ids' | 'duplicate_action'> = {
     group_id: group.group_id,
@@ -400,7 +407,7 @@ async function processGroup(
   }
 
   const masterUpdate = computeGuestUpdate(masterGuest, [duplicateGuest]);
-  const relatedCounts = await countAllRelated(supabase, duplicateId);
+  const relatedCounts = knownCounts ?? await countAllRelated(supabase, duplicateId);
 
   const fbl = relatedCounts.feedback_survey_links;
   const fbs = relatedCounts.feedback_surveys;
@@ -515,7 +522,11 @@ async function main(): Promise<void> {
   }
   console.log('╚══════════════════════════════════════════════════════════════╝');
   console.log(`\nMode    : ${modeLabel}`);
-  console.log(`Limite  : ${opts.limit} groupes\n`);
+  console.log(`Limite  : ${opts.limit} groupes`);
+  if (opts.onlyWithRelated) {
+    console.log(`Filtre  : --only-with-related (impact FK réel uniquement)`);
+  }
+  console.log('');
 
   // Confirmation required in apply mode
   if (opts.mode === 'apply' && !opts.confirmed) {
@@ -561,11 +572,65 @@ async function main(): Promise<void> {
   console.log(`Groupes éligibles (low risk, master data-driven, taille 2) : ${eligible.length}`);
   console.log(`Groupes exclus : ${skippedAtFilter.length}`);
 
-  const toProcess = eligible.slice(0, opts.limit);
-  console.log(`Groupes à traiter (limite ${opts.limit}) : ${toProcess.length}\n`);
-
   // Init Supabase
   const supabase = createSupabaseAdmin();
+
+  // Optional pre-scan: filter eligible groups to those with at least one related FK row
+  const countsCache = new Map<string, RelatedCounts>();
+  let candidateGroups: MergeGroupPreview[] = eligible;
+
+  if (opts.onlyWithRelated) {
+    if (eligible.length === 0) {
+      console.log('Aucun groupe éligible — filtre --only-with-related sans effet.\n');
+    } else {
+      // Probe first group to detect permission issues early
+      const probeId = eligible[0].duplicate_guest_ids[0];
+      const probeCount = await countRelatedRows(supabase, 'reservations', probeId);
+      if (probeCount === null) {
+        console.error(
+          '\n✗ --only-with-related requiert un accès SELECT sur les tables FK.\n' +
+          '  Les requêtes COUNT ont retourné une erreur (permission denied).\n' +
+          '  Ajoutez ces GRANTs dans Supabase avant de relancer :\n\n' +
+          '    GRANT SELECT, UPDATE ON reservations TO service_role;\n' +
+          '    GRANT SELECT, UPDATE ON waitlist TO service_role;\n' +
+          '    GRANT SELECT, UPDATE ON feedback_survey_links TO service_role;\n' +
+          '    GRANT SELECT, UPDATE ON feedback_surveys TO service_role;\n'
+        );
+        process.exit(1);
+      }
+
+      console.log(`\nScan des ${eligible.length} groupes éligibles pour impact lié…`);
+      const withRelated: MergeGroupPreview[] = [];
+
+      for (let i = 0; i < eligible.length; i++) {
+        const group = eligible[i];
+        const duplicateId = group.duplicate_guest_ids[0];
+        const counts = await countAllRelated(supabase, duplicateId);
+        countsCache.set(duplicateId, counts);
+
+        const total =
+          (counts.reservations ?? 0) +
+          (counts.waitlist ?? 0) +
+          (counts.feedback_survey_links ?? 0) +
+          (counts.feedback_surveys ?? 0);
+
+        if (total > 0) {
+          withRelated.push(group);
+        }
+
+        if ((i + 1) % 10 === 0 || i === eligible.length - 1) {
+          process.stdout.write(`  ${i + 1}/${eligible.length} scannés, ${withRelated.length} avec impact…\r`);
+        }
+      }
+      process.stdout.write('\n');
+
+      candidateGroups = withRelated;
+      console.log(`Groupes avec impact lié (reservations/waitlist/feedback) : ${candidateGroups.length}`);
+    }
+  }
+
+  const toProcess = candidateGroups.slice(0, opts.limit);
+  console.log(`Groupes à traiter (limite ${opts.limit}) : ${toProcess.length}\n`);
 
   // Process groups
   const results: MergeResult[] = [];
@@ -577,8 +642,10 @@ async function main(): Promise<void> {
   let totalFeedback = 0;
 
   for (const group of toProcess) {
+    const duplicateId = group.duplicate_guest_ids[0];
+    const knownCounts = countsCache.get(duplicateId);
     process.stdout.write(`  [${group.group_id}] ${group.master_name} … `);
-    const result = await processGroup(supabase, group, opts.mode);
+    const result = await processGroup(supabase, group, opts.mode, knownCounts);
     results.push(result);
 
     totalReservations += result.reservations_to_reassign_count ?? 0;
@@ -631,6 +698,8 @@ async function main(): Promise<void> {
     limit: opts.limit,
     summary: {
       eligible_in_preview: eligible.length,
+      only_with_related: opts.onlyWithRelated,
+      related_total_count: opts.onlyWithRelated ? candidateGroups.length : null,
       processed: processedCount,
       failed: failedCount,
       skipped_in_processing: skippedCount,
@@ -650,6 +719,9 @@ async function main(): Promise<void> {
   console.log('\n─── Résumé ───────────────────────────────────────────────────────');
   console.log(`Mode                         : ${opts.mode}`);
   console.log(`Groupes éligibles            : ${eligible.length}`);
+  if (opts.onlyWithRelated) {
+    console.log(`Groupes avec impact lié      : ${candidateGroups.length}`);
+  }
   console.log(`Traités (limite ${String(opts.limit).padStart(3)})         : ${toProcess.length}`);
   console.log(`  ✓ ${opts.mode === 'apply' ? 'Appliqués' : 'Simulés'}               : ${processedCount}`);
   console.log(`  ⊘ Ignorés (données)        : ${skippedCount}`);

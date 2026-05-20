@@ -304,11 +304,30 @@ Sur les 242 groupes `ready_for_review` de la prévisualisation, **183 sont élig
 # Simulation — lecture seule, aucune écriture
 npm run crm:merge:dry-run
 
+# Simulation — uniquement les groupes avec impact FK réel
+npm run crm:merge:dry-run:related
+
 # Application réelle — confirmation explicite requise
 npm run crm:merge:apply -- --confirm=MERGE_LOW_RISK_CRM
 ```
 
 Le token `--confirm=MERGE_LOW_RISK_CRM` est requis en mode `--apply`. Sans lui, le script s'arrête avec une erreur.
+
+### Option `--only-with-related`
+
+Par défaut, le script traite tous les groupes éligibles dans l'ordre du rapport. Beaucoup de doublons low-risk sont des fiches "fantômes" — créées mais sans réservation associée. Fusionner ces groupes nettoie la table `guests` mais n'a aucun effet sur les réservations ou feedbacks.
+
+L'option `--only-with-related` ajoute un **pass de pré-scan** avant le traitement :
+
+1. Pour chaque groupe éligible, le script interroge Supabase : combien de lignes dans `reservations`, `waitlist`, `feedback_survey_links`, `feedback_surveys` sont liées au `duplicate_guest_id` ?
+2. Seuls les groupes où le total > 0 sont conservés.
+3. Le filtre `--limit=N` s'applique ensuite sur cette liste réduite.
+
+**Résultat concret (mai 2026)** : sur 183 groupes éligibles, **0 ont un impact lié**. Les 183 doublons low-risk sont des fiches fantômes. La fusion les nettoiera proprement mais ne déplacera aucune réservation.
+
+**Prérequis** : `--only-with-related` nécessite que `service_role` ait un accès SELECT sur les tables FK (voir section _Limitation V1 : permissions Supabase_ ci-dessous). Si la probe échoue (permission denied), le script s'arrête immédiatement avec un message d'erreur explicite plutôt que de produire des résultats incorrects.
+
+Le rapport JSON inclut `summary.only_with_related` (true/false) et `summary.related_total_count` (nombre de groupes avec impact, ou null si le filtre n'était pas actif).
 
 ### Ce que fait chaque fusion (mode APPLY)
 
@@ -386,6 +405,9 @@ npm run crm:merge:preview
 
 # Étape 4a — Simulation des fusions low risk (lecture seule)
 npm run crm:merge:dry-run
+
+# Étape 4a (variante) — Simulation uniquement pour les groupes avec impact FK réel
+npm run crm:merge:dry-run:related
 
 # Étape 4b — Application réelle des fusions low risk (écriture Supabase)
 npm run crm:merge:apply -- --confirm=MERGE_LOW_RISK_CRM
