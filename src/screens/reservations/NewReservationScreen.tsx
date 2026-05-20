@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -24,6 +25,7 @@ import VipBadge from '../../components/VipBadge';
 import DateSelector from '../../components/DateSelector';
 import CalendarPicker from '../../components/CalendarPicker';
 import TimeSlotSelector from '../../components/TimeSlotSelector';
+import TablePlanSelector from '../../components/TablePlanSelector';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { GuestRow, TableRow } from '../../hooks/useCreateReservation';
 
@@ -85,8 +87,9 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
     setError,
   } = useCreateReservation();
 
-  const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  const [form, setForm]                       = useState<FormState>(INITIAL_FORM);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [showPlanSelector, setShowPlanSelector] = useState(false);
 
   const availableShifts = useMemo(
     () =>
@@ -228,6 +231,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
   const displayError = validationError ?? error;
 
   return (
+    <>
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <KeyboardAvoidingView
         style={styles.flex}
@@ -469,6 +473,36 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
               <Text style={styles.tableHint}>
                 Optionnel — sélection multiple possible, peut être assignée plus tard depuis le plan.
               </Text>
+
+              {/* Tables sélectionnées depuis le plan */}
+              {form.selectedTableIds.length > 0 && (
+                <View style={styles.selectedTablesList}>
+                  {form.selectedTableIds.map((id) => {
+                    const t = tables.find((tb) => tb.id === id);
+                    if (!t) return null;
+                    return (
+                      <View key={id} style={styles.selectedTableChip}>
+                        <Text style={styles.selectedTableChipText}>
+                          Table {t.label} · {t.zone.replace(/_/g, ' ')}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Bouton plan de salle */}
+              <TouchableOpacity
+                style={styles.planBtn}
+                onPress={() => setShowPlanSelector(true)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.planBtnText}>
+                  {form.selectedTableIds.length > 0 ? 'Modifier la sélection' : 'Choisir sur le plan'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Sélecteur liste (maintenu) */}
               {form.selectedTableIds.length > 0 && (
                 <TouchableOpacity
                   onPress={() => setForm((prev) => ({ ...prev, selectedTableIds: [] }))}
@@ -545,6 +579,25 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+
+    {/* ── Plan selector modal ───────────────────────────────────────────── */}
+    <Modal
+      visible={showPlanSelector}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowPlanSelector(false)}
+    >
+      <TablePlanSelector
+        dbTables={tables}
+        selectedIds={form.selectedTableIds}
+        onConfirm={(ids) => {
+          setForm((prev) => ({ ...prev, selectedTableIds: ids }));
+          setShowPlanSelector(false);
+        }}
+        onCancel={() => setShowPlanSelector(false)}
+      />
+    </Modal>
+    </>
   );
 }
 
@@ -589,6 +642,39 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.sm,
     fontStyle: 'italic',
+  },
+
+  // Plan selector button
+  planBtn: {
+    borderRadius:    radius.md,
+    paddingVertical: spacing.md,
+    alignItems:      'center',
+    backgroundColor: colors.background,
+    borderWidth:     1,
+    borderColor:     colors.gold,
+    marginBottom:    spacing.sm,
+  },
+  planBtnText: { ...typography.bodyMedium, color: colors.gold },
+
+  // Selected tables from plan
+  selectedTablesList: {
+    flexDirection: 'row',
+    flexWrap:      'wrap',
+    gap:           spacing.sm,
+    marginBottom:  spacing.sm,
+  },
+  selectedTableChip: {
+    borderRadius:      radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical:   spacing.sm,
+    backgroundColor:   colors.goldLight,
+    borderWidth:       1,
+    borderColor:       colors.gold,
+  },
+  selectedTableChipText: {
+    ...typography.small,
+    color:      colors.gold,
+    fontFamily: typography.bodyMedium.fontFamily,
   },
 
   // Table picker
