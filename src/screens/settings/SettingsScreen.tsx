@@ -179,12 +179,7 @@ function PeriodSelectorAdmin({
   onChange: (p: DashboardPeriod) => void;
 }): React.JSX.Element {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.periodRow}
-      style={styles.periodScroll}
-    >
+    <View style={styles.periodRow}>
       {PERIOD_OPTIONS.map(opt => {
         const isActive = active === opt.key;
         return (
@@ -200,7 +195,7 @@ function PeriodSelectorAdmin({
           </TouchableOpacity>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -986,14 +981,12 @@ const styles = StyleSheet.create({
     padding:   spacing.sm,
   },
 
-  // Period selector
-  periodScroll: {
-    marginBottom: spacing.xs,
-  },
+  // Period selector — wrapping layout so all chips stay visible
   periodRow: {
     flexDirection: 'row',
+    flexWrap:      'wrap',
     gap:           spacing.sm,
-    paddingBottom: spacing.xs,
+    marginBottom:  spacing.sm,
   },
   periodChip: {
     paddingVertical:   spacing.sm,

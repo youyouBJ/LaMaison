@@ -63,9 +63,9 @@ const STATUS_ACTIONS: Record<ReservationStatus, ActionDef[]> = {
   noshow:    [],
 };
 
-// Labels courts pour la section correction
+// Labels pour la section correction
 const CORRECTION_LABEL: Record<ReservationStatus, string> = {
-  pending:   'En attente',
+  pending:   'En attente de confirmation',
   confirmed: 'Confirmée',
   seated:    'À table',
   completed: 'Terminée',

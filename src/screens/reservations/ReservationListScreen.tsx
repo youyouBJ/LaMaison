@@ -21,6 +21,7 @@ import DateSelector from '../../components/DateSelector';
 import { FilterChip } from '../../components/FilterChip';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { ReservationWithJoins } from '../../types/reservations';
+import type { ReservationStatus } from '../../types/database';
 import { getReservationStatusLabel } from '../../utils/reservationStatus';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationList'>;
@@ -31,6 +32,10 @@ const SERVICE_OPTIONS: { key: ReservationServiceFilter; label: string }[] = [
   { key: 'all',    label: 'Tous' },
   { key: 'lunch',  label: 'Déjeuner' },
   { key: 'dinner', label: 'Dîner' },
+];
+
+const STATUS_FILTER_OPTIONS: ReservationStatus[] = [
+  'pending', 'confirmed', 'seated', 'completed', 'cancelled', 'noshow',
 ];
 
 // Normalise pour une recherche insensible aux diacritiques.
@@ -85,6 +90,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
   const [searchQuery, setSearchQuery]       = useState('');
   const [isFocused, setIsFocused]           = useState(false);
   const [serviceFilter, setServiceFilter]   = useState<ReservationServiceFilter>('all');
+  const [statusFilter, setStatusFilter]     = useState<ReservationStatus | null>(null);
 
   useFocusEffect(
     useCallback(() => { refresh(); }, [refresh]),
@@ -98,12 +104,18 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
     return reservations.filter(r => matchesService(r, serviceFilter));
   }, [reservations, serviceFilter]);
 
-  // Étape 2 : filtrage par recherche (sur le résultat du service)
+  // Étape 2 : filtrage par statut
+  const reservationsForStatus = useMemo(() => {
+    if (statusFilter === null) return reservationsForService;
+    return reservationsForService.filter(r => r.status === statusFilter);
+  }, [reservationsForService, statusFilter]);
+
+  // Étape 3 : filtrage par recherche (sur le résultat du statut)
   const filteredReservations = useMemo(() => {
     const q = normalizeSearchText(searchQuery.trim());
-    if (!q) return reservationsForService;
-    return reservationsForService.filter(r => buildSearchableString(r).includes(q));
-  }, [reservationsForService, searchQuery]);
+    if (!q) return reservationsForStatus;
+    return reservationsForStatus.filter(r => buildSearchableString(r).includes(q));
+  }, [reservationsForStatus, searchQuery]);
 
   const handleClear = () => setSearchQuery('');
 
@@ -137,6 +149,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
   const isSearching        = searchQuery.trim().length > 0;
   const hasReservations    = reservations.length > 0;
   const hasServiceResults  = reservationsForService.length > 0;
+  const hasStatusResults   = reservationsForStatus.length > 0;
   const hasResults         = filteredReservations.length > 0;
 
   const countLabel = (() => {
@@ -218,6 +231,36 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
             </View>
           </View>
 
+          {/* ── Filtre statut ── */}
+          <View style={styles.statusSection}>
+            <View style={styles.statusSectionHeader}>
+              <Text style={styles.statusSectionLabel}>Statut</Text>
+              {statusFilter !== null && (
+                <TouchableOpacity
+                  style={styles.statusResetBtn}
+                  onPress={() => { setStatusFilter(null); }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.statusResetBtnText}>Tout afficher</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.statusChips}
+            >
+              {STATUS_FILTER_OPTIONS.map(s => (
+                <FilterChip
+                  key={s}
+                  label={getReservationStatusLabel(s)}
+                  active={statusFilter === s}
+                  onPress={() => { setStatusFilter(statusFilter === s ? null : s); }}
+                />
+              ))}
+            </ScrollView>
+          </View>
+
           {/* ── Barre de recherche ── */}
           <View style={[styles.searchBar, isFocused && styles.searchBarFocused]}>
             <Ionicons
@@ -265,6 +308,17 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
                 {serviceFilter === 'lunch'
                   ? 'Aucune réservation déjeuner pour cette date.'
                   : 'Aucune réservation dîner pour cette date.'}
+              </Text>
+            </View>
+
+          /* ── Aucune réservation pour ce statut ── */
+          ) : !hasStatusResults ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>Aucune réservation avec ce statut</Text>
+              <Text style={styles.emptySubtitle}>
+                {statusFilter !== null
+                  ? `Aucune réservation "${getReservationStatusLabel(statusFilter)}" pour cette date.`
+                  : 'Aucune réservation pour cette date.'}
               </Text>
             </View>
 
@@ -408,7 +462,7 @@ const styles = StyleSheet.create({
   // Service filter
   serviceSection: {
     marginTop: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   serviceSectionLabel: {
     ...typography.label,
@@ -418,6 +472,37 @@ const styles = StyleSheet.create({
   serviceChips: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+
+  // Status filter
+  statusSection: {
+    marginBottom: spacing.md,
+  },
+  statusSectionHeader: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginBottom:   spacing.sm,
+  },
+  statusSectionLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+  },
+  statusResetBtn: {
+    backgroundColor:   colors.ctaLight,
+    borderRadius:      radius.md,
+    paddingVertical:   3,
+    paddingHorizontal: spacing.sm,
+    borderWidth:       1,
+    borderColor:       colors.cta,
+  },
+  statusResetBtnText: {
+    ...typography.label,
+    color: colors.cta,
+  },
+  statusChips: {
+    flexDirection: 'row',
+    gap:           spacing.sm,
   },
 
   // Search bar
