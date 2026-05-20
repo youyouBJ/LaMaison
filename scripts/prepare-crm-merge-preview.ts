@@ -4,10 +4,13 @@
  * Lit reports/crm-quality-audit.json et génère une prévisualisation des fusions
  * pour les groupes haute confiance (téléphone/email exact, noms similaires, ≤ 5 fiches).
  *
- * N'effectue aucune écriture dans Supabase. Si les variables SUPABASE_URL et
+ * N'effectue aucune écriture dans Supabase. Si SUPABASE_URL et
  * SUPABASE_SERVICE_ROLE_KEY sont disponibles dans .env.import, enrichit chaque
- * groupe avec VIP, avg_rating, visit_count, notes et tags pour affiner le choix
- * du master. Sinon, utilise uniquement les données contenues dans le rapport d'audit.
+ * groupe avec VIP, avg_rating, visit_count, notes et tags (lecture seule).
+ *
+ * Enrichissement robuste : batches de 100, 2 retries par batch, délai entre retries.
+ * Si un batch échoue définitivement, les IDs concernés sont marqués et les groupes
+ * sans enrichissement sont reclassés en validation humaine.
  *
  * Usage :
  *   npm run crm:merge:preview
@@ -28,6 +31,13 @@ import { normalizeEmail } from './lib/sevenroomsParser';
 console.log('\n╔══════════════════════════════════════════════════════╗');
 console.log('║  READ ONLY — aucune donnée Supabase ne sera modifiée ║');
 console.log('╚══════════════════════════════════════════════════════╝\n');
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const BATCH_SIZE = 100;
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 200;
+const LOG_EVERY_N_BATCHES = 10;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +91,7 @@ interface GuestEnrichment {
   notes: string | null;
   tags: string[];
   created_at: string;
+  updated_at: string | null;
 }
 
 interface MergedDataPreview {
@@ -109,15 +120,26 @@ interface MergeGroup {
   ratings: (number | null)[];
   reason: string;
   master_selection_reason: string;
+  enrichment_partial: boolean;
   merged_data_preview: MergedDataPreview;
   recommended_action: ActionRecommendation;
   automatic_action: false;
 }
 
+interface EnrichmentStats {
+  attempted: boolean;
+  total_ids: number;
+  enriched_count: number;
+  failed_count: number;
+  failed_batch_count: number;
+  failed_ids: string[];
+  complete: boolean;
+}
+
 interface PreviewReport {
   generated_at: string;
   source_audit_date: string;
-  enriched_from_supabase: boolean;
+  enrichment: EnrichmentStats;
   total_groups_analyzed: number;
   counts: {
     ready_for_review: number;
@@ -126,6 +148,7 @@ interface PreviewReport {
     risk_low: number;
     risk_medium: number;
     risk_high: number;
+    downgraded_due_to_partial_enrichment: number;
     match_phone_exact: number;
     match_email_exact: number;
     match_phone_and_email_exact: number;
@@ -135,13 +158,22 @@ interface PreviewReport {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
+  return result;
+}
+
 function namesAreSimilar(
   firstNames: (string | null)[],
   lastNames: (string | null)[]
 ): boolean {
   const nonNullFirst = firstNames.filter((n): n is string => !!n?.trim());
   const nonNullLast = lastNames.filter((n): n is string => !!n?.trim());
-
   if (nonNullFirst.length > 0 && new Set(nonNullFirst.map(n => n.toLowerCase().trim())).size === 1) return true;
   if (nonNullLast.length > 0 && new Set(nonNullLast.map(n => n.toLowerCase().trim())).size === 1) return true;
   return false;
@@ -153,7 +185,6 @@ function namesFullyIdentical(
 ): boolean {
   const nonNullFirst = firstNames.filter((n): n is string => !!n?.trim());
   const nonNullLast = lastNames.filter((n): n is string => !!n?.trim());
-
   const firstOk = nonNullFirst.length > 0 && new Set(nonNullFirst.map(n => n.toLowerCase().trim())).size === 1;
   const lastOk = nonNullLast.length > 0 && new Set(nonNullLast.map(n => n.toLowerCase().trim())).size === 1;
   return firstOk && lastOk;
@@ -161,8 +192,6 @@ function namesFullyIdentical(
 
 function computeMatchType(issue: AuditIssue): MatchType {
   if (issue.issue_type === 'duplicate_email_high_confidence') return 'email_exact';
-
-  // Phone group — check if emails also all match
   const nonNullEmails = issue.emails.filter((e): e is string => !!e);
   if (nonNullEmails.length >= 2) {
     const normed = nonNullEmails.map(e => normalizeEmail(e)).filter(Boolean);
@@ -171,11 +200,12 @@ function computeMatchType(issue: AuditIssue): MatchType {
   return 'phone_exact';
 }
 
-function computeRisk(issue: AuditIssue): RiskLevel {
+function computeRisk(issue: AuditIssue, masterIsDefinitive: boolean): RiskLevel {
   const size = issue.guest_ids.length;
   if (size >= 5) return 'high';
   if (size >= 3) return 'medium';
   // size == 2
+  if (!masterIsDefinitive) return 'medium';
   return namesFullyIdentical(issue.first_names, issue.last_names) ? 'low' : 'medium';
 }
 
@@ -199,6 +229,12 @@ interface GuestCandidate {
   enrichment?: GuestEnrichment;
 }
 
+interface MasterSelection {
+  masterId: string;
+  reason: string;
+  isDefinitive: boolean;
+}
+
 function fieldCompletenessScore(g: GuestCandidate): number {
   let score = 0;
   if (g.first_name) score++;
@@ -211,13 +247,11 @@ function fieldCompletenessScore(g: GuestCandidate): number {
   return score;
 }
 
-function selectMaster(candidates: GuestCandidate[]): {
-  masterId: string;
-  reason: string;
-} {
-  const reasons: string[] = [];
+function selectMaster(candidates: GuestCandidate[], enrichmentAttempted: boolean): MasterSelection {
+  const anyEnriched = candidates.some(c => c.enrichment !== undefined);
+  // Enrichment was attempted but none of this group's guests were enriched → fallback
+  const enrichmentMissing = enrichmentAttempted && !anyEnriched;
 
-  // Score each candidate, highest wins
   const scored = candidates.map(g => {
     let score = 0;
     const parts: string[] = [];
@@ -225,7 +259,7 @@ function selectMaster(candidates: GuestCandidate[]): {
     if (g.enrichment?.vip) { score += 100; parts.push('VIP'); }
 
     const rating = g.enrichment?.avg_rating ?? null;
-    if (rating !== null) { score += rating * 10; }
+    if (rating !== null && rating > 0) { score += rating * 10; parts.push(`rating ${rating}`); }
 
     if (g.email) { score += 5; parts.push('email'); }
 
@@ -239,35 +273,34 @@ function selectMaster(candidates: GuestCandidate[]): {
 
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
-    // Tiebreaker: older created_at wins (most established record)
     const aDate = a.g.enrichment?.created_at ?? '';
     const bDate = b.g.enrichment?.created_at ?? '';
     return aDate < bDate ? -1 : 1;
   });
 
   const winner = scored[0];
-  const winnerParts = winner.parts;
 
-  if (winnerParts.length === 0) {
-    const completeness = fieldCompletenessScore(winner.g);
-    if (completeness > fieldCompletenessScore(scored[1]?.g ?? winner.g)) {
-      reasons.push('données les plus complètes');
-    } else {
-      reasons.push('premier de la liste (par défaut)');
-    }
-  } else {
-    reasons.push(...winnerParts);
+  if (enrichmentMissing) {
+    return {
+      masterId: winner.g.id,
+      reason: 'données enrichies partielles — validation humaine recommandée',
+      isDefinitive: false,
+    };
   }
 
-  // Add rating detail if applicable
-  const winnerRating = winner.g.enrichment?.avg_rating;
-  if (winnerRating !== null && winnerRating !== undefined && !winner.parts.includes('VIP')) {
-    reasons.push(`rating ${winnerRating}`);
+  if (winner.parts.length === 0) {
+    const completenessA = fieldCompletenessScore(winner.g);
+    const completenessB = fieldCompletenessScore(scored[1]?.g ?? winner.g);
+    const reason = completenessA > completenessB
+      ? 'données les plus complètes'
+      : 'premier de la liste (par défaut)';
+    return { masterId: winner.g.id, reason, isDefinitive: true };
   }
 
   return {
     masterId: winner.g.id,
-    reason: reasons.join(' | ') || 'premier de la liste (par défaut)',
+    reason: winner.parts.join(' | '),
+    isDefinitive: true,
   };
 }
 
@@ -308,44 +341,98 @@ function buildMergedDataPreview(candidates: GuestCandidate[], masterId: string):
 
 // ─── Supabase enrichment ──────────────────────────────────────────────────────
 
-function chunk<T>(arr: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
-  return result;
+interface RawGuestRow {
+  id: string;
+  vip: boolean | null;
+  avg_rating: number | null;
+  visit_count: number | null;
+  notes: string | null;
+  tags: string[] | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+interface EnrichmentResult {
+  map: Map<string, GuestEnrichment>;
+  failedIds: string[];
+  failedBatchCount: number;
 }
 
 async function enrichGuestsFromSupabase(
   supabase: SupabaseClient,
   guestIds: string[]
-): Promise<Map<string, GuestEnrichment>> {
+): Promise<EnrichmentResult> {
   const enrichmentMap = new Map<string, GuestEnrichment>();
-  const batches = chunk(guestIds, 500);
+  const failedIds: string[] = [];
+  let failedBatchCount = 0;
 
-  for (const batch of batches) {
-    const { data, error } = await supabase
-      .from('guests')
-      .select('id, vip, avg_rating, visit_count, notes, tags, created_at')
-      .in('id', batch);
+  const batches = chunk(guestIds, BATCH_SIZE);
+  const totalBatches = batches.length;
 
-    if (error) {
-      console.warn(`  ⚠ Enrichissement Supabase partiel : ${error.message}`);
-      continue;
+  console.log(`  Taille des batches : ${BATCH_SIZE} | Total batches : ${totalBatches} | Retries max : ${MAX_RETRIES}`);
+
+  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+    const batch = batches[batchIdx];
+    let success = false;
+    let lastErrorMsg = '';
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        await sleep(RETRY_DELAY_MS * attempt);
+      }
+
+      const { data, error } = await supabase
+        .from('guests')
+        .select('id, vip, avg_rating, visit_count, notes, tags, created_at, updated_at')
+        .in('id', batch);
+
+      if (error) {
+        lastErrorMsg = error.message;
+        // Schema errors are not retryable
+        const isSchemaError =
+          error.message.includes('column') ||
+          error.message.includes('does not exist') ||
+          (error as { code?: string }).code === '42703';
+        if (isSchemaError) break;
+        continue;
+      }
+
+      for (const row of (data ?? []) as RawGuestRow[]) {
+        enrichmentMap.set(row.id, {
+          id: row.id,
+          vip: row.vip ?? false,
+          avg_rating: row.avg_rating ?? null,
+          visit_count: row.visit_count ?? 0,
+          notes: row.notes ?? null,
+          tags: Array.isArray(row.tags) ? row.tags : [],
+          created_at: row.created_at ?? '',
+          updated_at: row.updated_at ?? null,
+        });
+      }
+
+      success = true;
+      break;
     }
 
-    for (const row of (data ?? []) as GuestEnrichment[]) {
-      enrichmentMap.set(row.id, {
-        id: row.id,
-        vip: row.vip ?? false,
-        avg_rating: row.avg_rating ?? null,
-        visit_count: row.visit_count ?? 0,
-        notes: row.notes ?? null,
-        tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
-        created_at: row.created_at ?? '',
-      });
+    if (!success) {
+      failedBatchCount++;
+      failedIds.push(...batch);
+      console.warn(`  ⚠ Batch ${batchIdx + 1}/${totalBatches} échoué après ${MAX_RETRIES + 1} tentatives : ${lastErrorMsg}`);
+    }
+
+    const shouldLog =
+      (batchIdx + 1) % LOG_EVERY_N_BATCHES === 0 ||
+      batchIdx === totalBatches - 1;
+
+    if (shouldLog) {
+      const pct = Math.round(((batchIdx + 1) / totalBatches) * 100);
+      console.log(
+        `  Batch ${batchIdx + 1}/${totalBatches} (${pct}%) — enrichis : ${enrichmentMap.size}${failedBatchCount > 0 ? ` | batches échoués : ${failedBatchCount}` : ''}`
+      );
     }
   }
 
-  return enrichmentMap;
+  return { map: enrichmentMap, failedIds, failedBatchCount };
 }
 
 // ─── CSV ──────────────────────────────────────────────────────────────────────
@@ -375,6 +462,7 @@ function generateCSV(groups: MergeGroup[]): string {
     'ratings',
     'reason',
     'master_selection_reason',
+    'enrichment_partial',
     'merged_vip',
     'merged_rating',
     'notes_merge_required',
@@ -399,6 +487,7 @@ function generateCSV(groups: MergeGroup[]): string {
       g.ratings.join(' | '),
       g.reason,
       g.master_selection_reason,
+      g.enrichment_partial,
       g.merged_data_preview.vip,
       g.merged_data_preview.avg_rating ?? '',
       g.merged_data_preview.notes_merge_required,
@@ -416,7 +505,6 @@ function generateCSV(groups: MergeGroup[]): string {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  // Read audit JSON
   const auditPath = resolve(process.cwd(), 'reports/crm-quality-audit.json');
   console.log(`Lecture : ${auditPath}`);
 
@@ -437,11 +525,8 @@ async function main(): Promise<void> {
       issue.issue_type !== 'duplicate_phone_high_confidence' &&
       issue.issue_type !== 'duplicate_email_high_confidence'
     ) return false;
-
     if (issue.guest_ids.length > 5) return false;
-
     if (!namesAreSimilar(issue.first_names, issue.last_names)) return false;
-
     return true;
   });
 
@@ -449,10 +534,12 @@ async function main(): Promise<void> {
   console.log('  (phone/email exact, noms similaires, ≤ 5 fiches)\n');
 
   // ── Optional Supabase enrichment ──────────────────────────────────────────
-  let supabase: SupabaseClient | null = null;
+  let enrichmentAttempted = false;
   let enrichmentMap = new Map<string, GuestEnrichment>();
-  let enrichedFromSupabase = false;
+  let failedIds: string[] = [];
+  let failedBatchCount = 0;
 
+  let supabase: SupabaseClient | null = null;
   try {
     supabase = createSupabaseAdmin();
   } catch {
@@ -462,14 +549,26 @@ async function main(): Promise<void> {
 
   if (supabase !== null) {
     const allGuestIds = [...new Set(eligible.flatMap(i => i.guest_ids))];
-    console.log(`Enrichissement Supabase pour ${allGuestIds.length} clients...`);
-    enrichmentMap = await enrichGuestsFromSupabase(supabase, allGuestIds);
-    enrichedFromSupabase = enrichmentMap.size > 0;
-    console.log(`  → ${enrichmentMap.size} clients enrichis (VIP, rating, visit_count, notes, tags)\n`);
+    console.log(`Enrichissement Supabase — ${allGuestIds.length} clients à enrichir :`);
+    enrichmentAttempted = true;
+
+    const result = await enrichGuestsFromSupabase(supabase, allGuestIds);
+    enrichmentMap = result.map;
+    failedIds = result.failedIds;
+    failedBatchCount = result.failedBatchCount;
+
+    console.log(`\n  ✓ Enrichissement terminé : ${enrichmentMap.size}/${allGuestIds.length} clients`);
+    if (failedBatchCount > 0) {
+      console.log(`  ⚠ ${failedBatchCount} batch(es) échoué(s) — ${failedIds.length} clients non enrichis`);
+    }
+    console.log();
   }
+
+  const failedIdSet = new Set(failedIds);
 
   // ── Build merge groups ────────────────────────────────────────────────────
   const mergeGroups: MergeGroup[] = [];
+  let downgradedCount = 0;
 
   for (let idx = 0; idx < eligible.length; idx++) {
     const issue = eligible[idx];
@@ -484,19 +583,28 @@ async function main(): Promise<void> {
       enrichment: enrichmentMap.get(id),
     }));
 
-    const { masterId, reason: masterReason } = selectMaster(candidates);
+    const enrichmentPartial =
+      enrichmentAttempted &&
+      candidates.some(c => c.enrichment === undefined && failedIdSet.has(c.id));
+
+    const { masterId, reason: masterReason, isDefinitive } = selectMaster(
+      candidates,
+      enrichmentAttempted
+    );
     const duplicateIds = candidates.filter(c => c.id !== masterId).map(c => c.id);
 
     const masterCandidate = candidates.find(c => c.id === masterId)!;
     const duplicateCandidates = candidates.filter(c => c.id !== masterId);
 
-    const risk = computeRisk(issue);
+    const risk = computeRisk(issue, isDefinitive);
     const action = computeAction(risk);
     const matchType = computeMatchType(issue);
     const mergedPreview = buildMergedDataPreview(candidates, masterId);
 
     const vipFlags = candidates.map(c => c.enrichment?.vip ?? false);
     const ratings = candidates.map(c => c.enrichment?.avg_rating ?? null);
+
+    if (!isDefinitive) downgradedCount++;
 
     mergeGroups.push({
       group_id: groupId,
@@ -515,6 +623,7 @@ async function main(): Promise<void> {
       ratings,
       reason: issue.reason,
       master_selection_reason: masterReason,
+      enrichment_partial: enrichmentPartial,
       merged_data_preview: mergedPreview,
       recommended_action: action,
       automatic_action: false,
@@ -526,6 +635,16 @@ async function main(): Promise<void> {
   const humanCount = mergeGroups.filter(g => g.recommended_action === 'human_validation_required').length;
   const ignoreCount = mergeGroups.filter(g => g.recommended_action === 'ignore_for_now').length;
 
+  const enrichmentStats: EnrichmentStats = {
+    attempted: enrichmentAttempted,
+    total_ids: enrichmentAttempted ? [...new Set(eligible.flatMap(i => i.guest_ids))].length : 0,
+    enriched_count: enrichmentMap.size,
+    failed_count: failedIds.length,
+    failed_batch_count: failedBatchCount,
+    failed_ids: failedIds.length <= 200 ? failedIds : failedIds.slice(0, 200),
+    complete: enrichmentAttempted && failedIds.length === 0,
+  };
+
   const counts = {
     ready_for_review: readyCount,
     human_validation_required: humanCount,
@@ -533,6 +652,7 @@ async function main(): Promise<void> {
     risk_low: mergeGroups.filter(g => g.risk_level === 'low').length,
     risk_medium: mergeGroups.filter(g => g.risk_level === 'medium').length,
     risk_high: mergeGroups.filter(g => g.risk_level === 'high').length,
+    downgraded_due_to_partial_enrichment: downgradedCount,
     match_phone_exact: mergeGroups.filter(g => g.match_type === 'phone_exact').length,
     match_email_exact: mergeGroups.filter(g => g.match_type === 'email_exact').length,
     match_phone_and_email_exact: mergeGroups.filter(g => g.match_type === 'phone_and_email_exact').length,
@@ -548,7 +668,7 @@ async function main(): Promise<void> {
   const previewReport: PreviewReport = {
     generated_at: new Date().toISOString(),
     source_audit_date: audit.generated_at,
-    enriched_from_supabase: enrichedFromSupabase,
+    enrichment: enrichmentStats,
     total_groups_analyzed: mergeGroups.length,
     counts,
     groups: mergeGroups,
@@ -559,39 +679,52 @@ async function main(): Promise<void> {
 
   // ── Terminal output ───────────────────────────────────────────────────────
   console.log('─── Résultats de la prévisualisation ─────────────────────────');
-  console.log(`Groupes analysés               : ${mergeGroups.length}`);
-  console.log(`  ready_for_review             : ${readyCount}`);
-  console.log(`  human_validation_required    : ${humanCount}`);
-  console.log(`  ignore_for_now               : ${ignoreCount}`);
-  console.log(`Risque faible (low)            : ${counts.risk_low}`);
-  console.log(`Risque moyen (medium)          : ${counts.risk_medium}`);
-  console.log(`Risque élevé (high)            : ${counts.risk_high}`);
-  console.log(`Match téléphone exact          : ${counts.match_phone_exact}`);
-  console.log(`Match email exact              : ${counts.match_email_exact}`);
-  console.log(`Match téléphone + email exact  : ${counts.match_phone_and_email_exact}`);
-  console.log(`Enrichissement Supabase        : ${enrichedFromSupabase ? 'oui' : 'non (désactivé)'}`);
+  console.log(`Groupes analysés                          : ${mergeGroups.length}`);
+  console.log(`  ready_for_review                        : ${readyCount}`);
+  console.log(`  human_validation_required               : ${humanCount}`);
+  console.log(`  ignore_for_now                          : ${ignoreCount}`);
+  console.log(`Risque faible (low)                       : ${counts.risk_low}`);
+  console.log(`Risque moyen (medium)                     : ${counts.risk_medium}`);
+  console.log(`Risque élevé (high)                       : ${counts.risk_high}`);
+  console.log(`Groupes déclassés (enrichissement partiel): ${downgradedCount}`);
+  console.log(`Match téléphone exact                     : ${counts.match_phone_exact}`);
+  console.log(`Match email exact                         : ${counts.match_email_exact}`);
+  console.log(`Match téléphone + email exact             : ${counts.match_phone_and_email_exact}`);
+  if (enrichmentAttempted) {
+    console.log(`Enrichissement Supabase                   : ${enrichmentMap.size}/${enrichmentStats.total_ids} clients`);
+    console.log(`Batches échoués                           : ${failedBatchCount}`);
+    console.log(`Enrichissement complet                    : ${enrichmentStats.complete ? 'oui' : 'non'}`);
+  } else {
+    console.log(`Enrichissement Supabase                   : désactivé`);
+  }
   console.log('──────────────────────────────────────────────────────────────');
 
   const top20 = mergeGroups
     .filter(g => g.recommended_action === 'ready_for_review')
     .slice(0, 20);
 
-  console.log('\n── Top 20 groupes prêts pour review ──────────────────────────');
-  for (const g of top20) {
-    const contact =
-      g.match_type === 'email_exact'
-        ? (g.emails.find(e => e !== null) ?? '—')
-        : (g.phones.find(p => p !== null) ?? '—');
-    const names = [g.master_name, ...g.duplicate_names].join(' / ');
-    const vipNote = g.merged_data_preview.vip ? ' [VIP]' : '';
-    const ratingNote =
-      g.merged_data_preview.avg_rating !== null
-        ? ` [★ ${g.merged_data_preview.avg_rating}]`
-        : '';
-    console.log(`  [${g.group_id}] ${contact}${vipNote}${ratingNote}`);
-    console.log(`    Noms    : ${names}`);
-    console.log(`    Master  : ${g.master_guest_id} (${g.master_selection_reason})`);
-    console.log(`    Match   : ${g.match_type} | Risque : ${g.risk_level}`);
+  if (top20.length > 0) {
+    console.log('\n── Top 20 groupes prêts pour review ──────────────────────────');
+    for (const g of top20) {
+      const contact =
+        g.match_type === 'email_exact'
+          ? (g.emails.find(e => e !== null) ?? '—')
+          : (g.phones.find(p => p !== null) ?? '—');
+      const names = [g.master_name, ...g.duplicate_names].join(' / ');
+      const vipNote = g.merged_data_preview.vip ? ' [VIP]' : '';
+      const ratingNote =
+        g.merged_data_preview.avg_rating !== null
+          ? ` [★ ${g.merged_data_preview.avg_rating}]`
+          : '';
+      const partialNote = g.enrichment_partial ? ' ⚠ enrichissement partiel' : '';
+      console.log(`  [${g.group_id}] ${contact}${vipNote}${ratingNote}${partialNote}`);
+      console.log(`    Noms    : ${names}`);
+      console.log(`    Master  : ${g.master_guest_id} (${g.master_selection_reason})`);
+      console.log(`    Match   : ${g.match_type} | Risque : ${g.risk_level}`);
+    }
+  } else {
+    console.log('\n⚠ Aucun groupe ready_for_review — enrichissement peut-être incomplet.');
+    console.log('→ Relancez avec Supabase disponible pour affiner le scoring.');
   }
 
   console.log('\nRapports générés :');

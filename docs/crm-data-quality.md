@@ -230,7 +230,22 @@ Le master (fiche de référence à conserver) est sélectionné selon ce barème
 
 La raison de sélection est écrite en clair dans chaque ligne du rapport (`master_selection_reason`).
 
+L'enrichissement est robuste : batches de 100 IDs, 2 retries par batch avec délai, logs de progression toutes les 10 batches. Si un batch échoue définitivement, les IDs concernés sont tracés et les groupes affectés sont automatiquement reclassés.
+
 Si Supabase n'est pas disponible (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants), le script utilise uniquement email, phone et complétude de données pour sélectionner le master.
+
+**Note** : un `avg_rating` de 0 est ignoré dans le scoring — SevenRooms peut importer 0 pour signifier "pas de note", une fiche avec rating 0 n'est pas meilleure qu'une sans rating.
+
+### Comportement si enrichissement incomplet
+
+Si certains clients d'un groupe n'ont pas pu être enrichis (réseau défaillant, timeout) :
+- `enrichment_partial: true` dans le rapport JSON/CSV
+- Le master est marqué `"données enrichies partielles — validation humaine recommandée"`
+- Le groupe est automatiquement reclassé en **risque medium**
+- `recommended_action` passe à `human_validation_required`
+- On ne fusionne jamais sur un master choisi par défaut faute de données
+
+Le champ `enrichment.complete` dans le JSON indique si l'enrichissement a couvert 100% des IDs.
 
 ### Niveaux de risque
 
@@ -251,13 +266,14 @@ Pour chaque groupe, le rapport inclut `merged_data_preview` :
 - `notes_merge_required` : `true` si plusieurs notes distinctes à concaténer manuellement
 - `tags_merge_required` : `true` si plusieurs jeux de tags à fusionner
 
-### Résultats (mai 2026)
+### Résultats (mai 2026 — enrichissement complet 2 691/2 691 clients)
 
 | Métrique | Valeur |
 |----------|--------|
 | Groupes analysés | 1 366 |
 | ready_for_review | 242 |
 | human_validation_required | 1 124 |
+| Groupes déclassés (enrichissement partiel) | 0 |
 | Match téléphone exact | 1 032 |
 | Match email exact | 228 |
 | Match téléphone + email exact | 106 |
