@@ -6,12 +6,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useSettingsOverview } from '../../hooks/useSettingsOverview';
 import { supabase } from '../../lib/supabase';
+import { parseDateString } from '../../utils/date';
 import {
   usePeriodStats,
   PERIOD_OPTIONS,
@@ -350,22 +352,11 @@ function StatusSummarySection({
   }
   return (
     <View style={styles.statusCard}>
-      <View style={styles.statusColumns}>
-        <View style={styles.statusColumn}>
-          {STATUS_ORDER.slice(0, 3).map(s => {
-            const count = data[s as keyof PeriodReservationStats] as number;
-            const rate  = s === 'cancelled' ? data.cancellationRate : s === 'noshow' ? data.noshowRate : undefined;
-            return <StatusBreakdownRow key={s} status={s} count={count} rate={rate} />;
-          })}
-        </View>
-        <View style={[styles.statusColumn, styles.statusColumnRight]}>
-          {STATUS_ORDER.slice(3).map(s => {
-            const count = data[s as keyof PeriodReservationStats] as number;
-            const rate  = s === 'cancelled' ? data.cancellationRate : s === 'noshow' ? data.noshowRate : undefined;
-            return <StatusBreakdownRow key={s} status={s} count={count} rate={rate} />;
-          })}
-        </View>
-      </View>
+      {STATUS_ORDER.map(s => {
+        const count = data[s as keyof PeriodReservationStats] as number;
+        const rate  = s === 'cancelled' ? data.cancellationRate : s === 'noshow' ? data.noshowRate : undefined;
+        return <StatusBreakdownRow key={s} status={s} count={count} rate={rate} />;
+      })}
     </View>
   );
 }
@@ -392,92 +383,125 @@ function SatisfactionSection({
   const hasSR       = sevenRooms.count > 0;
   const hasFeedback = feedbackData !== null && feedbackData.total > 0;
 
-  // No data at all
-  if (!hasSR && !hasFeedback) {
-    return (
-      <Card>
-        <Text style={styles.emptyText}>
-          {feedbackData === null
-            ? 'Module satisfaction non configuré.'
-            : 'Aucune enquête reçue sur cette période.'}
-        </Text>
-      </Card>
-    );
-  }
-
-  // SR available but no in-app surveys for this period
-  if (!hasFeedback) {
-    return (
-      <>
-        <View style={styles.kpiRow}>
-          <StatCard label="Clients notés" value={sevenRooms.count} accent={colors.gold} />
-          <View style={styles.kpiGap} />
-          <StatCard
-            label="Note moyenne"
-            value={0}
-            valueText={`${fmtRating(sevenRooms.avgRating)} / 5`}
-            accent={colors.gold}
-          />
-        </View>
-        <Text style={styles.srNote}>
-          Données SevenRooms · toutes périodes
-          {feedbackData !== null ? ' · aucune enquête La Maison sur cette période' : ''}
-        </Text>
-        <Text style={styles.satisfactionNote}>
-          Les données combinent les notes importées SevenRooms et les nouvelles enquêtes La Maison lorsque disponibles.
-        </Text>
-      </>
-    );
-  }
-
-  // In-app surveys available — feedbackData is non-null and has data
   return (
     <>
-      <View style={styles.kpiRow}>
-        <StatCard label="Avis reçus" value={feedbackData.total} accent={colors.gold} />
-        <View style={styles.kpiGap} />
-        <StatCard
-          label="Note globale"
-          value={0}
-          valueText={`${fmtRating(feedbackData.avgOverall)} / 5`}
-          accent={colors.gold}
-        />
-      </View>
-      <View style={styles.kpiRow}>
-        <StatCard label="Cuisine"  value={0} valueText={fmtRating(feedbackData.avgFood)} />
-        <View style={styles.kpiGap} />
-        <StatCard label="Boissons" value={0} valueText={fmtRating(feedbackData.avgDrinks)} />
-      </View>
-      <View style={styles.kpiRow}>
-        <StatCard label="Service"  value={0} valueText={fmtRating(feedbackData.avgService)} />
-        <View style={styles.kpiGap} />
-        <StatCard label="Ambiance" value={0} valueText={fmtRating(feedbackData.avgAmbience)} />
-      </View>
-      {feedbackData.recommendedRate !== null && (
-        <View style={styles.kpiRow}>
-          <StatCard
-            label="Recommande"
-            value={0}
-            valueText={fmtPct(feedbackData.recommendedRate)}
-            accent={colors.statusFree}
+      {/* ── Enquêtes de la période ── */}
+      {hasFeedback && feedbackData !== null ? (
+        <>
+          <View style={styles.kpiRow}>
+            <StatCard label="Avis reçus"    value={feedbackData.total} accent={colors.gold} />
+            <View style={styles.kpiGap} />
+            <StatCard
+              label="Note moyenne"
+              value={0}
+              valueText={`${fmtRating(feedbackData.avgOverall)} / 5`}
+              accent={colors.gold}
+            />
+          </View>
+          <View style={styles.kpiRow}>
+            <StatCard label="Cuisine"  value={0} valueText={fmtRating(feedbackData.avgFood)} />
+            <View style={styles.kpiGap} />
+            <StatCard label="Boissons" value={0} valueText={fmtRating(feedbackData.avgDrinks)} />
+          </View>
+          <View style={styles.kpiRow}>
+            <StatCard label="Service"  value={0} valueText={fmtRating(feedbackData.avgService)} />
+            <View style={styles.kpiGap} />
+            <StatCard label="Ambiance" value={0} valueText={fmtRating(feedbackData.avgAmbience)} />
+          </View>
+          {feedbackData.recommendedRate !== null && (
+            <View style={styles.kpiRow}>
+              <StatCard
+                label="Recommandation"
+                value={0}
+                valueText={fmtPct(feedbackData.recommendedRate)}
+                accent={colors.statusFree}
+              />
+            </View>
+          )}
+          {feedbackData.lastComment ? (
+            <View style={styles.commentCard}>
+              <Text style={styles.commentLabel}>Dernier commentaire</Text>
+              <Text style={styles.commentText} numberOfLines={4}>{feedbackData.lastComment}</Text>
+            </View>
+          ) : null}
+        </>
+      ) : (
+        <Card>
+          <Text style={styles.emptyText}>
+            {feedbackData === null
+              ? 'Module satisfaction non configuré.'
+              : 'Aucune enquête reçue sur cette période.'}
+          </Text>
+        </Card>
+      )}
+
+      {/* ── Historique importé — affiché séparément si disponible ── */}
+      {hasSR && (
+        <View style={styles.srHistoryCard}>
+          <Text style={styles.srHistoryTitle}>Historique satisfaction</Text>
+          <View style={styles.srHistoryRow}>
+            <Text style={styles.srHistoryLabel}>Note importée</Text>
+            <Text style={styles.srHistoryValue}>{fmtRating(sevenRooms.avgRating)} / 5</Text>
+          </View>
+          <View style={styles.srHistoryRow}>
+            <Text style={styles.srHistoryLabel}>Clients notés</Text>
+            <Text style={styles.srHistoryValue}>{sevenRooms.count}</Text>
+          </View>
+        </View>
+      )}
+    </>
+  );
+}
+
+function CustomDateInputs({
+  startDate,
+  endDate,
+  onChangeStart,
+  onChangeEnd,
+  error,
+}: {
+  startDate: string;
+  endDate: string;
+  onChangeStart: (v: string) => void;
+  onChangeEnd: (v: string) => void;
+  error: string | null;
+}): React.JSX.Element {
+  return (
+    <View style={styles.customDateBlock}>
+      <View style={styles.customDateRow}>
+        <View style={styles.customDateGroup}>
+          <Text style={styles.customDateLabel}>Date début</Text>
+          <TextInput
+            style={styles.customDateInput}
+            placeholder="AAAA-MM-JJ"
+            placeholderTextColor={colors.textMuted}
+            value={startDate}
+            onChangeText={onChangeStart}
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
-      )}
-      {feedbackData.lastComment ? (
-        <View style={styles.commentCard}>
-          <Text style={styles.commentLabel}>Dernier commentaire</Text>
-          <Text style={styles.commentText} numberOfLines={4}>{feedbackData.lastComment}</Text>
+        <View style={styles.customDateGroup}>
+          <Text style={styles.customDateLabel}>Date fin</Text>
+          <TextInput
+            style={styles.customDateInput}
+            placeholder="AAAA-MM-JJ"
+            placeholderTextColor={colors.textMuted}
+            value={endDate}
+            onChangeText={onChangeEnd}
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
         </View>
-      ) : null}
-      {hasSR && (
-        <Text style={styles.srNote}>
-          SevenRooms : {fmtRating(sevenRooms.avgRating)} / 5 · {sevenRooms.count} clients notés · toutes périodes
-        </Text>
+      </View>
+      {error !== null && (
+        <Text style={styles.customDateError}>{error}</Text>
       )}
-      <Text style={styles.satisfactionNote}>
-        Les données combinent les notes importées SevenRooms et les nouvelles enquêtes La Maison lorsque disponibles.
-      </Text>
-    </>
+    </View>
   );
 }
 
@@ -531,10 +555,32 @@ export default function SettingsScreen(): React.JSX.Element {
   const [signingOut, setSigningOut]       = useState(false);
   const [signOutError, setSignOutError]   = useState<string | null>(null);
   const [activePeriod, setActivePeriod]   = useState<DashboardPeriod>('month');
+  const [customStart, setCustomStart]     = useState('');
+  const [customEnd, setCustomEnd]         = useState('');
 
   // restaurantId is null while settings load — hooks handle null gracefully
   const restaurantId = data?.restaurant.id ?? null;
-  const { loading: periodLoading, stats: period, refresh: periodRefresh } = usePeriodStats(restaurantId, activePeriod);
+
+  // Validate custom dates — only pass valid range to the hook
+  const customStartParsed  = parseDateString(customStart);
+  const customEndParsed    = parseDateString(customEnd);
+  const customDatesValid   = customStartParsed !== null && customEndParsed !== null && customStart <= customEnd;
+  const hookCustomStart    = activePeriod === 'custom' && customDatesValid ? customStart : undefined;
+  const hookCustomEnd      = activePeriod === 'custom' && customDatesValid ? customEnd   : undefined;
+
+  const customError: string | null = activePeriod !== 'custom' ? null
+    : customStart.length > 0 && customStartParsed === null ? 'Date de début invalide (format AAAA-MM-JJ).'
+    : customEnd.length > 0   && customEndParsed   === null ? 'Date de fin invalide (format AAAA-MM-JJ).'
+    : customStartParsed !== null && customEndParsed !== null && customStart > customEnd
+      ? 'La date de fin doit être après la date de début.'
+      : null;
+
+  const { loading: periodLoading, stats: period, refresh: periodRefresh } = usePeriodStats(
+    restaurantId,
+    activePeriod,
+    hookCustomStart,
+    hookCustomEnd,
+  );
   const { loading: extLoading, stats: ext, refresh: extRefresh } = useDashboardExtended(restaurantId);
 
   const handleSignOut = async (): Promise<void> => {
@@ -623,6 +669,15 @@ export default function SettingsScreen(): React.JSX.Element {
           {/* ── Pilotage avancé ── */}
           <SectionHeader title="Pilotage avancé" />
           <PeriodSelectorAdmin active={activePeriod} onChange={setActivePeriod} />
+          {activePeriod === 'custom' && (
+            <CustomDateInputs
+              startDate={customStart}
+              endDate={customEnd}
+              onChangeStart={setCustomStart}
+              onChangeEnd={setCustomEnd}
+              error={customError}
+            />
+          )}
 
           <Text style={styles.subSectionLabel}>Réservations</Text>
           <PeriodKpiSection data={period.reservations} loading={periodLoading} />
@@ -978,32 +1033,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Status breakdown
+  // Status breakdown — single column list, badge + count per row
   statusCard: {
     backgroundColor: colors.surface,
     borderRadius:    radius.lg,
     padding:         spacing.lg,
+    gap:             spacing.sm,
     ...CARD_SHADOW,
   },
-  statusColumns: {
-    flexDirection: 'row',
-  },
-  statusColumn: {
-    flex: 1,
-    gap:  spacing.sm,
-  },
-  statusColumnRight: {
-    marginLeft: spacing.lg,
-  },
   statusRowItem: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'space-between',
+    paddingVertical: 2,
   },
   statusPill: {
     borderRadius:      radius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical:   spacing.xs,
+    flexShrink:        1,
   },
   statusPillText: {
     ...typography.label,
@@ -1012,24 +1060,71 @@ const styles = StyleSheet.create({
     fontFamily: typography.stat.fontFamily,
     fontSize:   typography.body.fontSize,
     color:      colors.textPrimary,
+    marginLeft: spacing.sm,
+    flexShrink: 0,
   },
 
-  // Satisfaction — SevenRooms compact note
-  srNote: {
-    ...typography.small,
+  // Satisfaction — historique importé (compact, non-technique)
+  srHistoryCard: {
+    backgroundColor: colors.surfaceWarm,
+    borderRadius:    radius.md,
+    padding:         spacing.md,
+    marginTop:       spacing.lg,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.sand,
+  },
+  srHistoryTitle: {
+    ...typography.label,
     color:        colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  srHistoryRow: {
+    flexDirection:   'row',
+    justifyContent:  'space-between',
+    alignItems:      'center',
+    paddingVertical: 2,
+  },
+  srHistoryLabel: {
+    ...typography.small,
+    color: colors.textSecondary,
+  },
+  srHistoryValue: {
+    fontFamily: typography.stat.fontFamily,
+    fontSize:   typography.small.fontSize,
+    color:      colors.textPrimary,
+  },
+
+  // Période personnalisée — champs date
+  customDateBlock: {
     marginTop:    spacing.sm,
     marginBottom: spacing.xs,
-    fontStyle:    'italic',
   },
-
-  // Satisfaction — disclaimer on combined data sources
-  satisfactionNote: {
+  customDateRow: {
+    flexDirection: 'row',
+    gap:           spacing.sm,
+  },
+  customDateGroup: {
+    flex: 1,
+  },
+  customDateLabel: {
+    ...typography.label,
+    color:        colors.textMuted,
+    marginBottom: spacing.xs,
+  },
+  customDateInput: {
+    backgroundColor:   colors.surface,
+    borderRadius:      radius.md,
+    borderWidth:       1,
+    borderColor:       colors.border,
+    paddingVertical:   spacing.sm,
+    paddingHorizontal: spacing.md,
+    ...typography.body,
+    color:             colors.textPrimary,
+  },
+  customDateError: {
     ...typography.small,
-    color:      colors.textMuted,
-    marginTop:  spacing.md,
-    fontStyle:  'italic',
-    textAlign:  'center',
+    color:     colors.cta,
+    marginTop: spacing.xs,
   },
 
   // Satisfaction — last comment

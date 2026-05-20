@@ -4,7 +4,7 @@ import { getTodayDateString, addDaysToDateString } from '../utils/date';
 
 // ─── Period definition ────────────────────────────────────────────────────────
 
-export type DashboardPeriod = 'today' | 'week' | 'month' | 'current_month' | 'year';
+export type DashboardPeriod = 'today' | 'week' | 'month' | 'current_month' | 'year' | 'custom';
 
 export type PeriodOption = { key: DashboardPeriod; label: string };
 
@@ -14,13 +14,16 @@ export const PERIOD_OPTIONS: PeriodOption[] = [
   { key: 'month',         label: '30 jours' },
   { key: 'current_month', label: 'Mois' },
   { key: 'year',          label: 'Année' },
+  { key: 'custom',        label: 'Personnalisée' },
 ];
 
 export function getPeriodLabel(period: DashboardPeriod): string {
   return PERIOD_OPTIONS.find(o => o.key === period)?.label ?? period;
 }
 
-export function getPeriodDateRange(period: DashboardPeriod): { start: string; end: string } {
+export function getPeriodDateRange(
+  period: Exclude<DashboardPeriod, 'custom'>,
+): { start: string; end: string } {
   const today = getTodayDateString();
   switch (period) {
     case 'today':
@@ -217,14 +220,26 @@ function computeFeedbackStats(rows: FbRow[]): PeriodFeedbackStats {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function usePeriodStats(restaurantId: string | null, period: DashboardPeriod) {
+export function usePeriodStats(
+  restaurantId: string | null,
+  period: DashboardPeriod,
+  customStart?: string,
+  customEnd?: string,
+) {
   const [loading, setLoading] = useState(false);
   const [stats, setStats]     = useState<PeriodStatsResult>(INITIAL_STATS);
   const fetchIdRef            = useRef(0);
 
-  const fetchAll = useCallback(async (resId: string, p: DashboardPeriod): Promise<void> => {
+  const fetchAll = useCallback(async (
+    resId: string,
+    p: DashboardPeriod,
+    custStart: string,
+    custEnd: string,
+  ): Promise<void> => {
     const myId           = ++fetchIdRef.current;
-    const { start, end } = getPeriodDateRange(p);
+    const { start, end } = p === 'custom'
+      ? { start: custStart, end: custEnd }
+      : getPeriodDateRange(p);
 
     const [resResult, fbResult] = await Promise.all([
       supabase
@@ -297,15 +312,20 @@ export function usePeriodStats(restaurantId: string | null, period: DashboardPer
 
   const refresh = useCallback((): void => {
     if (!restaurantId) return;
+    if (period === 'custom' && (!customStart || !customEnd)) return;
     setLoading(true);
-    void fetchAll(restaurantId, period).finally(() => { setLoading(false); });
-  }, [restaurantId, period, fetchAll]);
+    void fetchAll(restaurantId, period, customStart ?? '', customEnd ?? '').finally(() => { setLoading(false); });
+  }, [restaurantId, period, customStart, customEnd, fetchAll]);
 
   useEffect(() => {
     if (!restaurantId) return;
+    if (period === 'custom' && (!customStart || !customEnd)) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    void fetchAll(restaurantId, period).finally(() => { setLoading(false); });
-  }, [restaurantId, period, fetchAll]);
+    void fetchAll(restaurantId, period, customStart ?? '', customEnd ?? '').finally(() => { setLoading(false); });
+  }, [restaurantId, period, customStart, customEnd, fetchAll]);
 
   return { loading, stats, refresh };
 }
