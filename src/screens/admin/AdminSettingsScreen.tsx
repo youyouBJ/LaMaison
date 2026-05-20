@@ -12,15 +12,10 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useSettingsOverview } from '../../hooks/useSettingsOverview';
-import type { ZoneSummary } from '../../hooks/useSettingsOverview';
-import { useDashboardExtended } from '../../hooks/useDashboardExtended';
 import { supabase } from '../../lib/supabase';
-import StatCard from '../../components/StatCard';
 import type { AdminStackParamList } from '../../navigation/AdminNavigator';
-import type { Database } from '../../types/database';
 
-type ShiftRow      = Database['public']['Tables']['shifts']['Row'];
-type IoniconsName  = React.ComponentProps<typeof Ionicons>['name'];
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 type Props = {
   navigation: NativeStackNavigationProp<AdminStackParamList, 'AdminSettings'>;
@@ -34,8 +29,6 @@ const ROLE_LABELS: Record<string, string> = {
   host:    'Hôte',
   waiter:  'Serveur',
 };
-
-const DAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
 type ChannelStatus = 'active' | 'configured' | 'inactive' | 'soon';
 
@@ -64,32 +57,8 @@ const CHANNEL_STATUS_CONFIG: Record<ChannelStatus, { label: string; color: strin
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatDays(days: number[]): string {
-  if (days.length === 0) return '–';
-  if (days.length === 7) return 'Tous les jours';
-  const sorted = [...days].sort((a, b) => a - b);
-  const labels = sorted.map(d => DAY_SHORT[d] ?? `J${d}`);
-  let consecutive = true;
-  for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i] !== sorted[i - 1] + 1) { consecutive = false; break; }
-  }
-  if (consecutive && sorted.length >= 3) {
-    return `${labels[0]}–${labels[labels.length - 1]}`;
-  }
-  return labels.join(', ');
-}
-
-function formatTime(t: string): string {
-  return t.length >= 5 ? t.substring(0, 5) : t;
-}
-
 function getRoleLabel(role: string): string {
   return ROLE_LABELS[role] ?? role;
-}
-
-function fmtRating(v: number | null): string {
-  if (v === null) return '—';
-  return `${v.toFixed(1)} / 5`;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -113,48 +82,6 @@ function SectionHeader({ title }: { title: string }): React.JSX.Element {
 
 function Card({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <View style={styles.card}>{children}</View>;
-}
-
-function ShiftCard({ shift }: { shift: ShiftRow }): React.JSX.Element {
-  const days  = formatDays(shift.days_of_week);
-  const start = formatTime(shift.start_time);
-  const end   = formatTime(shift.end_time);
-  return (
-    <View style={styles.shiftCard}>
-      <View style={styles.shiftHeader}>
-        <Text style={styles.shiftName}>{shift.name}</Text>
-        <View style={styles.shiftBadge}>
-          <Text style={styles.shiftBadgeText}>{days}</Text>
-        </View>
-      </View>
-      <Text style={styles.shiftHours}>{start}–{end}</Text>
-      <View style={styles.shiftMeta}>
-        <View style={styles.shiftMetaItem}>
-          <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-          <Text style={styles.shiftMetaText}>Slot {shift.slot_duration} min</Text>
-        </View>
-        <View style={styles.shiftMetaDot} />
-        <View style={styles.shiftMetaItem}>
-          <Ionicons name="people-outline" size={12} color={colors.textMuted} />
-          <Text style={styles.shiftMetaText}>{shift.max_covers_per_slot} couverts max</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function ZoneRow({ zone }: { zone: ZoneSummary }): React.JSX.Element {
-  return (
-    <View style={styles.zoneRow}>
-      <View style={styles.zoneIcon}>
-        <Ionicons name="grid-outline" size={14} color={colors.gold} />
-      </View>
-      <Text style={styles.zoneName} numberOfLines={1}>{zone.name}</Text>
-      <Text style={styles.zoneCount}>
-        {zone.tableCount} table{zone.tableCount > 1 ? 's' : ''}
-      </Text>
-    </View>
-  );
 }
 
 function ChannelRow({ channel }: { channel: Channel }): React.JSX.Element {
@@ -182,9 +109,6 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
   const [signingOut, setSigningOut]       = useState(false);
   const [signOutError, setSignOutError]   = useState<string | null>(null);
 
-  const restaurantId = data?.restaurant.id ?? null;
-  const { loading: extLoading, stats: ext, refresh: extRefresh } = useDashboardExtended(restaurantId);
-
   const handleSignOut = async (): Promise<void> => {
     setSigningOut(true);
     setSignOutError(null);
@@ -199,11 +123,6 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
       setSignOutError('Erreur lors de la déconnexion.');
       setSigningOut(false);
     }
-  };
-
-  const handleRefresh = (): void => {
-    refresh();
-    extRefresh();
   };
 
   if (loading) {
@@ -231,7 +150,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             </TouchableOpacity>
             <Text style={styles.errorTitle}>Impossible de charger les paramètres</Text>
             <Text style={styles.errorMessage}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+            <TouchableOpacity style={styles.retryButton} onPress={refresh}>
               <Text style={styles.retryButtonText}>Réessayer</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -251,7 +170,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
 
   if (!data) return <SafeAreaView style={styles.safe} />;
 
-  const { restaurant, userProfile, shifts, floor, guests } = data;
+  const { restaurant, userProfile } = data;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -280,7 +199,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             </View>
             <TouchableOpacity
               style={styles.refreshButton}
-              onPress={handleRefresh}
+              onPress={refresh}
               activeOpacity={0.7}
             >
               <Ionicons name="refresh-outline" size={16} color={colors.textMuted} />
@@ -330,60 +249,6 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
               </>
             ) : null}
           </Card>
-
-          {/* ── Services ── */}
-          <SectionHeader title="Services" />
-          {shifts.length === 0 ? (
-            <Card>
-              <Text style={styles.emptyText}>Aucun service configuré.</Text>
-            </Card>
-          ) : (
-            shifts.map((shift, idx) => (
-              <ShiftCard key={shift.id ?? idx} shift={shift} />
-            ))
-          )}
-
-          {/* ── Plan de salle ── */}
-          <SectionHeader title="Plan de salle" />
-          <View style={styles.kpiRow}>
-            <StatCard label="Tables" value={floor.totalTables} accent={colors.gold} />
-            <View style={styles.kpiGap} />
-            <StatCard label="Zones"  value={floor.zoneCount} />
-          </View>
-          {floor.zones.length > 0 && (
-            <Card>
-              {floor.zones.map((z, idx) => (
-                <React.Fragment key={z.name}>
-                  {idx > 0 && <Divider />}
-                  <ZoneRow zone={z} />
-                </React.Fragment>
-              ))}
-            </Card>
-          )}
-
-          {/* ── Données importées ── */}
-          <SectionHeader title="Données importées" />
-          <View style={styles.kpiRow}>
-            <StatCard label="Clients"    value={guests.total} />
-            <View style={styles.kpiGap} />
-            <StatCard label="VIP"        value={guests.vip} accent={colors.gold} />
-          </View>
-          <View style={styles.kpiRow}>
-            <StatCard label="Avec tél."  value={guests.withPhone} />
-            <View style={styles.kpiGap} />
-            <StatCard label="Avec email" value={guests.withEmail} />
-          </View>
-          {extLoading ? (
-            <View style={styles.extLoadingCard}>
-              <ActivityIndicator color={colors.sand} size="small" />
-            </View>
-          ) : ext.sevenRooms.count > 0 ? (
-            <Card>
-              <InfoRow label="Clients notés" value={String(ext.sevenRooms.count)} />
-              <Divider />
-              <InfoRow label="Note moyenne"  value={fmtRating(ext.sevenRooms.avgRating)} />
-            </Card>
-          ) : null}
 
           {/* ── Canaux et intégrations ── */}
           <SectionHeader title="Canaux et intégrations" />
@@ -456,10 +321,10 @@ const styles = StyleSheet.create({
 
   // Back navigation
   backButton: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    alignSelf:      'flex-start',
-    marginBottom:   spacing.md,
+    flexDirection:   'row',
+    alignItems:      'center',
+    alignSelf:       'flex-start',
+    marginBottom:    spacing.md,
     paddingVertical: spacing.xs,
   },
   backButtonInline: {
@@ -475,10 +340,10 @@ const styles = StyleSheet.create({
 
   // Header
   headerRow: {
-    flexDirection:   'row',
-    alignItems:      'flex-start',
-    justifyContent:  'space-between',
-    marginBottom:    spacing.lg,
+    flexDirection:  'row',
+    alignItems:     'flex-start',
+    justifyContent: 'space-between',
+    marginBottom:   spacing.lg,
   },
   headerLeft: {
     flex: 1,
@@ -580,113 +445,6 @@ const styles = StyleSheet.create({
     height:           1,
     backgroundColor:  colors.borderLight,
     marginHorizontal: -spacing.lg,
-  },
-
-  // KPI grid
-  kpiRow: {
-    flexDirection: 'row',
-    marginBottom:  spacing.sm,
-  },
-  kpiGap: {
-    width: spacing.sm,
-  },
-
-  // Ext loading
-  extLoadingCard: {
-    backgroundColor: colors.surface,
-    borderRadius:    radius.lg,
-    padding:         spacing.xl,
-    alignItems:      'center',
-    marginBottom:    spacing.sm,
-    ...CARD_SHADOW,
-  },
-
-  // Empty state
-  emptyText: {
-    ...typography.body,
-    color:     colors.textMuted,
-    textAlign: 'center',
-    padding:   spacing.sm,
-  },
-
-  // Shift cards
-  shiftCard: {
-    backgroundColor: colors.surface,
-    borderRadius:    radius.lg,
-    padding:         spacing.lg,
-    marginBottom:    spacing.sm,
-    ...CARD_SHADOW,
-  },
-  shiftHeader: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-    marginBottom:   spacing.xs,
-  },
-  shiftName: {
-    ...typography.bodyMedium,
-    color: colors.textPrimary,
-  },
-  shiftBadge: {
-    backgroundColor:   colors.goldLight,
-    borderRadius:      radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical:   2,
-  },
-  shiftBadgeText: {
-    ...typography.label,
-    color: colors.gold,
-  },
-  shiftHours: {
-    ...typography.h2,
-    color:        colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  shiftMeta: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.sm,
-  },
-  shiftMetaItem: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.xs,
-  },
-  shiftMetaText: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-  shiftMetaDot: {
-    width:           3,
-    height:          3,
-    borderRadius:    2,
-    backgroundColor: colors.sandLight,
-  },
-
-  // Zone rows
-  zoneRow: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    paddingVertical: spacing.sm,
-    gap:             spacing.sm,
-  },
-  zoneIcon: {
-    width:           28,
-    height:          28,
-    borderRadius:    radius.sm,
-    backgroundColor: colors.goldLight,
-    alignItems:      'center',
-    justifyContent:  'center',
-    flexShrink:      0,
-  },
-  zoneName: {
-    ...typography.body,
-    color: colors.textPrimary,
-    flex:  1,
-  },
-  zoneCount: {
-    ...typography.small,
-    color: colors.textMuted,
   },
 
   // Channel rows

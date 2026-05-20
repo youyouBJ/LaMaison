@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useSettingsOverview } from '../../hooks/useSettingsOverview';
+import type { ZoneSummary } from '../../hooks/useSettingsOverview';
 import { supabase } from '../../lib/supabase';
 import { parseDateString } from '../../utils/date';
 import {
@@ -27,7 +28,9 @@ import { useDashboardExtended, type SevenRoomsStats } from '../../hooks/useDashb
 import { getReservationStatusColors, getReservationStatusLabel } from '../../utils/reservationStatus';
 import StatCard from '../../components/StatCard';
 import type { AdminStackParamList } from '../../navigation/AdminNavigator';
-import type { ReservationStatus } from '../../types/database';
+import type { ReservationStatus, Database } from '../../types/database';
+
+type ShiftRow = Database['public']['Tables']['shifts']['Row'];
 
 type Props = {
   navigation: NativeStackNavigationProp<AdminStackParamList, 'AdminMain'>;
@@ -39,6 +42,8 @@ const STATUS_ORDER: ReservationStatus[] = [
   'confirmed', 'pending', 'seated',
   'completed', 'cancelled', 'noshow',
 ];
+
+const DAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -52,6 +57,25 @@ function fmtPct(v: number | null): string {
   return `${v} %`;
 }
 
+function formatDays(days: number[]): string {
+  if (days.length === 0) return '–';
+  if (days.length === 7) return 'Tous les jours';
+  const sorted = [...days].sort((a, b) => a - b);
+  const labels = sorted.map(d => DAY_SHORT[d] ?? `J${d}`);
+  let consecutive = true;
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] !== sorted[i - 1] + 1) { consecutive = false; break; }
+  }
+  if (consecutive && sorted.length >= 3) {
+    return `${labels[0]}–${labels[labels.length - 1]}`;
+  }
+  return labels.join(', ');
+}
+
+function formatTime(t: string): string {
+  return t.length >= 5 ? t.substring(0, 5) : t;
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Card({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -60,6 +84,61 @@ function Card({ children }: { children: React.ReactNode }): React.JSX.Element {
 
 function SectionHeader({ title }: { title: string }): React.JSX.Element {
   return <Text style={styles.sectionTitle}>{title}</Text>;
+}
+
+function InfoRow({ label, value }: { label: string; value: string }): React.JSX.Element {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue} numberOfLines={2}>{value}</Text>
+    </View>
+  );
+}
+
+function Divider(): React.JSX.Element {
+  return <View style={styles.divider} />;
+}
+
+function ShiftCard({ shift }: { shift: ShiftRow }): React.JSX.Element {
+  const days  = formatDays(shift.days_of_week);
+  const start = formatTime(shift.start_time);
+  const end   = formatTime(shift.end_time);
+  return (
+    <View style={styles.shiftCard}>
+      <View style={styles.shiftHeader}>
+        <Text style={styles.shiftName}>{shift.name}</Text>
+        <View style={styles.shiftBadge}>
+          <Text style={styles.shiftBadgeText}>{days}</Text>
+        </View>
+      </View>
+      <Text style={styles.shiftHours}>{start}–{end}</Text>
+      <View style={styles.shiftMeta}>
+        <View style={styles.shiftMetaItem}>
+          <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+          <Text style={styles.shiftMetaText}>Slot {shift.slot_duration} min</Text>
+        </View>
+        <View style={styles.shiftMetaDot} />
+        <View style={styles.shiftMetaItem}>
+          <Ionicons name="people-outline" size={12} color={colors.textMuted} />
+          <Text style={styles.shiftMetaText}>{shift.max_covers_per_slot} couverts max</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ZoneRow({ zone }: { zone: ZoneSummary }): React.JSX.Element {
+  return (
+    <View style={styles.zoneRow}>
+      <View style={styles.zoneIcon}>
+        <Ionicons name="grid-outline" size={14} color={colors.gold} />
+      </View>
+      <Text style={styles.zoneName} numberOfLines={1}>{zone.name}</Text>
+      <Text style={styles.zoneCount}>
+        {zone.tableCount} table{zone.tableCount > 1 ? 's' : ''}
+      </Text>
+    </View>
+  );
 }
 
 function PeriodSelectorAdmin({
@@ -114,7 +193,7 @@ function PeriodKpiSection({
   return (
     <>
       <View style={styles.kpiRow}>
-        <StatCard label="Réservations" value={data.total} />
+        <StatCard label="Réservations"   value={data.total} />
         <View style={styles.kpiGap} />
         <StatCard label="Couverts actifs" value={data.covers} />
       </View>
@@ -169,7 +248,7 @@ function PeriodKpiSection({
   );
 }
 
-function ServicesSection({
+function PeriodServicesSection({
   data,
   loading,
 }: {
@@ -389,7 +468,7 @@ function CustomDateInputs({
   );
 }
 
-function GuestsDataSection({
+function PeriodGuestsSection({
   periodGuests,
   periodLoading,
 }: {
@@ -504,6 +583,8 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
 
   if (!data) return <SafeAreaView style={styles.safe} />;
 
+  const { restaurant, shifts, floor, guests } = data;
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
@@ -516,7 +597,7 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
           {/* ── Header ── */}
           <Text style={styles.headerLabel}>Admin</Text>
           <Text style={styles.headerTitle}>Administration</Text>
-          <Text style={styles.headerSub}>Pilotage · {data.restaurant.name}</Text>
+          <Text style={styles.headerSub}>Pilotage · {restaurant.name}</Text>
 
           {/* ── Entrée Paramètres ── */}
           <TouchableOpacity
@@ -529,7 +610,7 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
             </View>
             <View style={styles.settingsEntryContent}>
               <Text style={styles.settingsEntryTitle}>Paramètres</Text>
-              <Text style={styles.settingsEntrySub}>Restaurant, compte, services et configuration</Text>
+              <Text style={styles.settingsEntrySub}>Restaurant, compte et configuration</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
@@ -551,7 +632,7 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
           <PeriodKpiSection data={period.reservations} loading={periodLoading} />
 
           <Text style={styles.subSectionLabel}>Clients</Text>
-          <GuestsDataSection
+          <PeriodGuestsSection
             periodGuests={period.guests}
             periodLoading={periodLoading}
           />
@@ -559,8 +640,8 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
           <Text style={styles.subSectionLabel}>Répartition statuts</Text>
           <StatusSummarySection data={period.reservations} loading={periodLoading} />
 
-          <Text style={styles.subSectionLabel}>Services</Text>
-          <ServicesSection data={period.reservations} loading={periodLoading} />
+          <Text style={styles.subSectionLabel}>Services de la période</Text>
+          <PeriodServicesSection data={period.reservations} loading={periodLoading} />
 
           <Text style={styles.subSectionLabel}>Satisfaction client</Text>
           <SatisfactionSection
@@ -570,7 +651,70 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
             extLoading={extLoading}
           />
 
-          {/* ── Actions rapides ── */}
+          {/* ── Services ── */}
+          <SectionHeader title="Services" />
+          {shifts.length === 0 ? (
+            <Card>
+              <Text style={styles.emptyText}>Aucun service configuré.</Text>
+            </Card>
+          ) : (
+            shifts.map((shift, idx) => (
+              <ShiftCard key={shift.id ?? idx} shift={shift} />
+            ))
+          )}
+
+          {/* ── Plan de salle ── */}
+          <SectionHeader title="Plan de salle" />
+          <View style={styles.kpiRow}>
+            <StatCard label="Tables" value={floor.totalTables} accent={colors.gold} />
+            <View style={styles.kpiGap} />
+            <StatCard label="Zones"  value={floor.zoneCount} />
+          </View>
+          {floor.zones.length > 0 && (
+            <Card>
+              {floor.zones.map((z, idx) => (
+                <React.Fragment key={z.name}>
+                  {idx > 0 && <Divider />}
+                  <ZoneRow zone={z} />
+                </React.Fragment>
+              ))}
+            </Card>
+          )}
+
+          {/* ── Données clients ── */}
+          <SectionHeader title="Données clients" />
+          <View style={styles.kpiRow}>
+            <StatCard label="Clients"    value={guests.total} />
+            <View style={styles.kpiGap} />
+            <StatCard label="VIP"        value={guests.vip} accent={colors.gold} />
+          </View>
+          <View style={styles.kpiRow}>
+            <StatCard label="Avec email" value={guests.withEmail} />
+          </View>
+          {extLoading ? (
+            <View style={styles.extLoadingCard}>
+              <ActivityIndicator color={colors.sand} size="small" />
+            </View>
+          ) : (
+            <Card>
+              <InfoRow label="Avec tél." value={String(guests.withPhone)} />
+              {ext.sevenRooms.count > 0 && (
+                <>
+                  <Divider />
+                  <InfoRow label="Clients notés" value={String(ext.sevenRooms.count)} />
+                  <Divider />
+                  <InfoRow
+                    label="Note moyenne"
+                    value={ext.sevenRooms.avgRating !== null
+                      ? `${ext.sevenRooms.avgRating.toFixed(1)} / 5`
+                      : '—'}
+                  />
+                </>
+              )}
+            </Card>
+          )}
+
+          {/* ── Actualiser ── */}
           <TouchableOpacity style={styles.refreshButton} onPress={handleRefreshAll}>
             <Ionicons name="refresh-outline" size={16} color={colors.cta} />
             <Text style={styles.refreshButtonText}>Actualiser</Text>
@@ -704,6 +848,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.h2,
     color:        colors.textPrimary,
+    marginTop:    spacing.xxl,
     marginBottom: spacing.md,
   },
 
@@ -715,6 +860,31 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
   },
 
+  // Info rows
+  infoRow: {
+    flexDirection:   'row',
+    alignItems:      'flex-start',
+    paddingVertical: spacing.sm,
+    gap:             spacing.sm,
+  },
+  infoLabel: {
+    ...typography.label,
+    color:      colors.textMuted,
+    width:      96,
+    marginTop:  2,
+    flexShrink: 0,
+  },
+  infoValue: {
+    ...typography.body,
+    color: colors.textPrimary,
+    flex:  1,
+  },
+  divider: {
+    height:           1,
+    backgroundColor:  colors.borderLight,
+    marginHorizontal: -spacing.lg,
+  },
+
   // KPI grid
   kpiRow: {
     flexDirection: 'row',
@@ -724,7 +894,7 @@ const styles = StyleSheet.create({
     width: spacing.sm,
   },
 
-  // Loading placeholder for pilotage sections
+  // Loading placeholder
   extLoadingCard: {
     backgroundColor: colors.surface,
     borderRadius:    radius.lg,
@@ -891,7 +1061,87 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Refresh button (actions rapides)
+  // Shift cards
+  shiftCard: {
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    padding:         spacing.lg,
+    marginBottom:    spacing.sm,
+    ...CARD_SHADOW,
+  },
+  shiftHeader: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginBottom:   spacing.xs,
+  },
+  shiftName: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
+  },
+  shiftBadge: {
+    backgroundColor:   colors.goldLight,
+    borderRadius:      radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   2,
+  },
+  shiftBadgeText: {
+    ...typography.label,
+    color: colors.gold,
+  },
+  shiftHours: {
+    ...typography.h2,
+    color:        colors.textPrimary,
+    marginBottom: spacing.sm,
+  },
+  shiftMeta: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing.sm,
+  },
+  shiftMetaItem: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing.xs,
+  },
+  shiftMetaText: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  shiftMetaDot: {
+    width:           3,
+    height:          3,
+    borderRadius:    2,
+    backgroundColor: colors.sandLight,
+  },
+
+  // Zone rows
+  zoneRow: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    paddingVertical: spacing.sm,
+    gap:             spacing.sm,
+  },
+  zoneIcon: {
+    width:           28,
+    height:          28,
+    borderRadius:    radius.sm,
+    backgroundColor: colors.goldLight,
+    alignItems:      'center',
+    justifyContent:  'center',
+    flexShrink:      0,
+  },
+  zoneName: {
+    ...typography.body,
+    color: colors.textPrimary,
+    flex:  1,
+  },
+  zoneCount: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+
+  // Refresh button
   refreshButton: {
     flexDirection:     'row',
     alignItems:        'center',
