@@ -12,14 +12,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useSettingsOverview } from '../../hooks/useSettingsOverview';
 import { supabase } from '../../lib/supabase';
+import {
+  usePeriodStats,
+  PERIOD_OPTIONS,
+  type DashboardPeriod,
+  type PeriodReservationStats,
+  type PeriodFeedbackStats,
+  type PeriodGuestStats,
+} from '../../hooks/usePeriodStats';
+import { useDashboardExtended, type SevenRoomsStats } from '../../hooks/useDashboardExtended';
+import { getReservationStatusColors, getReservationStatusLabel } from '../../utils/reservationStatus';
 import StatCard from '../../components/StatCard';
-import type { ZoneSummary } from '../../hooks/useSettingsOverview';
-import type { Database } from '../../types/database';
+import type { ZoneSummary, GuestCounts } from '../../hooks/useSettingsOverview';
+import type { Database, ReservationStatus } from '../../types/database';
 
 type ShiftRow = Database['public']['Tables']['shifts']['Row'];
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const ROLE_LABELS: Record<string, string> = {
   admin:   'Admin',
@@ -28,8 +38,24 @@ const ROLE_LABELS: Record<string, string> = {
   waiter:  'Serveur',
 };
 
-// 0=Dim, 1=Lun … 6=Sam (JavaScript convention)
 const DAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+
+const STATUS_ORDER: ReservationStatus[] = [
+  'confirmed', 'pending', 'seated',
+  'completed', 'cancelled', 'noshow',
+];
+
+type Feature = { icon: IoniconsName; label: string };
+const FEATURES: Feature[] = [
+  { icon: 'logo-whatsapp',      label: 'WhatsApp Business' },
+  { icon: 'mail-outline',       label: 'Email Resend' },
+  { icon: 'chatbubble-outline', label: 'SMS secours' },
+  { icon: 'card-outline',       label: 'Stripe abonnements' },
+  { icon: 'business-outline',   label: 'Multi-restaurants' },
+  { icon: 'map-outline',        label: 'Éditeur plan avancé' },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDays(days: number[]): string {
   if (days.length === 0) return '–';
@@ -54,19 +80,17 @@ function getRoleLabel(role: string): string {
   return ROLE_LABELS[role] ?? role;
 }
 
-// ─── Upcoming features ────────────────────────────────────────────────────────
+function fmtRating(v: number | null): string {
+  if (v === null) return '—';
+  return v.toFixed(1);
+}
 
-type Feature = { icon: IoniconsName; label: string };
-const FEATURES: Feature[] = [
-  { icon: 'logo-whatsapp',    label: 'WhatsApp Business' },
-  { icon: 'mail-outline',     label: 'Email Resend' },
-  { icon: 'chatbubble-outline', label: 'SMS secours' },
-  { icon: 'card-outline',     label: 'Stripe abonnements' },
-  { icon: 'business-outline', label: 'Multi-restaurants' },
-  { icon: 'map-outline',      label: 'Éditeur plan avancé' },
-];
+function fmtPct(v: number | null): string {
+  if (v === null) return '—';
+  return `${v} %`;
+}
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Base sub-components ──────────────────────────────────────────────────────
 
 function InfoRow({ label, value }: { label: string; value: string }): React.JSX.Element {
   return (
@@ -143,12 +167,375 @@ function FeatureCard({ icon, label }: Feature): React.JSX.Element {
   );
 }
 
+// ─── Pilotage sub-components ──────────────────────────────────────────────────
+
+function PeriodSelectorAdmin({
+  active,
+  onChange,
+}: {
+  active: DashboardPeriod;
+  onChange: (p: DashboardPeriod) => void;
+}): React.JSX.Element {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.periodRow}
+      style={styles.periodScroll}
+    >
+      {PERIOD_OPTIONS.map(opt => {
+        const isActive = active === opt.key;
+        return (
+          <TouchableOpacity
+            key={opt.key}
+            style={[styles.periodChip, isActive && styles.periodChipActive]}
+            onPress={() => { onChange(opt.key); }}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.periodChipText, isActive && styles.periodChipTextActive]}>
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+function PeriodKpiSection({
+  data,
+  loading,
+}: {
+  data: PeriodReservationStats;
+  loading: boolean;
+}): React.JSX.Element {
+  if (loading) {
+    return (
+      <View style={styles.extLoadingCard}>
+        <ActivityIndicator color={colors.sand} size="small" />
+      </View>
+    );
+  }
+  if (data.total === 0) {
+    return (
+      <Card>
+        <Text style={styles.emptyText}>Aucune réservation sur cette période.</Text>
+      </Card>
+    );
+  }
+  return (
+    <>
+      <View style={styles.kpiRow}>
+        <StatCard label="Réservations" value={data.total} />
+        <View style={styles.kpiGap} />
+        <StatCard label="Couverts actifs" value={data.covers} />
+      </View>
+      <View style={styles.kpiRow}>
+        <StatCard label="Confirmées" value={data.confirmed} accent={colors.gold} />
+        <View style={styles.kpiGap} />
+        <StatCard label="Terminées" value={data.completed} />
+      </View>
+      <View style={styles.kpiRow}>
+        <StatCard label="En attente" value={data.pending} />
+        <View style={styles.kpiGap} />
+        <StatCard label="À table" value={data.seated} accent={colors.cta} />
+      </View>
+      <View style={styles.kpiRow}>
+        <StatCard
+          label="Annulées"
+          value={data.cancelled}
+          valueText={data.cancellationRate > 0 ? `${data.cancelled} (${data.cancellationRate} %)` : `${data.cancelled}`}
+          accent={data.cancelled > 0 ? colors.cta : colors.textMuted}
+        />
+        <View style={styles.kpiGap} />
+        <StatCard
+          label="No-show"
+          value={data.noshow}
+          valueText={data.noshowRate > 0 ? `${data.noshow} (${data.noshowRate} %)` : `${data.noshow}`}
+          accent={data.noshow > 0 ? colors.cta : colors.textMuted}
+        />
+      </View>
+      {data.uniqueGuests > 0 && (
+        <View style={styles.kpiRow}>
+          <StatCard label="Walk-ins" value={data.walkIns} />
+          <View style={styles.kpiGap} />
+          <StatCard label="Clients uniques" value={data.uniqueGuests} />
+        </View>
+      )}
+      {(data.birthdays > 0 || data.events > 0) && (
+        <View style={styles.kpiRow}>
+          <StatCard
+            label="Anniversaires"
+            value={data.birthdays}
+            accent={data.birthdays > 0 ? colors.gold : colors.textMuted}
+          />
+          <View style={styles.kpiGap} />
+          <StatCard
+            label="Événements"
+            value={data.events}
+            accent={data.events > 0 ? colors.gold : colors.textMuted}
+          />
+        </View>
+      )}
+    </>
+  );
+}
+
+function ServicesSection({
+  data,
+  loading,
+}: {
+  data: PeriodReservationStats;
+  loading: boolean;
+}): React.JSX.Element {
+  if (loading) {
+    return (
+      <View style={styles.extLoadingCard}>
+        <ActivityIndicator color={colors.sand} size="small" />
+      </View>
+    );
+  }
+  return (
+    <>
+      <View style={styles.kpiRow}>
+        <StatCard label="Déjeuner" value={data.lunchCount} accent={colors.gold} />
+        <View style={styles.kpiGap} />
+        <StatCard label="Couverts déj." value={data.lunchCovers} />
+      </View>
+      <View style={styles.kpiRow}>
+        <StatCard label="Dîner" value={data.dinnerCount} accent={colors.gold} />
+        <View style={styles.kpiGap} />
+        <StatCard label="Couverts dîn." value={data.dinnerCovers} />
+      </View>
+    </>
+  );
+}
+
+function StatusBreakdownRow({
+  status,
+  count,
+  rate,
+}: {
+  status: ReservationStatus;
+  count: number;
+  rate?: number;
+}): React.JSX.Element {
+  const { backgroundColor, color } = getReservationStatusColors(status);
+  const label = getReservationStatusLabel(status);
+  return (
+    <View style={styles.statusRowItem}>
+      <View style={[styles.statusPill, { backgroundColor }]}>
+        <Text style={[styles.statusPillText, { color }]}>{label}</Text>
+      </View>
+      <Text style={styles.statusCount}>
+        {count}{rate !== undefined && rate > 0 ? ` · ${rate} %` : ''}
+      </Text>
+    </View>
+  );
+}
+
+function StatusSummarySection({
+  data,
+  loading,
+}: {
+  data: PeriodReservationStats;
+  loading: boolean;
+}): React.JSX.Element {
+  if (loading) {
+    return (
+      <View style={styles.extLoadingCard}>
+        <ActivityIndicator color={colors.sand} size="small" />
+      </View>
+    );
+  }
+  return (
+    <View style={styles.statusCard}>
+      <View style={styles.statusColumns}>
+        <View style={styles.statusColumn}>
+          {STATUS_ORDER.slice(0, 3).map(s => {
+            const count = data[s as keyof PeriodReservationStats] as number;
+            const rate  = s === 'cancelled' ? data.cancellationRate : s === 'noshow' ? data.noshowRate : undefined;
+            return <StatusBreakdownRow key={s} status={s} count={count} rate={rate} />;
+          })}
+        </View>
+        <View style={[styles.statusColumn, styles.statusColumnRight]}>
+          {STATUS_ORDER.slice(3).map(s => {
+            const count = data[s as keyof PeriodReservationStats] as number;
+            const rate  = s === 'cancelled' ? data.cancellationRate : s === 'noshow' ? data.noshowRate : undefined;
+            return <StatusBreakdownRow key={s} status={s} count={count} rate={rate} />;
+          })}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function SatisfactionSection({
+  feedbackData,
+  sevenRooms,
+  periodLoading,
+  extLoading,
+}: {
+  feedbackData: PeriodFeedbackStats | null;
+  sevenRooms: SevenRoomsStats;
+  periodLoading: boolean;
+  extLoading: boolean;
+}): React.JSX.Element {
+  if (periodLoading || extLoading) {
+    return (
+      <View style={styles.extLoadingCard}>
+        <ActivityIndicator color={colors.sand} size="small" />
+      </View>
+    );
+  }
+
+  const hasSR       = sevenRooms.count > 0;
+  const hasFeedback = feedbackData !== null && feedbackData.total > 0;
+
+  // No data at all
+  if (!hasSR && !hasFeedback) {
+    return (
+      <Card>
+        <Text style={styles.emptyText}>
+          {feedbackData === null
+            ? 'Module satisfaction non configuré.'
+            : 'Aucune enquête reçue sur cette période.'}
+        </Text>
+      </Card>
+    );
+  }
+
+  // SR available but no in-app surveys for this period
+  if (!hasFeedback) {
+    return (
+      <>
+        <View style={styles.kpiRow}>
+          <StatCard label="Clients notés" value={sevenRooms.count} accent={colors.gold} />
+          <View style={styles.kpiGap} />
+          <StatCard
+            label="Note moyenne"
+            value={0}
+            valueText={`${fmtRating(sevenRooms.avgRating)} / 5`}
+            accent={colors.gold}
+          />
+        </View>
+        <Text style={styles.srNote}>
+          Données SevenRooms · toutes périodes
+          {feedbackData !== null ? ' · aucune enquête La Maison sur cette période' : ''}
+        </Text>
+        <Text style={styles.satisfactionNote}>
+          Les données combinent les notes importées SevenRooms et les nouvelles enquêtes La Maison lorsque disponibles.
+        </Text>
+      </>
+    );
+  }
+
+  // In-app surveys available — feedbackData is non-null and has data
+  return (
+    <>
+      <View style={styles.kpiRow}>
+        <StatCard label="Avis reçus" value={feedbackData.total} accent={colors.gold} />
+        <View style={styles.kpiGap} />
+        <StatCard
+          label="Note globale"
+          value={0}
+          valueText={`${fmtRating(feedbackData.avgOverall)} / 5`}
+          accent={colors.gold}
+        />
+      </View>
+      <View style={styles.kpiRow}>
+        <StatCard label="Cuisine"  value={0} valueText={fmtRating(feedbackData.avgFood)} />
+        <View style={styles.kpiGap} />
+        <StatCard label="Boissons" value={0} valueText={fmtRating(feedbackData.avgDrinks)} />
+      </View>
+      <View style={styles.kpiRow}>
+        <StatCard label="Service"  value={0} valueText={fmtRating(feedbackData.avgService)} />
+        <View style={styles.kpiGap} />
+        <StatCard label="Ambiance" value={0} valueText={fmtRating(feedbackData.avgAmbience)} />
+      </View>
+      {feedbackData.recommendedRate !== null && (
+        <View style={styles.kpiRow}>
+          <StatCard
+            label="Recommande"
+            value={0}
+            valueText={fmtPct(feedbackData.recommendedRate)}
+            accent={colors.statusFree}
+          />
+        </View>
+      )}
+      {feedbackData.lastComment ? (
+        <View style={styles.commentCard}>
+          <Text style={styles.commentLabel}>Dernier commentaire</Text>
+          <Text style={styles.commentText} numberOfLines={4}>{feedbackData.lastComment}</Text>
+        </View>
+      ) : null}
+      {hasSR && (
+        <Text style={styles.srNote}>
+          SevenRooms : {fmtRating(sevenRooms.avgRating)} / 5 · {sevenRooms.count} clients notés · toutes périodes
+        </Text>
+      )}
+      <Text style={styles.satisfactionNote}>
+        Les données combinent les notes importées SevenRooms et les nouvelles enquêtes La Maison lorsque disponibles.
+      </Text>
+    </>
+  );
+}
+
+function GuestsDataSection({
+  periodGuests,
+  globalGuests,
+  periodLoading,
+}: {
+  periodGuests: PeriodGuestStats;
+  globalGuests: GuestCounts;
+  periodLoading: boolean;
+}): React.JSX.Element {
+  if (periodLoading) {
+    return (
+      <View style={styles.extLoadingCard}>
+        <ActivityIndicator color={colors.sand} size="small" />
+      </View>
+    );
+  }
+  return (
+    <>
+      <View style={styles.kpiRow}>
+        <StatCard label="Clients uniques"  value={periodGuests.uniqueReserving} />
+        <View style={styles.kpiGap} />
+        <StatCard label="Nouveaux clients" value={periodGuests.newGuests} />
+      </View>
+      <View style={styles.kpiRow}>
+        <StatCard label="Walk-ins" value={periodGuests.walkIns} />
+        <View style={styles.kpiGap} />
+        <StatCard label="VIP"      value={periodGuests.vipReserving} accent={colors.gold} />
+      </View>
+      <Text style={styles.subSectionLabel}>Base clients</Text>
+      <View style={styles.kpiRow}>
+        <StatCard label="Total clients" value={globalGuests.total} />
+        <View style={styles.kpiGap} />
+        <StatCard label="VIP"           value={globalGuests.vip} accent={colors.gold} />
+      </View>
+      <View style={styles.kpiRow}>
+        <StatCard label="Avec téléphone" value={globalGuests.withPhone} />
+        <View style={styles.kpiGap} />
+        <StatCard label="Avec email"     value={globalGuests.withEmail} />
+      </View>
+    </>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function SettingsScreen(): React.JSX.Element {
   const { loading, error, data, refresh } = useSettingsOverview();
-  const [signingOut, setSigningOut]         = useState(false);
-  const [signOutError, setSignOutError]     = useState<string | null>(null);
+  const [signingOut, setSigningOut]       = useState(false);
+  const [signOutError, setSignOutError]   = useState<string | null>(null);
+  const [activePeriod, setActivePeriod]   = useState<DashboardPeriod>('month');
+
+  // restaurantId is null while settings load — hooks handle null gracefully
+  const restaurantId = data?.restaurant.id ?? null;
+  const { loading: periodLoading, stats: period, refresh: periodRefresh } = usePeriodStats(restaurantId, activePeriod);
+  const { loading: extLoading, stats: ext, refresh: extRefresh } = useDashboardExtended(restaurantId);
 
   const handleSignOut = async (): Promise<void> => {
     setSigningOut(true);
@@ -165,6 +552,12 @@ export default function SettingsScreen(): React.JSX.Element {
       setSignOutError('Erreur lors de la déconnexion.');
       setSigningOut(false);
     }
+  };
+
+  const handleRefreshAll = (): void => {
+    refresh();
+    periodRefresh();
+    extRefresh();
   };
 
   if (loading) {
@@ -185,7 +578,7 @@ export default function SettingsScreen(): React.JSX.Element {
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>Impossible de charger les paramètres</Text>
             <Text style={styles.errorMessage}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={refresh}>
+            <TouchableOpacity style={styles.retryButton} onPress={handleRefreshAll}>
               <Text style={styles.retryButtonText}>Réessayer</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -222,10 +615,38 @@ export default function SettingsScreen(): React.JSX.Element {
           <Text style={styles.headerSub}>Configuration & pilotage · {restaurant.name}</Text>
 
           {/* ── Refresh button ── */}
-          <TouchableOpacity style={styles.refreshButton} onPress={refresh}>
+          <TouchableOpacity style={styles.refreshButton} onPress={handleRefreshAll}>
             <Ionicons name="refresh-outline" size={16} color={colors.cta} />
             <Text style={styles.refreshButtonText}>Actualiser</Text>
           </TouchableOpacity>
+
+          {/* ── Pilotage avancé ── */}
+          <SectionHeader title="Pilotage avancé" />
+          <PeriodSelectorAdmin active={activePeriod} onChange={setActivePeriod} />
+
+          <Text style={styles.subSectionLabel}>Réservations</Text>
+          <PeriodKpiSection data={period.reservations} loading={periodLoading} />
+
+          <Text style={styles.subSectionLabel}>Données clients</Text>
+          <GuestsDataSection
+            periodGuests={period.guests}
+            globalGuests={guests}
+            periodLoading={periodLoading}
+          />
+
+          <Text style={styles.subSectionLabel}>Répartition statuts</Text>
+          <StatusSummarySection data={period.reservations} loading={periodLoading} />
+
+          <Text style={styles.subSectionLabel}>Services</Text>
+          <ServicesSection data={period.reservations} loading={periodLoading} />
+
+          <Text style={styles.subSectionLabel}>Satisfaction client</Text>
+          <SatisfactionSection
+            feedbackData={period.feedback}
+            sevenRooms={ext.sevenRooms}
+            periodLoading={periodLoading}
+            extLoading={extLoading}
+          />
 
           {/* ── Restaurant ── */}
           <SectionHeader title="Restaurant" />
@@ -250,7 +671,7 @@ export default function SettingsScreen(): React.JSX.Element {
               </>
             ) : null}
             <Divider />
-            <InfoRow label="Fuseau"    value={restaurant.timezone} />
+            <InfoRow label="Fuseau"       value={restaurant.timezone} />
             <Divider />
             <InfoRow label="Réservations" value="Téléphone uniquement" />
           </Card>
@@ -294,19 +715,6 @@ export default function SettingsScreen(): React.JSX.Element {
               ))}
             </Card>
           )}
-
-          {/* ── Données clients ── */}
-          <SectionHeader title="Données clients" />
-          <View style={styles.kpiRow}>
-            <StatCard label="Clients" value={guests.total} />
-            <View style={styles.kpiGap} />
-            <StatCard label="VIP" value={guests.vip} accent={colors.gold} />
-          </View>
-          <View style={[styles.kpiRow, styles.kpiRowGap]}>
-            <StatCard label="Avec téléphone" value={guests.withPhone} />
-            <View style={styles.kpiGap} />
-            <StatCard label="Avec email" value={guests.withEmail} />
-          </View>
 
           {/* ── Fonctionnalités à venir ── */}
           <SectionHeader title="Fonctionnalités à venir" />
@@ -368,24 +776,24 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: spacing.xxl },
   container: {
-    padding:      spacing.xl,
-    maxWidth:     layout.contentMaxWidth,
-    width:        '100%',
-    alignSelf:    'center',
+    padding:   spacing.xl,
+    maxWidth:  layout.contentMaxWidth,
+    width:     '100%',
+    alignSelf: 'center',
   },
   centered: {
-    flex:            1,
-    justifyContent:  'center',
-    alignItems:      'center',
-    padding:         spacing.xl,
+    flex:           1,
+    justifyContent: 'center',
+    alignItems:     'center',
+    padding:        spacing.xl,
   },
 
   // Loading
   loadingText: {
     ...typography.body,
-    color:      colors.textMuted,
-    marginTop:  spacing.md,
-    textAlign:  'center',
+    color:     colors.textMuted,
+    marginTop: spacing.md,
+    textAlign: 'center',
   },
 
   // Error
@@ -437,10 +845,10 @@ const styles = StyleSheet.create({
 
   // Refresh button
   refreshButton: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    alignSelf:       'flex-start',
-    gap:             spacing.xs,
+    flexDirection:     'row',
+    alignItems:        'center',
+    alignSelf:         'flex-start',
+    gap:               spacing.xs,
     paddingVertical:   spacing.sm,
     paddingHorizontal: spacing.md,
     backgroundColor:   colors.ctaLight,
@@ -470,16 +878,16 @@ const styles = StyleSheet.create({
 
   // Info rows
   infoRow: {
-    flexDirection:  'row',
-    alignItems:     'flex-start',
+    flexDirection:   'row',
+    alignItems:      'flex-start',
     paddingVertical: spacing.sm,
     gap:             spacing.sm,
   },
   infoLabel: {
     ...typography.label,
-    color:     colors.textMuted,
-    width:     96,
-    marginTop: 2,
+    color:      colors.textMuted,
+    width:      96,
+    marginTop:  2,
     flexShrink: 0,
   },
   infoValue: {
@@ -488,9 +896,150 @@ const styles = StyleSheet.create({
     flex:  1,
   },
   divider: {
-    height:          1,
-    backgroundColor: colors.borderLight,
+    height:           1,
+    backgroundColor:  colors.borderLight,
     marginHorizontal: -spacing.lg,
+  },
+
+  // KPI grid
+  kpiRow: {
+    flexDirection: 'row',
+    marginBottom:  spacing.sm,
+  },
+  kpiRowGap: {
+    marginTop: 0,
+  },
+  kpiGap: {
+    width: spacing.sm,
+  },
+
+  // Loading placeholder for pilotage sections
+  extLoadingCard: {
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    padding:         spacing.xl,
+    alignItems:      'center',
+    marginBottom:    spacing.sm,
+    ...CARD_SHADOW,
+  },
+
+  // Empty state (inside Card)
+  emptyText: {
+    ...typography.body,
+    color:     colors.textMuted,
+    textAlign: 'center',
+    padding:   spacing.sm,
+  },
+
+  // Period selector
+  periodScroll: {
+    marginBottom: spacing.xs,
+  },
+  periodRow: {
+    flexDirection: 'row',
+    gap:           spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  periodChip: {
+    paddingVertical:   spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius:      radius.xl,
+    backgroundColor:   colors.surface,
+    borderWidth:       1,
+    borderColor:       colors.border,
+  },
+  periodChipActive: {
+    backgroundColor: colors.cta,
+    borderColor:     colors.cta,
+  },
+  periodChipText: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+  },
+  periodChipTextActive: {
+    color: colors.textOnDark,
+  },
+
+  // Sub-section labels within Pilotage
+  subSectionLabel: {
+    ...typography.label,
+    color:        colors.textMuted,
+    marginTop:    spacing.lg,
+    marginBottom: spacing.sm,
+  },
+
+  // Status breakdown
+  statusCard: {
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    padding:         spacing.lg,
+    ...CARD_SHADOW,
+  },
+  statusColumns: {
+    flexDirection: 'row',
+  },
+  statusColumn: {
+    flex: 1,
+    gap:  spacing.sm,
+  },
+  statusColumnRight: {
+    marginLeft: spacing.lg,
+  },
+  statusRowItem: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+  },
+  statusPill: {
+    borderRadius:      radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   spacing.xs,
+  },
+  statusPillText: {
+    ...typography.label,
+  },
+  statusCount: {
+    fontFamily: typography.stat.fontFamily,
+    fontSize:   typography.body.fontSize,
+    color:      colors.textPrimary,
+  },
+
+  // Satisfaction — SevenRooms compact note
+  srNote: {
+    ...typography.small,
+    color:        colors.textMuted,
+    marginTop:    spacing.sm,
+    marginBottom: spacing.xs,
+    fontStyle:    'italic',
+  },
+
+  // Satisfaction — disclaimer on combined data sources
+  satisfactionNote: {
+    ...typography.small,
+    color:      colors.textMuted,
+    marginTop:  spacing.md,
+    fontStyle:  'italic',
+    textAlign:  'center',
+  },
+
+  // Satisfaction — last comment
+  commentCard: {
+    backgroundColor:  colors.surfaceWarm,
+    borderRadius:     radius.lg,
+    padding:          spacing.lg,
+    marginTop:        spacing.sm,
+    borderLeftWidth:  3,
+    borderLeftColor:  colors.gold,
+  },
+  commentLabel: {
+    ...typography.label,
+    color:        colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  commentText: {
+    ...typography.body,
+    color:     colors.textSecondary,
+    fontStyle: 'italic',
   },
 
   // Shift cards
@@ -512,8 +1061,8 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   shiftBadge: {
-    backgroundColor: colors.goldLight,
-    borderRadius:    radius.sm,
+    backgroundColor:   colors.goldLight,
+    borderRadius:      radius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical:   2,
   },
@@ -547,18 +1096,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sandLight,
   },
 
-  // KPI grid (reused from dashboard)
-  kpiRow: {
-    flexDirection: 'row',
-    marginBottom:  spacing.sm,
-  },
-  kpiRowGap: {
-    marginTop: 0,
-  },
-  kpiGap: {
-    width: spacing.sm,
-  },
-
   // Zone rows
   zoneRow: {
     flexDirection:   'row',
@@ -587,10 +1124,10 @@ const styles = StyleSheet.create({
 
   // Feature grid
   featureGrid: {
-    flexDirection:  'row',
-    flexWrap:       'wrap',
-    gap:            spacing.sm,
-    marginBottom:   spacing.sm,
+    flexDirection: 'row',
+    flexWrap:      'wrap',
+    gap:           spacing.sm,
+    marginBottom:  spacing.sm,
   },
   featureCard: {
     backgroundColor: colors.surface,
@@ -607,22 +1144,14 @@ const styles = StyleSheet.create({
     flex:  1,
   },
   featureBadge: {
-    backgroundColor: colors.borderLight,
-    borderRadius:    radius.sm,
+    backgroundColor:   colors.borderLight,
+    borderRadius:      radius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical:   2,
   },
   featureBadgeText: {
     ...typography.label,
     color: colors.textMuted,
-  },
-
-  // Empty state
-  emptyText: {
-    ...typography.body,
-    color:     colors.textMuted,
-    textAlign: 'center',
-    padding:   spacing.sm,
   },
 
   // Sign-out
@@ -657,7 +1186,7 @@ const styles = StyleSheet.create({
   },
   signOutTextSmall: {
     ...typography.small,
-    color:                colors.textMuted,
-    textDecorationLine:   'underline',
+    color:               colors.textMuted,
+    textDecorationLine:  'underline',
   },
 });

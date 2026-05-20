@@ -74,9 +74,17 @@ export type PeriodFeedbackStats = {
   lastComment: string | null;
 };
 
+export type PeriodGuestStats = {
+  uniqueReserving: number;
+  walkIns: number;
+  newGuests: number;
+  vipReserving: number;
+};
+
 export type PeriodStatsResult = {
   reservations: PeriodReservationStats;
   feedback: PeriodFeedbackStats | null;
+  guests: PeriodGuestStats;
 };
 
 // ─── Internal row types ───────────────────────────────────────────────────────
@@ -117,6 +125,7 @@ const EMPTY_RES: PeriodReservationStats = {
 const INITIAL_STATS: PeriodStatsResult = {
   reservations: { ...EMPTY_RES },
   feedback: null,
+  guests: { uniqueReserving: 0, walkIns: 0, newGuests: 0, vipReserving: 0 },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -215,10 +224,10 @@ export function usePeriodStats(restaurantId: string | null, period: DashboardPer
   const fetchIdRef            = useRef(0);
 
   const fetchAll = useCallback(async (resId: string, p: DashboardPeriod): Promise<void> => {
-    const myId         = ++fetchIdRef.current;
+    const myId           = ++fetchIdRef.current;
     const { start, end } = getPeriodDateRange(p);
 
-    const [resResult, fbResult] = await Promise.all([
+    const [resResult, fbResult, newGuestsResult] = await Promise.all([
       supabase
         .from('reservations')
         .select('status, party_size, notes, guest_id, source, time_slot')
@@ -233,12 +242,45 @@ export function usePeriodStats(restaurantId: string | null, period: DashboardPer
         .select('rating_overall, rating_food, rating_drinks, rating_service, rating_ambience, recommended, comment, created_at')
         .eq('restaurant_id', resId)
         .order('created_at', { ascending: false }),
+
+      // Count guests created in the period (no row data loaded)
+      supabase
+        .from('guests')
+        .select('*', { count: 'exact', head: true })
+        .eq('restaurant_id', resId)
+        .gte('created_at', start)
+        .lt('created_at', addDaysToDateString(end, 1)),
     ]);
 
     // Discard stale responses when the period changed mid-flight
     if (fetchIdRef.current !== myId) return;
 
     const resRows = (resResult.data as ResRow[] | null) ?? [];
+
+    // Collect unique guest IDs that reserved in this period
+    const guestIdSet = new Set<string>();
+    for (const r of resRows) {
+      if (r.guest_id !== null) guestIdSet.add(r.guest_id);
+    }
+    const guestIdBatch = [...guestIdSet].slice(0, 400);
+
+    // Count VIP among reserving guests (sequential, depends on guestIdBatch)
+    let vipReserving = 0;
+    if (guestIdBatch.length > 0) {
+      const vipResult = await supabase
+        .from('guests')
+        .select('*', { count: 'exact', head: true })
+        .eq('restaurant_id', resId)
+        .eq('vip', true)
+        .in('id', guestIdBatch);
+      if (!vipResult.error) {
+        vipReserving = vipResult.count ?? 0;
+      }
+    }
+
+    if (fetchIdRef.current !== myId) return;
+
+    const resStats = computeReservationStats(resRows);
 
     let feedback: PeriodFeedbackStats | null = null;
     if (!fbResult.error) {
@@ -252,8 +294,14 @@ export function usePeriodStats(restaurantId: string | null, period: DashboardPer
     }
 
     setStats({
-      reservations: computeReservationStats(resRows),
+      reservations: resStats,
       feedback,
+      guests: {
+        uniqueReserving: resStats.uniqueGuests,
+        walkIns:         resStats.walkIns,
+        newGuests:       newGuestsResult.count ?? 0,
+        vipReserving,
+      },
     });
   }, []);
 
