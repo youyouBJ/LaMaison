@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,14 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { colors, typography, spacing, radius, layout } from '../../theme';
 import { useTodayDashboard, type DashboardReservation } from '../../hooks/useTodayDashboard';
-import { useDashboardExtended, type FeedbackStats, type PeriodStats, type ClientStats } from '../../hooks/useDashboardExtended';
+import { useDashboardExtended, type ClientStats } from '../../hooks/useDashboardExtended';
+import {
+  usePeriodStats,
+  PERIOD_OPTIONS,
+  type DashboardPeriod,
+  type PeriodReservationStats,
+  type PeriodFeedbackStats,
+} from '../../hooks/usePeriodStats';
 import { formatReadableDate, formatTimeSlot } from '../../utils/date';
 import { getReservationStatusColors, getReservationStatusLabel } from '../../utils/reservationStatus';
 import { reservationNeedsPhoneConfirmation } from '../../utils/reservationConfirmation';
@@ -52,14 +59,68 @@ function fmtRating(v: number | null): string {
 
 function fmtPct(v: number | null): string {
   if (v === null) return '—';
-  return `${v}%`;
+  return `${v} %`;
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Primitive sub-components ─────────────────────────────────────────────────
 
 function SectionHeader({ title }: { title: string }): React.JSX.Element {
   return <Text style={styles.sectionTitle}>{title}</Text>;
 }
+
+function KpiRow({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <View style={styles.kpiRow}>{children}</View>;
+}
+
+function KpiGap(): React.JSX.Element {
+  return <View style={styles.kpiGap} />;
+}
+
+function EmptyCard({ title, subtitle }: { title: string; subtitle?: string }): React.JSX.Element {
+  return (
+    <View style={styles.emptyCard}>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.emptySubtitle}>{subtitle}</Text> : null}
+    </View>
+  );
+}
+
+// ─── Period selector ──────────────────────────────────────────────────────────
+
+function PeriodSelector({
+  active,
+  onChange,
+}: {
+  active: DashboardPeriod;
+  onChange: (p: DashboardPeriod) => void;
+}): React.JSX.Element {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.periodRow}
+      style={styles.periodScroll}
+    >
+      {PERIOD_OPTIONS.map(opt => {
+        const isActive = active === opt.key;
+        return (
+          <TouchableOpacity
+            key={opt.key}
+            style={[styles.periodChip, isActive && styles.periodChipActive]}
+            onPress={() => { onChange(opt.key); }}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.periodChipText, isActive && styles.periodChipTextActive]}>
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+// ─── Reservation list item ────────────────────────────────────────────────────
 
 function ReservationRow({ r }: { r: DashboardReservation }): React.JSX.Element {
   const isVip = r.guests?.vip === true;
@@ -70,9 +131,7 @@ function ReservationRow({ r }: { r: DashboardReservation }): React.JSX.Element {
       </View>
       <View style={styles.reservationInfo}>
         <View style={styles.nameRow}>
-          <Text style={styles.guestName} numberOfLines={1}>
-            {getGuestName(r)}
-          </Text>
+          <Text style={styles.guestName} numberOfLines={1}>{getGuestName(r)}</Text>
           {isVip && (
             <View style={styles.vipBadge}>
               <Text style={styles.vipText}>VIP</Text>
@@ -88,7 +147,17 @@ function ReservationRow({ r }: { r: DashboardReservation }): React.JSX.Element {
   );
 }
 
-function StatusRow({ status, count }: { status: ReservationStatus; count: number }): React.JSX.Element {
+// ─── Status breakdown row ─────────────────────────────────────────────────────
+
+function StatusBreakdownRow({
+  status,
+  count,
+  rate,
+}: {
+  status: ReservationStatus;
+  count: number;
+  rate?: number;
+}): React.JSX.Element {
   const { backgroundColor, color } = getReservationStatusColors(status);
   const label = getReservationStatusLabel(status);
   return (
@@ -96,133 +165,284 @@ function StatusRow({ status, count }: { status: ReservationStatus; count: number
       <View style={[styles.statusPill, { backgroundColor }]}>
         <Text style={[styles.statusPillText, { color }]}>{label}</Text>
       </View>
-      <Text style={styles.statusCount}>{count}</Text>
+      <Text style={styles.statusCount}>
+        {count}{rate !== undefined && rate > 0 ? ` · ${rate} %` : ''}
+      </Text>
     </View>
   );
 }
 
-function KpiRow({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <View style={styles.kpiRow}>{children}</View>;
-}
+// ─── Vue période KPIs ─────────────────────────────────────────────────────────
 
-function KpiGap(): React.JSX.Element {
-  return <View style={styles.kpiGap} />;
-}
-
-// ── Period section ─────────────────────────────────────────────────────────
-
-function PeriodSection({ title, data }: { title: string; data: PeriodStats }): React.JSX.Element {
-  return (
-    <View style={styles.section}>
-      <SectionHeader title={title} />
-      <KpiRow>
-        <StatCard label="Réservations" value={data.reservations} />
-        <KpiGap />
-        <StatCard label="Couverts" value={data.covers} />
-      </KpiRow>
-      <KpiRow>
-        <StatCard label="Annulées" value={data.cancelled} accent={data.cancelled > 0 ? colors.cta : colors.textMuted} />
-        <KpiGap />
-        <StatCard label="No-show" value={data.noshow} accent={data.noshow > 0 ? colors.cta : colors.textMuted} />
-      </KpiRow>
-      <KpiRow>
-        <StatCard label="Anniversaires" value={data.birthdays} accent={data.birthdays > 0 ? colors.gold : colors.textMuted} />
-        <KpiGap />
-        <StatCard label="Événements" value={data.events} accent={data.events > 0 ? colors.gold : colors.textMuted} />
-      </KpiRow>
-    </View>
-  );
-}
-
-// ── Client section ─────────────────────────────────────────────────────────
-
-function ClientSection({ data }: { data: ClientStats }): React.JSX.Element {
-  return (
-    <View style={styles.section}>
-      <SectionHeader title="Clients" />
-      <KpiRow>
-        <StatCard label="Total clients" value={data.total} />
-        <KpiGap />
-        <StatCard label="VIP" value={data.vip} accent={colors.gold} />
-      </KpiRow>
-      <KpiRow>
-        <StatCard label="Avec téléphone" value={data.withPhone} />
-        <KpiGap />
-        <StatCard label="Avec email" value={data.withEmail} />
-      </KpiRow>
-      <KpiRow>
-        <StatCard label="Sans téléphone" value={data.withoutPhone} accent={data.withoutPhone > 0 ? colors.textSecondary : colors.textMuted} />
-        <KpiGap />
-        <StatCard label="Sans email" value={data.withoutEmail} accent={data.withoutEmail > 0 ? colors.textSecondary : colors.textMuted} />
-      </KpiRow>
-      {data.withRating > 0 && (
-        <KpiRow>
-          <StatCard label="Avec note importée" value={data.withRating} accent={colors.gold} />
-        </KpiRow>
-      )}
-    </View>
-  );
-}
-
-// ── Feedback section ───────────────────────────────────────────────────────
-
-function FeedbackSection({ data }: { data: FeedbackStats | null }): React.JSX.Element {
-  if (data === null) {
+function PeriodKpiSection({
+  data,
+  loading,
+  isToday,
+  waitlistPending,
+  toCallCount,
+}: {
+  data: PeriodReservationStats;
+  loading: boolean;
+  isToday: boolean;
+  waitlistPending: number;
+  toCallCount: number;
+}): React.JSX.Element {
+  if (loading) {
     return (
-      <View style={styles.section}>
-        <SectionHeader title="Satisfaction" />
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Module satisfaction non disponible</Text>
-          <Text style={styles.emptySubtitle}>
-            Vérifiez que la migration feedback_surveys est appliquée.
-          </Text>
-        </View>
+      <View style={styles.extLoadingCard}>
+        <ActivityIndicator color={colors.sand} size="small" />
       </View>
     );
   }
 
   if (data.total === 0) {
-    return (
-      <View style={styles.section}>
-        <SectionHeader title="Satisfaction" />
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Aucun avis reçu pour le moment</Text>
-          <Text style={styles.emptySubtitle}>
-            Les avis apparaîtront ici dès réception du premier retour client.
-          </Text>
-        </View>
-      </View>
-    );
+    return <EmptyCard title="Aucune réservation sur cette période" />;
   }
 
   return (
-    <View style={styles.section}>
-      <SectionHeader title="Satisfaction" />
+    <>
       <KpiRow>
-        <StatCard label="Avis reçus" value={data.total} accent={colors.gold} />
+        <StatCard label="Réservations" value={data.total} />
         <KpiGap />
-        <StatCard label="Note globale" value={0} valueText={`${fmtRating(data.avgOverall)} / 5`} accent={colors.gold} />
+        <StatCard label="Couverts actifs" value={data.covers} />
       </KpiRow>
       <KpiRow>
-        <StatCard label="Cuisine" value={0} valueText={fmtRating(data.avgFood)} />
+        <StatCard label="Confirmées" value={data.confirmed} accent={colors.gold} />
         <KpiGap />
-        <StatCard label="Boissons" value={0} valueText={fmtRating(data.avgDrinks)} />
+        <StatCard label="Terminées" value={data.completed} />
       </KpiRow>
       <KpiRow>
-        <StatCard label="Service" value={0} valueText={fmtRating(data.avgService)} />
+        <StatCard label="En attente" value={data.pending} />
         <KpiGap />
-        <StatCard label="Ambiance" value={0} valueText={fmtRating(data.avgAmbience)} />
+        <StatCard label="À table" value={data.seated} accent={colors.cta} />
       </KpiRow>
-      {data.recommendedRate !== null && (
+      <KpiRow>
+        <StatCard
+          label="Annulées"
+          value={data.cancelled}
+          valueText={data.cancellationRate > 0 ? `${data.cancelled} (${data.cancellationRate} %)` : `${data.cancelled}`}
+          accent={data.cancelled > 0 ? colors.cta : colors.textMuted}
+        />
+        <KpiGap />
+        <StatCard
+          label="No-show"
+          value={data.noshow}
+          valueText={data.noshowRate > 0 ? `${data.noshow} (${data.noshowRate} %)` : `${data.noshow}`}
+          accent={data.noshow > 0 ? colors.cta : colors.textMuted}
+        />
+      </KpiRow>
+      {(data.walkIns > 0 || data.uniqueGuests > 0) && (
         <KpiRow>
-          <StatCard label="Recommande" value={0} valueText={fmtPct(data.recommendedRate)} accent={colors.statusFree} />
+          <StatCard label="Walk-ins" value={data.walkIns} />
+          <KpiGap />
+          <StatCard label="Clients uniques" value={data.uniqueGuests} />
         </KpiRow>
+      )}
+      {(data.birthdays > 0 || data.events > 0) && (
+        <KpiRow>
+          <StatCard label="Anniversaires" value={data.birthdays} accent={data.birthdays > 0 ? colors.gold : colors.textMuted} />
+          <KpiGap />
+          <StatCard label="Événements" value={data.events} accent={data.events > 0 ? colors.gold : colors.textMuted} />
+        </KpiRow>
+      )}
+      {isToday && (
+        <KpiRow>
+          <StatCard
+            label="Waitlist en attente"
+            value={waitlistPending}
+            accent={waitlistPending > 0 ? colors.gold : colors.textMuted}
+          />
+          <KpiGap />
+          <StatCard
+            label="À appeler"
+            value={toCallCount}
+            accent={toCallCount > 0 ? colors.cta : colors.textMuted}
+          />
+        </KpiRow>
+      )}
+    </>
+  );
+}
+
+// ─── Statuts répartition ──────────────────────────────────────────────────────
+
+function StatusSection({
+  data,
+  loading,
+}: {
+  data: PeriodReservationStats;
+  loading: boolean;
+}): React.JSX.Element {
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Répartition statuts" />
+      {loading ? (
+        <View style={styles.extLoadingCard}>
+          <ActivityIndicator color={colors.sand} size="small" />
+        </View>
+      ) : (
+        <View style={styles.statusCard}>
+          <View style={styles.statusColumns}>
+            <View style={styles.statusColumn}>
+              {STATUS_ORDER.slice(0, 3).map(s => {
+                const count = data[s as keyof PeriodReservationStats] as number;
+                const rate  = s === 'cancelled' ? data.cancellationRate : s === 'noshow' ? data.noshowRate : undefined;
+                return <StatusBreakdownRow key={s} status={s} count={count} rate={rate} />;
+              })}
+            </View>
+            <View style={[styles.statusColumn, styles.statusColumnRight]}>
+              {STATUS_ORDER.slice(3).map(s => {
+                const count = data[s as keyof PeriodReservationStats] as number;
+                const rate  = s === 'cancelled' ? data.cancellationRate : s === 'noshow' ? data.noshowRate : undefined;
+                return <StatusBreakdownRow key={s} status={s} count={count} rate={rate} />;
+              })}
+            </View>
+          </View>
+        </View>
       )}
     </View>
   );
 }
 
-// ── Action button ──────────────────────────────────────────────────────────
+// ─── Services section ─────────────────────────────────────────────────────────
+
+function ServicesSection({
+  data,
+  loading,
+}: {
+  data: PeriodReservationStats;
+  loading: boolean;
+}): React.JSX.Element {
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Services" />
+      {loading ? (
+        <View style={styles.extLoadingCard}>
+          <ActivityIndicator color={colors.sand} size="small" />
+        </View>
+      ) : (
+        <>
+          <KpiRow>
+            <StatCard label="Déjeuner" value={data.lunchCount} accent={colors.gold} />
+            <KpiGap />
+            <StatCard label="Couverts déj." value={data.lunchCovers} />
+          </KpiRow>
+          <KpiRow>
+            <StatCard label="Dîner" value={data.dinnerCount} accent={colors.gold} />
+            <KpiGap />
+            <StatCard label="Couverts dîn." value={data.dinnerCovers} />
+          </KpiRow>
+        </>
+      )}
+    </View>
+  );
+}
+
+// ─── Satisfaction section ─────────────────────────────────────────────────────
+
+function SatisfactionSection({
+  data,
+  loading,
+}: {
+  data: PeriodFeedbackStats | null;
+  loading: boolean;
+}): React.JSX.Element {
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Satisfaction" />
+      {loading ? (
+        <View style={styles.extLoadingCard}>
+          <ActivityIndicator color={colors.sand} size="small" />
+        </View>
+      ) : data === null ? (
+        <EmptyCard
+          title="Module satisfaction non disponible"
+          subtitle="Vérifiez que la migration feedback_surveys est appliquée."
+        />
+      ) : data.total === 0 ? (
+        <EmptyCard
+          title="Aucun avis reçu sur cette période"
+          subtitle="Les avis apparaîtront ici dès réception du premier retour client."
+        />
+      ) : (
+        <>
+          <KpiRow>
+            <StatCard label="Avis reçus" value={data.total} accent={colors.gold} />
+            <KpiGap />
+            <StatCard label="Note globale" value={0} valueText={`${fmtRating(data.avgOverall)} / 5`} accent={colors.gold} />
+          </KpiRow>
+          <KpiRow>
+            <StatCard label="Cuisine" value={0} valueText={fmtRating(data.avgFood)} />
+            <KpiGap />
+            <StatCard label="Boissons" value={0} valueText={fmtRating(data.avgDrinks)} />
+          </KpiRow>
+          <KpiRow>
+            <StatCard label="Service" value={0} valueText={fmtRating(data.avgService)} />
+            <KpiGap />
+            <StatCard label="Ambiance" value={0} valueText={fmtRating(data.avgAmbience)} />
+          </KpiRow>
+          {data.recommendedRate !== null && (
+            <KpiRow>
+              <StatCard label="Recommande" value={0} valueText={fmtPct(data.recommendedRate)} accent={colors.statusFree} />
+            </KpiRow>
+          )}
+          {data.lastComment ? (
+            <View style={styles.commentCard}>
+              <Text style={styles.commentLabel}>Dernier commentaire</Text>
+              <Text style={styles.commentText} numberOfLines={4}>{data.lastComment}</Text>
+            </View>
+          ) : null}
+        </>
+      )}
+    </View>
+  );
+}
+
+// ─── Client section ───────────────────────────────────────────────────────────
+
+function ClientSection({
+  data,
+  loading,
+}: {
+  data: ClientStats;
+  loading: boolean;
+}): React.JSX.Element {
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Clients" />
+      {loading ? (
+        <View style={styles.extLoadingCard}>
+          <ActivityIndicator color={colors.sand} size="small" />
+        </View>
+      ) : (
+        <>
+          <KpiRow>
+            <StatCard label="Total clients" value={data.total} />
+            <KpiGap />
+            <StatCard label="VIP" value={data.vip} accent={colors.gold} />
+          </KpiRow>
+          <KpiRow>
+            <StatCard label="Avec téléphone" value={data.withPhone} />
+            <KpiGap />
+            <StatCard label="Avec email" value={data.withEmail} />
+          </KpiRow>
+          <KpiRow>
+            <StatCard label="Sans téléphone" value={data.withoutPhone} accent={data.withoutPhone > 0 ? colors.textSecondary : colors.textMuted} />
+            <KpiGap />
+            <StatCard label="Sans email" value={data.withoutEmail} accent={data.withoutEmail > 0 ? colors.textSecondary : colors.textMuted} />
+          </KpiRow>
+          {data.withRating > 0 && (
+            <KpiRow>
+              <StatCard label="Avec note importée" value={data.withRating} accent={colors.gold} />
+            </KpiRow>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
+
+// ─── Action button ────────────────────────────────────────────────────────────
 
 function ActionButton({
   icon,
@@ -245,23 +465,29 @@ function ActionButton({
 
 export default function DashboardScreen(): React.JSX.Element {
   const navigation = useNavigation<NavProp>();
-  const { loading, error, reservations, stats, refresh, restaurantId } = useTodayDashboard();
+  const [activePeriod, setActivePeriod] = useState<DashboardPeriod>('today');
+
+  const { loading, error, reservations, restaurantId, refresh: todayRefresh } = useTodayDashboard();
   const { loading: extLoading, stats: ext, refresh: extRefresh } = useDashboardExtended(restaurantId);
+  const { loading: periodLoading, stats: period, refresh: periodRefresh } = usePeriodStats(restaurantId, activePeriod);
 
   const readableDate = formatReadableDate(new Date());
   const toCallCount  = reservations.filter(reservationNeedsPhoneConfirmation).length;
+  const isToday      = activePeriod === 'today';
 
   const handleRefresh = (): void => {
-    refresh();
+    todayRefresh();
     extRefresh();
+    periodRefresh();
   };
 
+  // ── Full-screen loading (initial auth + profile only) ──────────────────────
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement de la vue du jour…</Text>
+          <Text style={styles.loadingText}>Chargement du tableau de bord…</Text>
         </View>
       </SafeAreaView>
     );
@@ -298,7 +524,7 @@ export default function DashboardScreen(): React.JSX.Element {
           <View style={styles.headerRow}>
             <View style={styles.headerText}>
               <Text style={styles.headerLabel}>Tableau de bord</Text>
-              <Text style={styles.headerTitle}>Vue du jour</Text>
+              <Text style={styles.headerTitle}>Pilotage</Text>
               <Text style={styles.headerDate}>{readableDate}</Text>
             </View>
             <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
@@ -307,148 +533,47 @@ export default function DashboardScreen(): React.JSX.Element {
             </TouchableOpacity>
           </View>
 
-          {/* ── Aujourd'hui : KPIs ── */}
+          {/* ── Sélecteur de période ── */}
+          <PeriodSelector active={activePeriod} onChange={setActivePeriod} />
+
+          {/* ── Vue période ── */}
           <View style={styles.section}>
-            <SectionHeader title="Aujourd'hui" />
-            <KpiRow>
-              <StatCard label="Réservations" value={stats.total} />
-              <KpiGap />
-              <StatCard label="Couverts actifs" value={stats.totalCovers} />
-            </KpiRow>
-            <KpiRow>
-              <StatCard label="Confirmées" value={stats.confirmed} accent={colors.gold} />
-              <KpiGap />
-              <StatCard label="À table" value={stats.seated} accent={colors.cta} />
-            </KpiRow>
-            <KpiRow>
-              <StatCard label="En attente" value={stats.byStatus.pending} />
-              <KpiGap />
-              <StatCard label="Walk-ins" value={stats.walkInCount} />
-            </KpiRow>
-            <KpiRow>
-              <StatCard
-                label="Waitlist en attente"
-                value={extLoading ? 0 : ext.waitlistPending}
-                accent={ext.waitlistPending > 0 ? colors.gold : colors.textMuted}
-              />
-              <KpiGap />
-              {toCallCount > 0 ? (
-                <StatCard label="À appeler" value={toCallCount} accent={colors.cta} />
+            <SectionHeader title="Vue période" />
+            <PeriodKpiSection
+              data={period.reservations}
+              loading={periodLoading}
+              isToday={isToday}
+              waitlistPending={ext.waitlistPending}
+              toCallCount={toCallCount}
+            />
+          </View>
+
+          {/* ── Prochaines arrivées (aujourd'hui uniquement) ── */}
+          {isToday && (
+            <View style={styles.section}>
+              <SectionHeader title="Prochaines arrivées" />
+              {visible.length === 0 ? (
+                <EmptyCard
+                  title="Aucune réservation aujourd'hui"
+                  subtitle="Les réservations créées apparaîtront ici en temps réel."
+                />
               ) : (
-                <StatCard label="À appeler" value={toCallCount} />
+                visible.map(r => <ReservationRow key={r.id} r={r} />)
               )}
-            </KpiRow>
-            <KpiRow>
-              <StatCard
-                label="Annulées"
-                value={stats.byStatus.cancelled}
-                accent={stats.byStatus.cancelled > 0 ? colors.cta : colors.textMuted}
-              />
-              <KpiGap />
-              <StatCard
-                label="No-show"
-                value={stats.byStatus.noshow}
-                accent={stats.byStatus.noshow > 0 ? colors.cta : colors.textMuted}
-              />
-            </KpiRow>
-          </View>
-
-          {/* ── Prochaines arrivées ── */}
-          <View style={styles.section}>
-            <SectionHeader title="Prochaines arrivées" />
-            {visible.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>Aucune réservation aujourd'hui</Text>
-                <Text style={styles.emptySubtitle}>
-                  Les réservations créées apparaîtront ici en temps réel.
-                </Text>
-              </View>
-            ) : (
-              visible.map((r) => <ReservationRow key={r.id} r={r} />)
-            )}
-          </View>
-
-          {/* ── Statuts du jour ── */}
-          <View style={styles.section}>
-            <SectionHeader title="Statuts du jour" />
-            <View style={styles.statusCard}>
-              <View style={styles.statusColumns}>
-                <View style={styles.statusColumn}>
-                  {STATUS_ORDER.slice(0, 3).map((s) => (
-                    <StatusRow key={s} status={s} count={stats.byStatus[s]} />
-                  ))}
-                </View>
-                <View style={[styles.statusColumn, styles.statusColumnRight]}>
-                  {STATUS_ORDER.slice(3).map((s) => (
-                    <StatusRow key={s} status={s} count={stats.byStatus[s]} />
-                  ))}
-                </View>
-              </View>
             </View>
-          </View>
-
-          {/* ── Services du jour ── */}
-          <View style={styles.section}>
-            <SectionHeader title="Services du jour" />
-            <KpiRow>
-              <StatCard label="Déjeuner" value={stats.lunchCount} accent={colors.gold} />
-              <KpiGap />
-              <StatCard label="Couverts déj." value={stats.lunchCovers} />
-            </KpiRow>
-            <KpiRow>
-              <StatCard label="Dîner" value={stats.dinnerCount} accent={colors.gold} />
-              <KpiGap />
-              <StatCard label="Couverts dîn." value={stats.dinnerCovers} />
-            </KpiRow>
-          </View>
-
-          {/* ── Période 7 jours ── */}
-          {extLoading ? (
-            <View style={styles.section}>
-              <SectionHeader title="7 derniers jours" />
-              <View style={styles.extLoadingCard}>
-                <ActivityIndicator color={colors.sand} size="small" />
-              </View>
-            </View>
-          ) : (
-            <PeriodSection title="7 derniers jours" data={ext.week} />
           )}
 
-          {/* ── Période 30 jours ── */}
-          {extLoading ? (
-            <View style={styles.section}>
-              <SectionHeader title="30 derniers jours" />
-              <View style={styles.extLoadingCard}>
-                <ActivityIndicator color={colors.sand} size="small" />
-              </View>
-            </View>
-          ) : (
-            <PeriodSection title="30 derniers jours" data={ext.month} />
-          )}
+          {/* ── Répartition statuts ── */}
+          <StatusSection data={period.reservations} loading={periodLoading} />
 
-          {/* ── Clients ── */}
-          {extLoading ? (
-            <View style={styles.section}>
-              <SectionHeader title="Clients" />
-              <View style={styles.extLoadingCard}>
-                <ActivityIndicator color={colors.sand} size="small" />
-              </View>
-            </View>
-          ) : (
-            <ClientSection data={ext.clients} />
-          )}
+          {/* ── Services ── */}
+          <ServicesSection data={period.reservations} loading={periodLoading} />
 
           {/* ── Satisfaction ── */}
-          {extLoading ? (
-            <View style={styles.section}>
-              <SectionHeader title="Satisfaction" />
-              <View style={styles.extLoadingCard}>
-                <ActivityIndicator color={colors.sand} size="small" />
-              </View>
-            </View>
-          ) : (
-            <FeedbackSection data={ext.feedback} />
-          )}
+          <SatisfactionSection data={period.feedback} loading={periodLoading} />
+
+          {/* ── Clients ── */}
+          <ClientSection data={ext.clients} loading={extLoading} />
 
           {/* ── Actions rapides ── */}
           <View style={styles.section}>
@@ -498,17 +623,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: spacing.xxl,
-  },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: spacing.xxl },
   container: {
-    padding:     spacing.xl,
-    maxWidth:    layout.contentMaxWidth,
-    width:       '100%',
-    alignSelf:   'center',
+    padding:   spacing.xl,
+    maxWidth:  layout.contentMaxWidth,
+    width:     '100%',
+    alignSelf: 'center',
   },
   centered: {
     flex:           1,
@@ -560,11 +681,9 @@ const styles = StyleSheet.create({
     flexDirection:  'row',
     alignItems:     'flex-start',
     justifyContent: 'space-between',
-    marginBottom:   spacing.xl,
+    marginBottom:   spacing.lg,
   },
-  headerText: {
-    flex: 1,
-  },
+  headerText: { flex: 1 },
   headerLabel: {
     ...typography.label,
     color:        colors.textMuted,
@@ -594,6 +713,35 @@ const styles = StyleSheet.create({
     color: colors.cta,
   },
 
+  // Period selector
+  periodScroll: {
+    marginBottom: spacing.xs,
+  },
+  periodRow: {
+    flexDirection: 'row',
+    gap:           spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  periodChip: {
+    paddingVertical:   spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius:      radius.xl,
+    backgroundColor:   colors.surface,
+    borderWidth:       1,
+    borderColor:       colors.border,
+  },
+  periodChipActive: {
+    backgroundColor: colors.cta,
+    borderColor:     colors.cta,
+  },
+  periodChipText: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+  },
+  periodChipTextActive: {
+    color: colors.textOnDark,
+  },
+
   // Sections
   section: {
     marginTop: spacing.xxl,
@@ -613,7 +761,7 @@ const styles = StyleSheet.create({
     width: spacing.sm,
   },
 
-  // Extended stats loading state
+  // Loading placeholder for async sections
   extLoadingCard: {
     backgroundColor: colors.surface,
     borderRadius:    radius.lg,
@@ -642,7 +790,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Reservation cards
+  // Reservation list
   reservationCard: {
     backgroundColor: colors.surface,
     borderRadius:    radius.md,
@@ -653,8 +801,8 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
   },
   timeChip: {
-    backgroundColor:  colors.goldLight,
-    borderRadius:     radius.sm,
+    backgroundColor:   colors.goldLight,
+    borderRadius:      radius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical:   spacing.xs,
     marginRight:       spacing.md,
@@ -667,9 +815,7 @@ const styles = StyleSheet.create({
     fontSize:   typography.small.fontSize,
     color:      colors.gold,
   },
-  reservationInfo: {
-    flex: 1,
-  },
+  reservationInfo: { flex: 1 },
   nameRow: {
     flexDirection: 'row',
     alignItems:    'center',
@@ -681,8 +827,8 @@ const styles = StyleSheet.create({
     flex:  1,
   },
   vipBadge: {
-    backgroundColor:  colors.goldLight,
-    borderRadius:     radius.sm,
+    backgroundColor:   colors.goldLight,
+    borderRadius:      radius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical:   2,
     marginLeft:        spacing.xs,
@@ -733,6 +879,26 @@ const styles = StyleSheet.create({
     color:      colors.textPrimary,
   },
 
+  // Satisfaction comment
+  commentCard: {
+    backgroundColor: colors.surfaceWarm,
+    borderRadius:    radius.lg,
+    padding:         spacing.lg,
+    marginTop:       spacing.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.gold,
+  },
+  commentLabel: {
+    ...typography.label,
+    color:        colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  commentText: {
+    ...typography.body,
+    color:      colors.textSecondary,
+    fontStyle:  'italic',
+  },
+
   // Actions rapides
   actionGrid: {
     flexDirection: 'row',
@@ -740,12 +906,12 @@ const styles = StyleSheet.create({
     gap:           spacing.sm,
   },
   actionButton: {
-    backgroundColor:  colors.surface,
-    borderRadius:     radius.lg,
-    padding:          spacing.lg,
-    width:            '48%',
-    alignItems:       'flex-start',
-    gap:              spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    padding:         spacing.lg,
+    width:           '48%',
+    alignItems:      'flex-start',
+    gap:             spacing.sm,
     ...CARD_SHADOW,
   },
   actionLabel: {
