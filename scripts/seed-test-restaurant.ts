@@ -70,6 +70,21 @@ const supabase: SupabaseClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
 });
 
+// ─── Hint permission ──────────────────────────────────────────────────────────
+
+const PERM_HINT = [
+  '   💡  Permissions manquantes pour service_role.',
+  '       Exécutez ce SQL dans Supabase → SQL Editor :',
+  '         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.users         TO service_role;',
+  '         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.shifts        TO service_role;',
+  '         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.reservations  TO service_role;',
+  '       Fichier complet : supabase/manual/grant_service_role.sql',
+].join('\n');
+
+function isPermissionError(msg: string): boolean {
+  return msg.toLowerCase().includes('permission denied');
+}
+
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 const TEST_RESTAURANT_NAME = 'La Maison Test';
@@ -134,6 +149,20 @@ async function runDryRun(): Promise<void> {
   console.log(`  Cible    : "${TEST_RESTAURANT_NAME}" (jamais le restaurant réel)`);
   console.log('─'.repeat(62) + '\n');
 
+  // Tester l'accès aux tables principales
+  const permTests: Array<{ table: string; err: string | null }> = [];
+  for (const table of ['users', 'shifts', 'reservations'] as const) {
+    const { error } = await supabase.from(table).select('id').limit(1);
+    permTests.push({ table, err: error?.message ?? null });
+  }
+  const permFailed = permTests.filter(p => p.err && isPermissionError(p.err));
+  if (permFailed.length > 0) {
+    console.warn('⚠️   ATTENTION : Accès refusé sur certaines tables avec service_role :');
+    for (const p of permFailed) console.warn(`     • public.${p.table} : ${p.err}`);
+    console.warn('     Le dry-run est partiel. Exécutez d\'abord :');
+    console.warn('     supabase/manual/grant_service_role.sql dans Supabase → SQL Editor\n');
+  }
+
   // Vérifier si le restaurant test existe déjà
   const { data: existing } = await supabase
     .from('restaurants')
@@ -184,6 +213,8 @@ async function runApply(): Promise<void> {
   console.log(`  Cible : "${TEST_RESTAURANT_NAME}"`);
   console.log(`  ⚠️   Le restaurant réel n'est pas touché.`);
   console.log('─'.repeat(62) + '\n');
+
+  let permErrorSeen = false;
 
   // ── 1. Restaurant ──────────────────────────────────────────────────────────
 
@@ -257,7 +288,7 @@ async function runApply(): Promise<void> {
   const shiftIds: Record<string, string> = {};
 
   for (const shift of shiftsToCreate) {
-    const { data: existing } = await supabase
+    const { data: existing, error: selectErr } = await supabase
       .from('shifts')
       .select('id, name')
       .eq('restaurant_id', testRestaurantId)
@@ -265,7 +296,10 @@ async function runApply(): Promise<void> {
       .maybeSingle()
       .returns<ShiftRow | null>();
 
-    if (existing) {
+    if (selectErr) {
+      console.error(`  ❌  Impossible de vérifier "${shift.name}" : ${selectErr.message}`);
+      if (isPermissionError(selectErr.message)) { console.error(PERM_HINT); permErrorSeen = true; }
+    } else if (existing) {
       console.log(`  ℹ️   ${pad(shift.name, 16)} existant — ignoré`);
       shiftIds[shift.name] = existing.id;
     } else {
@@ -278,6 +312,7 @@ async function runApply(): Promise<void> {
 
       if (shiftError || !newShift) {
         console.error(`  ❌  Échec création service "${shift.name}" : ${shiftError?.message ?? 'réponse vide'}`);
+        if (shiftError && isPermissionError(shiftError.message)) { console.error(PERM_HINT); permErrorSeen = true; }
       } else {
         shiftIds[shift.name] = newShift.id;
         console.log(`  ✅  ${pad(shift.name, 16)} créé`);
@@ -291,7 +326,7 @@ async function runApply(): Promise<void> {
 
   let floorPlanId: string | null = null;
 
-  const { data: existingPlan } = await supabase
+  const { data: existingPlan, error: planSelectErr } = await supabase
     .from('floor_plans')
     .select('id, name')
     .eq('restaurant_id', testRestaurantId)
@@ -299,7 +334,10 @@ async function runApply(): Promise<void> {
     .maybeSingle()
     .returns<{ id: string; name: string } | null>();
 
-  if (existingPlan) {
+  if (planSelectErr) {
+    console.error(`  ❌  Impossible de vérifier le plan de salle : ${planSelectErr.message}`);
+    if (isPermissionError(planSelectErr.message)) { console.error(PERM_HINT); permErrorSeen = true; }
+  } else if (existingPlan) {
     floorPlanId = existingPlan.id;
     console.log(`  ℹ️   Plan existant : "${existingPlan.name}" — ignoré`);
   } else {
@@ -312,6 +350,7 @@ async function runApply(): Promise<void> {
 
     if (planError || !newPlan) {
       console.error(`  ❌  Impossible de créer le plan de salle : ${planError?.message ?? 'réponse vide'}`);
+      if (planError && isPermissionError(planError.message)) { console.error(PERM_HINT); permErrorSeen = true; }
     } else {
       floorPlanId = newPlan.id;
       console.log(`  ✅  Plan "Plan Test" créé`);
@@ -322,7 +361,7 @@ async function runApply(): Promise<void> {
   const tableIds: Record<string, string> = {};
 
   for (const table of TEST_TABLES) {
-    const { data: existing } = await supabase
+    const { data: existing, error: tableSelectErr } = await supabase
       .from('tables')
       .select('id, label')
       .eq('restaurant_id', testRestaurantId)
@@ -330,7 +369,10 @@ async function runApply(): Promise<void> {
       .maybeSingle()
       .returns<TableRow | null>();
 
-    if (existing) {
+    if (tableSelectErr) {
+      console.error(`  ❌  Impossible de vérifier ${table.label} : ${tableSelectErr.message}`);
+      if (isPermissionError(tableSelectErr.message)) { console.error(PERM_HINT); permErrorSeen = true; }
+    } else if (existing) {
       console.log(`  ℹ️   ${pad(table.label, 4)} (${table.zone}) — existante`);
       tableIds[table.label] = existing.id;
     } else {
@@ -353,6 +395,7 @@ async function runApply(): Promise<void> {
 
       if (tableError || !newTable) {
         console.error(`  ❌  Échec table ${table.label} : ${tableError?.message ?? 'réponse vide'}`);
+        if (tableError && isPermissionError(tableError.message)) { console.error(PERM_HINT); permErrorSeen = true; }
       } else {
         tableIds[table.label] = newTable.id;
         console.log(`  ✅  ${pad(table.label, 4)} (${table.zone}, ${table.capacity} couverts) — créée`);
@@ -366,7 +409,7 @@ async function runApply(): Promise<void> {
   const guestIds: string[] = [];
 
   for (const guest of TEST_GUESTS) {
-    const { data: existing } = await supabase
+    const { data: existing, error: guestSelectErr } = await supabase
       .from('guests')
       .select('id, first_name, last_name')
       .eq('restaurant_id', testRestaurantId)
@@ -374,7 +417,10 @@ async function runApply(): Promise<void> {
       .maybeSingle()
       .returns<GuestRow | null>();
 
-    if (existing) {
+    if (guestSelectErr) {
+      console.error(`  ❌  Impossible de vérifier ${guest.first_name} : ${guestSelectErr.message}`);
+      if (isPermissionError(guestSelectErr.message)) { console.error(PERM_HINT); permErrorSeen = true; }
+    } else if (existing) {
       const name = `${existing.first_name ?? ''} ${existing.last_name ?? ''}`.trim();
       console.log(`  ℹ️   ${pad(name, 16)} — existant`);
       guestIds.push(existing.id);
@@ -395,6 +441,7 @@ async function runApply(): Promise<void> {
 
       if (guestError || !newGuest) {
         console.error(`  ❌  Échec client ${guest.first_name} : ${guestError?.message ?? 'réponse vide'}`);
+        if (guestError && isPermissionError(guestError.message)) { console.error(PERM_HINT); permErrorSeen = true; }
       } else {
         const name = `${newGuest.first_name ?? ''} ${newGuest.last_name ?? ''}`.trim();
         console.log(`  ✅  ${pad(name, 16)} — créé`);
@@ -460,7 +507,7 @@ async function runApply(): Promise<void> {
   ];
 
   for (const { label, data: insertData } of reservationsToCreate) {
-    const { data: existing } = await supabase
+    const { data: existing, error: resSelectErr } = await supabase
       .from('reservations')
       .select('id')
       .eq('restaurant_id', testRestaurantId)
@@ -470,12 +517,16 @@ async function runApply(): Promise<void> {
       .maybeSingle()
       .returns<{ id: string } | null>();
 
-    if (existing) {
+    if (resSelectErr) {
+      console.error(`  ❌  Impossible de vérifier "${label}" : ${resSelectErr.message}`);
+      if (isPermissionError(resSelectErr.message)) { console.error(PERM_HINT); permErrorSeen = true; }
+    } else if (existing) {
       console.log(`  ℹ️   ${label} — existante`);
     } else {
       const { error: resError } = await supabase.from('reservations').insert(insertData);
       if (resError) {
         console.error(`  ❌  Échec réservation "${label}" : ${resError.message}`);
+        if (isPermissionError(resError.message)) { console.error(PERM_HINT); permErrorSeen = true; }
       } else {
         console.log(`  ✅  ${label} — créée`);
       }
@@ -518,14 +569,17 @@ async function runApply(): Promise<void> {
 
       if (testeurAuthId) {
         // Vérifier si le profil existe
-        const { data: existingProfile } = await supabase
+        const { data: existingProfile, error: profileSelectErr } = await supabase
           .from('users')
           .select('id')
           .eq('id', testeurAuthId)
           .maybeSingle()
           .returns<ProfileRow | null>();
 
-        if (existingProfile) {
+        if (profileSelectErr) {
+          console.error(`  ❌  Impossible de vérifier le profil testeur : ${profileSelectErr.message}`);
+          if (isPermissionError(profileSelectErr.message)) { console.error(PERM_HINT); permErrorSeen = true; }
+        } else if (existingProfile) {
           console.log('  ℹ️   Profil testeur existant — non modifié.');
         } else {
           const { error: profileError } = await supabase
@@ -538,6 +592,7 @@ async function runApply(): Promise<void> {
             });
           if (profileError) {
             console.error(`  ❌  Échec profil testeur : ${profileError.message}`);
+            if (isPermissionError(profileError.message)) { console.error(PERM_HINT); permErrorSeen = true; }
           } else {
             console.log('  ✅  Profil testeur créé dans public.users');
           }
@@ -563,15 +618,22 @@ async function runApply(): Promise<void> {
   // ── 7. Résumé final ───────────────────────────────────────────────────────
 
   console.log('\n' + '═'.repeat(62));
-  console.log(`  ✅  Restaurant de test prêt : "${TEST_RESTAURANT_NAME}"`);
-  console.log(`  restaurant_id test : ${testRestaurantId}`);
-  console.log('\n  Prochaines étapes :');
-  console.log('    1. Notez le restaurant_id test ci-dessus.');
-  console.log('    2. Pour tester avec ce restaurant, remplacez RESTAURANT_ID');
-  console.log('       dans .env.import par la valeur ci-dessus.');
-  console.log('    3. Le compte testeur peut se connecter et ne verra que');
-  console.log('       les données de "La Maison Test".');
-  console.log('    4. Pour revenir au restaurant réel, restaurez le vrai RESTAURANT_ID.');
+  if (permErrorSeen) {
+    console.log('  ⚠️   Des erreurs de permission ont empêché la création de certaines données.');
+    console.log('      1. Exécutez supabase/manual/grant_service_role.sql dans Supabase → SQL Editor');
+    console.log(`      2. Relancez : npm run test:seed:apply -- --confirm=${CONFIRM_TOKEN}`);
+    console.log('         (idempotent — seules les données manquantes seront créées)');
+  } else {
+    console.log(`  ✅  Restaurant de test prêt : "${TEST_RESTAURANT_NAME}"`);
+    console.log(`  restaurant_id test : ${testRestaurantId}`);
+    console.log('\n  Prochaines étapes :');
+    console.log('    1. Notez le restaurant_id test ci-dessus.');
+    console.log('    2. Pour tester avec ce restaurant, remplacez RESTAURANT_ID');
+    console.log('       dans .env.import par la valeur ci-dessus.');
+    console.log('    3. Le compte testeur peut se connecter et ne verra que');
+    console.log('       les données de "La Maison Test".');
+    console.log('    4. Pour revenir au restaurant réel, restaurez le vrai RESTAURANT_ID.');
+  }
   console.log('═'.repeat(62) + '\n');
 }
 

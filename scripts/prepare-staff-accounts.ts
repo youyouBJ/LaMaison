@@ -2,7 +2,7 @@
  * prepare-staff-accounts.ts
  *
  * Prépare les comptes staff pour le restaurant La Maison (restaurant réel).
- * Lit la liste depuis scripts/staff-accounts.config.ts.
+ * Idempotent : peut être relancé plusieurs fois sans créer de doublons.
  *
  * Modes :
  *   dry-run (défaut) : vérifie l'état sans rien créer
@@ -21,6 +21,9 @@
  *     Elle ne doit jamais être importée dans src/ (app mobile).
  * ⚠️  Aucun mot de passe n'est affiché ni stocké.
  *     Les utilisateurs définissent leur mot de passe via le lien généré.
+ *
+ * Si "permission denied for table users" → exécuter :
+ *   supabase/manual/grant_service_role.sql  dans Supabase → SQL Editor
  */
 
 import { config as dotenvConfig } from 'dotenv';
@@ -45,21 +48,14 @@ const supabaseUrl    = process.env['SUPABASE_URL'];
 const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 const restaurantId   = process.env['RESTAURANT_ID'];
 
-if (!supabaseUrl) {
-  console.error('❌  SUPABASE_URL manquant dans .env.import');
-  process.exit(1);
-}
-if (!serviceRoleKey) {
-  console.error('❌  SUPABASE_SERVICE_ROLE_KEY manquante dans .env.import');
-  process.exit(1);
-}
-if (!restaurantId) {
+if (!supabaseUrl)    { console.error('❌  SUPABASE_URL manquant dans .env.import');           process.exit(1); }
+if (!serviceRoleKey) { console.error('❌  SUPABASE_SERVICE_ROLE_KEY manquante dans .env.import'); process.exit(1); }
+if (!restaurantId)   {
   console.error('❌  RESTAURANT_ID manquant dans .env.import');
   console.error('    Récupérez-le dans Supabase : Table Editor → restaurants → colonne id');
   process.exit(1);
 }
 
-// Variables validées — on peut les utiliser comme string dès ici
 const SUPABASE_URL    : string = supabaseUrl;
 const RESTAURANT_ID   : string = restaurantId;
 const SERVICE_ROLE_KEY: string = serviceRoleKey;
@@ -77,19 +73,35 @@ const supabase: SupabaseClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
 });
 
+// ─── Hint permission ──────────────────────────────────────────────────────────
+
+const PERM_HINT = [
+  '   💡  Permissions manquantes pour service_role.',
+  '       Exécutez ce SQL dans Supabase → SQL Editor :',
+  '         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.users        TO service_role;',
+  '         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.shifts       TO service_role;',
+  '         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.reservations TO service_role;',
+  '       Fichier complet : supabase/manual/grant_service_role.sql',
+].join('\n');
+
+function isPermissionError(msg: string): boolean {
+  return msg.toLowerCase().includes('permission denied');
+}
+
 // ─── Types internes ───────────────────────────────────────────────────────────
 
 type AccountStatus =
   | 'missing_email'   // email non configuré dans la config
-  | 'ready'           // email défini, aucun compte existant → à créer
+  | 'ready'           // auth user inexistant → à créer
   | 'partial'         // auth user existe mais profil public.users manquant
   | 'complete';       // auth user + profil existent déjà
 
 type AccountCheck = {
-  account:       StaffAccountConfig;
-  status:        AccountStatus;
-  authId:        string | null;
-  profileExists: boolean;
+  account:        StaffAccountConfig;
+  status:         AccountStatus;
+  authId:         string | null;
+  profileExists:  boolean;
+  profileCheckErr: string | null;  // erreur lors du SELECT profil (ex. permission denied)
 };
 
 type AuthUserRecord = { id: string; email: string | undefined };
@@ -100,8 +112,7 @@ type ProfileRecord  = { id: string };
 async function loadAuthUsers(): Promise<AuthUserRecord[]> {
   const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (error) throw new Error(`Impossible de lister les utilisateurs Auth : ${error.message}`);
-  const users = data?.users ?? [];
-  return users.map(u => ({ id: u.id, email: u.email }));
+  return (data?.users ?? []).map(u => ({ id: u.id, email: u.email }));
 }
 
 async function checkAccounts(accounts: StaffAccountConfig[]): Promise<AccountCheck[]> {
@@ -110,29 +121,38 @@ async function checkAccounts(accounts: StaffAccountConfig[]): Promise<AccountChe
 
   for (const account of accounts) {
     if (!account.email) {
-      checks.push({ account, status: 'missing_email', authId: null, profileExists: false });
+      checks.push({ account, status: 'missing_email', authId: null, profileExists: false, profileCheckErr: null });
       continue;
     }
 
     const found = authUsers.find(u => u.email === account.email) ?? null;
 
-    let profileExists = false;
+    let profileExists    = false;
+    let profileCheckErr: string | null = null;
+
     if (found) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('users')
         .select('id')
         .eq('id', found.id)
         .maybeSingle()
         .returns<ProfileRecord | null>();
-      profileExists = data !== null;
+
+      if (error) {
+        // Permission denied ou autre erreur — on ne peut pas déterminer l'état réel
+        profileCheckErr = error.message;
+        profileExists   = false;
+      } else {
+        profileExists = data !== null;
+      }
     }
 
     const status: AccountStatus =
-      !found            ? 'ready'    :
-      !profileExists    ? 'partial'  :
-                          'complete';
+      !found         ? 'ready'   :
+      !profileExists ? 'partial' :
+                       'complete';
 
-    checks.push({ account, status, authId: found?.id ?? null, profileExists });
+    checks.push({ account, status, authId: found?.id ?? null, profileExists, profileCheckErr });
   }
 
   return checks;
@@ -141,12 +161,12 @@ async function checkAccounts(accounts: StaffAccountConfig[]): Promise<AccountChe
 // ─── Dry-run ──────────────────────────────────────────────────────────────────
 
 async function runDryRun(): Promise<void> {
-  console.log('\n' + '═'.repeat(62));
+  console.log('\n' + '═'.repeat(64));
   console.log('  DRY-RUN — prepare-staff-accounts');
-  console.log('═'.repeat(62));
+  console.log('═'.repeat(64));
   console.log(`  Supabase    : ${SUPABASE_URL}`);
   console.log(`  Restaurant  : ${RESTAURANT_ID}`);
-  console.log('─'.repeat(62) + '\n');
+  console.log('─'.repeat(64) + '\n');
 
   // Vérifier que le restaurant existe
   const { data: restaurant, error: restaurantError } = await supabase
@@ -163,64 +183,88 @@ async function runDryRun(): Promise<void> {
   }
   console.log(`✅  Restaurant trouvé : "${restaurant.name}"\n`);
 
-  const checks = await checkAccounts(STAFF_ACCOUNTS);
-  let missing = 0, toCreate = 0, partial = 0, complete = 0;
+  // Tester l'accès en lecture à public.users
+  const { error: permTest } = await supabase
+    .from('users')
+    .select('id')
+    .limit(1);
 
-  for (const { account, status, authId } of checks) {
-    const roleTag   = `[${account.role.toUpperCase().padEnd(7)}]`;
-    const emailTag  = account.email || '(email non configuré)';
+  if (permTest && isPermissionError(permTest.message)) {
+    console.warn('⚠️   ATTENTION : Accès refusé à public.users avec service_role.');
+    console.warn('     Le dry-run est partiel. Exécutez d\'abord :');
+    console.warn('     supabase/manual/grant_service_role.sql dans Supabase → SQL Editor\n');
+  }
+
+  const checks = await checkAccounts(STAFF_ACCOUNTS);
+  let missing = 0, toCreate = 0, partial = 0, complete = 0, permErr = 0;
+
+  for (const { account, status, authId, profileCheckErr } of checks) {
+    const roleTag  = `[${account.role.toUpperCase().padEnd(7)}]`;
+    const emailTag = account.email || '(email non configuré)';
     console.log(`  ${account.fullName.padEnd(14)} ${roleTag}  ${emailTag}`);
+
     switch (status) {
       case 'missing_email':
         console.log(`      ⚠️   Email non renseigné — compléter dans staff-accounts.config.ts`);
         missing++;
         break;
       case 'ready':
-        console.log(`      ✅  Compte inexistant → sera créé`);
+        console.log(`      ✅  Auth user inexistant → sera créé`);
         toCreate++;
         break;
       case 'partial':
-        console.log(`      ⚠️   Auth user existe (${authId}) mais profil public.users manquant → sera complété`);
+        if (profileCheckErr) {
+          console.log(`      ⚠️   Auth user existe (${authId})`);
+          console.log(`      ❌  Impossible de vérifier le profil public.users : ${profileCheckErr}`);
+          if (isPermissionError(profileCheckErr)) {
+            console.log(`      💡  Exécutez supabase/manual/grant_service_role.sql puis relancez.`);
+          }
+          permErr++;
+        } else {
+          console.log(`      ⚠️   Auth user existe (${authId}) — profil public.users manquant → sera créé`);
+        }
         partial++;
         break;
       case 'complete':
-        console.log(`      ℹ️   Compte complet existant (auth + profil) — non modifié`);
+        console.log(`      ℹ️   Compte complet (auth ✓ + profil ✓) — non modifié`);
         complete++;
         break;
     }
     console.log(`      Note : ${account.note}\n`);
   }
 
-  console.log('─'.repeat(62));
-  console.log(`  Résumé :`);
-  if (toCreate > 0) console.log(`    ${toCreate}  compte(s) à créer`);
-  if (partial  > 0) console.log(`    ${partial}  compte(s) partiel(s) à compléter`);
+  console.log('─'.repeat(64));
+  console.log('  Résumé :');
+  if (toCreate > 0) console.log(`    ${toCreate}  compte(s) à créer (auth + profil)`);
+  if (partial  > 0) console.log(`    ${partial}  compte(s) partiel(s) — profil manquant à compléter`);
   if (complete > 0) console.log(`    ${complete}  compte(s) déjà complet(s) — non touchés`);
-  if (missing  > 0) {
-    console.log(`    ${missing}  compte(s) sans email — renseigner dans staff-accounts.config.ts`);
-    console.log('\n  ⚠️   Des emails sont manquants. Complétez-les avant de lancer apply.');
-  }
-  if (toCreate > 0 || partial > 0) {
-    console.log('\n  Pour créer les comptes :');
+  if (missing  > 0) console.log(`    ${missing}  compte(s) sans email — renseigner dans staff-accounts.config.ts`);
+  if (permErr  > 0) {
+    console.log(`\n  ❌  ${permErr} erreur(s) de permission détectée(s).`);
+    console.log('     Exécutez d\'abord supabase/manual/grant_service_role.sql');
+    console.log('     puis relancez le dry-run pour confirmer l\'état.\n');
+  } else if (toCreate > 0 || partial > 0) {
+    console.log(`\n  Pour créer/compléter les comptes :`);
     console.log(`    npm run staff:prepare:apply -- --confirm=${CONFIRM_TOKEN}`);
   }
-  console.log('═'.repeat(62) + '\n');
+  console.log('═'.repeat(64) + '\n');
 }
 
 // ─── Apply ────────────────────────────────────────────────────────────────────
 
 async function runApply(): Promise<void> {
-  console.log('\n' + '═'.repeat(62));
+  console.log('\n' + '═'.repeat(64));
   console.log('  APPLY — prepare-staff-accounts');
-  console.log('═'.repeat(62));
+  console.log('═'.repeat(64));
   console.log(`  Restaurant : ${RESTAURANT_ID}`);
-  console.log('─'.repeat(62) + '\n');
+  console.log('─'.repeat(64) + '\n');
 
   const checks = await checkAccounts(STAFF_ACCOUNTS);
+  let permErrorSeen = false;
 
   for (const check of checks) {
     const { account, status, authId } = check;
-    console.log(`\n── ${account.fullName} [${account.role}] ${'─'.repeat(40 - account.fullName.length)}`);
+    console.log(`\n── ${account.fullName} [${account.role}] ${'─'.repeat(Math.max(0, 42 - account.fullName.length))}`);
     console.log(`   Email : ${account.email || '(manquant)'}`);
     console.log(`   Note  : ${account.note}`);
 
@@ -231,7 +275,7 @@ async function runApply(): Promise<void> {
     }
 
     if (status === 'complete') {
-      console.log('   ℹ️   Compte complet existant — non modifié.');
+      console.log('   ℹ️   Compte complet (auth ✓ + profil ✓) — non modifié.');
       continue;
     }
 
@@ -243,7 +287,7 @@ async function runApply(): Promise<void> {
       const { data: createData, error: createError } = await supabase.auth.admin.createUser({
         email:         account.email,
         email_confirm: true,
-        // Pas de mot de passe — l'utilisateur le définira via le lien généré ci-dessous
+        // Pas de mot de passe — l'utilisateur le définira via le lien de récupération
       });
 
       if (createError || !createData?.user) {
@@ -270,6 +314,10 @@ async function runApply(): Promise<void> {
 
       if (profileError) {
         console.error(`   ❌  Échec création profil : ${profileError.message}`);
+        if (isPermissionError(profileError.message)) {
+          console.error(PERM_HINT);
+          permErrorSeen = true;
+        }
         continue;
       }
       console.log('   ✅  Profil créé dans public.users');
@@ -278,7 +326,7 @@ async function runApply(): Promise<void> {
     }
 
     // ── Générer un lien de configuration du mot de passe ─────────────────────
-    console.log('   🔗  Génération du lien de définition du mot de passe…');
+    console.log('   🔗  Génération du lien de configuration du mot de passe…');
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type:  'recovery',
       email: account.email,
@@ -289,15 +337,22 @@ async function runApply(): Promise<void> {
       console.warn(`   ⚠️   Lien non généré : ${linkError?.message ?? 'réponse vide'}`);
       console.warn('       Envoyez un reset password depuis : Supabase Dashboard → Auth → Users');
     } else {
-      console.log(`   🔑  Lien de configuration du mot de passe (valable 24h) :`);
+      console.log(`   🔑  Lien de configuration (valable 24h) :`);
       console.log(`       ${actionLink}`);
       console.log('       → Transmettez ce lien à la personne. Elle définira son propre mot de passe.');
     }
   }
 
-  console.log('\n' + '═'.repeat(62));
-  console.log('  Terminé.');
-  console.log('═'.repeat(62) + '\n');
+  console.log('\n' + '═'.repeat(64));
+  if (permErrorSeen) {
+    console.log('  ⚠️   Des erreurs de permission ont empêché la création de certains profils.');
+    console.log('      1. Exécutez supabase/manual/grant_service_role.sql dans Supabase → SQL Editor');
+    console.log(`      2. Relancez : npm run staff:prepare:apply -- --confirm=${CONFIRM_TOKEN}`);
+    console.log('         (idempotent — seuls les profils manquants seront créés)');
+  } else {
+    console.log('  ✅  Terminé sans erreur de permission.');
+  }
+  console.log('═'.repeat(64) + '\n');
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
