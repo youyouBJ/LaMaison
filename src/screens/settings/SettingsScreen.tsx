@@ -533,7 +533,7 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
     try {
       await supabase.auth.signOut();
     } catch (e) {
-      console.error('[Admin] signOut threw:', e);
+      if (__DEV__) console.error('[Admin] signOut threw:', e);
     } finally {
       setSigningOut(false);
     }

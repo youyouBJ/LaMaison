@@ -42,7 +42,7 @@ export default function LoginScreen(): React.JSX.Element {
       }
       // Si succès, RootNavigator bascule automatiquement vers MainTabs via onAuthStateChange
     } catch (e) {
-      console.error('[Login] signInWithPassword threw:', e);
+      if (__DEV__) console.error('[Login] signInWithPassword threw:', e);
       setError('Erreur de connexion. Vérifiez votre réseau.');
     } finally {
       setLoading(false);

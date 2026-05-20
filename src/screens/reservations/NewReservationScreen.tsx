@@ -843,7 +843,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   statusOptionActive: { backgroundColor: colors.ctaLight, borderColor: colors.cta },
-  statusOptionText: { ...typography.small, color: colors.textMuted },
+  statusOptionText: { ...typography.small, color: colors.textMuted, textAlign: 'center' },
   statusOptionTextActive: { color: colors.cta, fontFamily: typography.bodyMedium.fontFamily },
 
   // Info

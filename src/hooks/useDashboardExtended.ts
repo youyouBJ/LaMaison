@@ -92,7 +92,7 @@ export function useDashboardExtended(restaurantId: string | null) {
     const ratingRows  = (avgRatingRes.data as { avg_rating: number | null }[] | null) ?? [];
     const validRatings = ratingRows
       .map(r => r.avg_rating)
-      .filter((v): v is number => v !== null);
+      .filter((v): v is number => v !== null && v > 0);
 
     const srAvg = validRatings.length > 0
       ? Math.round((validRatings.reduce((a, b) => a + b, 0) / validRatings.length) * 10) / 10

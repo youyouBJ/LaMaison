@@ -440,7 +440,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
         setSigningOut(false);
       }
     } catch (e) {
-      console.error('[AdminSettings] signOut threw:', e);
+      if (__DEV__) console.error('[AdminSettings] signOut threw:', e);
       setSignOutError('Erreur lors de la déconnexion.');
       setSigningOut(false);
     }
