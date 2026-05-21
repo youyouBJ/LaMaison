@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "LaMaison",
-    "slug": "LaMaison",
+    "name": "La Maison",
+    "slug": "lamaison",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,7 +13,9 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lamaison.restaurant",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
