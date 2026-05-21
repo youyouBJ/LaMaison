@@ -342,4 +342,22 @@ GRANT SELECT, INSERT ON TABLE public.feedback_surveys TO service_role;
 
 ---
 
-*Document créé le 2026-05-21. Mis à jour le 2026-05-21 (dataset test immersif).*
+## Checklist de test TestFlight
+
+Pour guider les sessions de test sur l'app TestFlight, utiliser la checklist interactive dédiée :
+
+**[docs/testflight-checklist.md](testflight-checklist.md)**
+
+Cette checklist couvre :
+- Installation et premier démarrage
+- Connexion avec le compte testeur (`musicybj@gmail.com`)
+- Tous les parcours utilisateur (Dashboard, Réservations, Plan, Waitlist, CRM, Admin, Paramètres)
+- Vérification de l'isolation des données (La Maison Test uniquement)
+- Responsive iPhone / iPad
+- Synthèse des bugs et décision go / no-go
+
+> **Pour les testeurs externes (amis) :** utiliser uniquement le compte `musicybj@gmail.com` et l'environnement **La Maison Test**. Ne jamais utiliser les comptes réels du restaurant.
+
+---
+
+*Document créé le 2026-05-21. Mis à jour le 2026-05-21 (dataset test immersif, checklist de test).*

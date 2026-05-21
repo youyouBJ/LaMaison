@@ -1,6 +1,6 @@
 # Backlog — La Maison
 
-Dernière mise à jour : 2026-05-21
+Dernière mise à jour : 2026-05-21 (checklist TestFlight livrée)
 
 ---
 
@@ -114,7 +114,7 @@ Dernière mise à jour : 2026-05-21
 - [ ] **Navigation plan → détail réservation** : tapper une table réservée ouvre le détail de la réservation associée
 - [x] **Paramètres admin V1** : restaurant (nom, adresse, tél, email, timezone), services (horaires, jours, slot, couverts max), tables (label, zone, capacité), réservations en lecture seule — voir `docs/settings.md`
 - [ ] **Tests end-to-end manuels** : parcours complet création/service/clôture d'une réservation
-- [ ] **Créer checklist interactive de test TestFlight** : document structuré pour testeurs non-techniques (cases à cocher, résultat attendu, statut OK/Bug/À revoir, champ commentaire, champ screenshot) — couvrir : prérequis, comptes de test, connexion, création réservation, modification statut, sélection table depuis liste et depuis plan, multi-tables, plan de salle, waitlist, CRM client, VIP, WhatsApp confirmation + enquête satisfaction, email confirmation + enquête, formulaire satisfaction web, admin analytics, paramètres restaurant/services/tables, responsive iPhone/iPad, section bugs bloquants, section améliorations souhaitées — base : `docs/manual-test-checklist.md`
+- [x] **Créer checklist interactive de test TestFlight** : `docs/testflight-checklist.md` — 16 sections (installation, connexion, dashboard, réservations, création, détail, plan, waitlist, CRM, rappels, admin, paramètres, i18n, sécurité, responsive, bugs), synthèse bugs tabulaire, décision go/no-go avec critères explicites — voir `docs/testflight.md` pour le lien
 - [ ] **Polish iPad** : vérifier les layouts sur grand écran (si iPad disponible)
 - [ ] **Go-live restaurant La Maison** : formation équipe, données réelles en prod
 
