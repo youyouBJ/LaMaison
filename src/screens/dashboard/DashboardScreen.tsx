@@ -12,12 +12,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { colors, typography, spacing, radius, layout } from '../../theme';
+import { useI18n } from '../../i18n';
 import { useTodayDashboard, type DashboardReservation } from '../../hooks/useTodayDashboard';
 import { useDashboardExtended } from '../../hooks/useDashboardExtended';
+import { useTodayReminders } from '../../hooks/useTodayReminders';
 import { formatReadableDate, formatTimeSlot } from '../../utils/date';
 import { reservationNeedsPhoneConfirmation } from '../../utils/reservationConfirmation';
 import StatCard from '../../components/StatCard';
 import StatusBadge from '../../components/StatusBadge';
+import RemindersSection from '../../components/RemindersSection';
 import type { MainTabsParamList } from '../../navigation/MainTabs';
 
 type NavProp = BottomTabNavigationProp<MainTabsParamList>;
@@ -27,15 +30,15 @@ const MAX_RESERVATIONS = 8;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getGuestName(r: DashboardReservation): string {
-  if (!r.guests) return 'Client sans nom';
+function getGuestName(r: DashboardReservation, noName: string): string {
+  if (!r.guests) return noName;
   const parts = [r.guests.first_name, r.guests.last_name]
     .filter((p): p is string => Boolean(p));
-  return parts.length > 0 ? parts.join(' ') : 'Client sans nom';
+  return parts.length > 0 ? parts.join(' ') : noName;
 }
 
-function getTableLabel(r: DashboardReservation): string {
-  return r.tables?.label ?? 'Table non assignée';
+function getTableLabel(r: DashboardReservation, unassigned: string): string {
+  return r.tables?.label ?? unassigned;
 }
 
 // ─── Primitive sub-components ─────────────────────────────────────────────────
@@ -64,6 +67,7 @@ function EmptyCard({ title, subtitle }: { title: string; subtitle?: string }): R
 // ─── Reservation list item ────────────────────────────────────────────────────
 
 function ReservationRow({ r }: { r: DashboardReservation }): React.JSX.Element {
+  const { t } = useI18n();
   const isVip = r.guests?.vip === true;
   return (
     <View style={styles.reservationCard}>
@@ -72,7 +76,7 @@ function ReservationRow({ r }: { r: DashboardReservation }): React.JSX.Element {
       </View>
       <View style={styles.reservationInfo}>
         <View style={styles.nameRow}>
-          <Text style={styles.guestName} numberOfLines={1}>{getGuestName(r)}</Text>
+          <Text style={styles.guestName} numberOfLines={1}>{getGuestName(r, t('dashboard_guest_no_name'))}</Text>
           {isVip && (
             <View style={styles.vipBadge}>
               <Text style={styles.vipText}>VIP</Text>
@@ -80,7 +84,7 @@ function ReservationRow({ r }: { r: DashboardReservation }): React.JSX.Element {
           )}
         </View>
         <Text style={styles.reservationMeta}>
-          {r.party_size} couvert{r.party_size > 1 ? 's' : ''} · {getTableLabel(r)}
+          {r.party_size} couvert{r.party_size > 1 ? 's' : ''} · {getTableLabel(r, t('dashboard_table_unassigned'))}
         </Text>
         <StatusBadge status={r.status} />
       </View>
@@ -110,9 +114,17 @@ function ActionButton({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function DashboardScreen(): React.JSX.Element {
+  const { t } = useI18n();
   const navigation = useNavigation<NavProp>();
   const { loading, error, reservations, stats, restaurantId, refresh: todayRefresh } = useTodayDashboard();
   const { loading: extLoading, stats: ext, refresh: extRefresh } = useDashboardExtended(restaurantId);
+  const {
+    reminders,
+    urgentCount,
+    loading: remindersLoading,
+    error:   remindersError,
+    refresh: remindersRefresh,
+  } = useTodayReminders(reservations, restaurantId);
 
   const readableDate = formatReadableDate(new Date());
   const toCallCount  = reservations.filter(reservationNeedsPhoneConfirmation).length;
@@ -120,6 +132,7 @@ export default function DashboardScreen(): React.JSX.Element {
   const handleRefresh = (): void => {
     todayRefresh();
     extRefresh();
+    remindersRefresh();
   };
 
   if (loading) {
@@ -127,7 +140,7 @@ export default function DashboardScreen(): React.JSX.Element {
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement du tableau de bord…</Text>
+          <Text style={styles.loadingText}>{t('dashboard_loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -138,10 +151,10 @@ export default function DashboardScreen(): React.JSX.Element {
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Impossible de charger le dashboard</Text>
+            <Text style={styles.errorTitle}>{t('dashboard_error')}</Text>
             <Text style={styles.errorMessage}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-              <Text style={styles.retryButtonText}>Réessayer</Text>
+              <Text style={styles.retryButtonText}>{t('common_retry')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -163,44 +176,44 @@ export default function DashboardScreen(): React.JSX.Element {
           {/* ── Header ── */}
           <View style={styles.headerRow}>
             <View style={styles.headerText}>
-              <Text style={styles.headerLabel}>Accueil</Text>
-              <Text style={styles.headerTitle}>Service du jour</Text>
+              <Text style={styles.headerLabel}>{t('dashboard_label')}</Text>
+              <Text style={styles.headerTitle}>{t('dashboard_title')}</Text>
               <Text style={styles.headerDate}>{readableDate}</Text>
             </View>
             <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
               <Ionicons name="refresh-outline" size={16} color={colors.cta} />
-              <Text style={styles.refreshText}>Actualiser</Text>
+              <Text style={styles.refreshText}>{t('common_refresh')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* ── Vue d'ensemble ── */}
           <View style={styles.section}>
-            <SectionHeader title="Vue d'ensemble" />
+            <SectionHeader title={t('dashboard_overview')} />
             <KpiRow>
-              <StatCard label="Réservations" value={stats.total} />
+              <StatCard label={t('dashboard_stat_reservations')} value={stats.total} />
               <KpiGap />
-              <StatCard label="Couverts actifs" value={stats.totalCovers} />
+              <StatCard label={t('dashboard_stat_covers')} value={stats.totalCovers} />
             </KpiRow>
             <KpiRow>
-              <StatCard label="Confirmées" value={stats.confirmed} accent={colors.gold} />
+              <StatCard label={t('dashboard_stat_confirmed')} value={stats.confirmed} accent={colors.gold} />
               <KpiGap />
-              <StatCard label="À table" value={stats.seated} accent={colors.cta} />
+              <StatCard label={t('dashboard_stat_seated')} value={stats.seated} accent={colors.cta} />
             </KpiRow>
             <KpiRow>
-              <StatCard label="En attente de conf." value={stats.byStatus.pending} />
+              <StatCard label={t('dashboard_stat_pending')} value={stats.byStatus.pending} />
               <KpiGap />
-              <StatCard label="Terminées" value={stats.byStatus.completed} />
+              <StatCard label={t('dashboard_stat_completed')} value={stats.byStatus.completed} />
             </KpiRow>
             {!extLoading && (ext.waitlistPending > 0 || toCallCount > 0) && (
               <KpiRow>
                 <StatCard
-                  label="Waitlist"
+                  label={t('dashboard_stat_waitlist')}
                   value={ext.waitlistPending}
                   accent={ext.waitlistPending > 0 ? colors.gold : colors.textMuted}
                 />
                 <KpiGap />
                 <StatCard
-                  label="À appeler"
+                  label={t('dashboard_stat_to_call')}
                   value={toCallCount}
                   accent={toCallCount > 0 ? colors.cta : colors.textMuted}
                 />
@@ -208,13 +221,22 @@ export default function DashboardScreen(): React.JSX.Element {
             )}
           </View>
 
+          {/* ── Rappels du jour ── */}
+          <RemindersSection
+            reminders={reminders}
+            urgentCount={urgentCount}
+            loading={remindersLoading}
+            error={remindersError}
+            onRefresh={remindersRefresh}
+          />
+
           {/* ── Prochaines arrivées ── */}
           <View style={styles.section}>
-            <SectionHeader title="Prochaines arrivées" />
+            <SectionHeader title={t('dashboard_upcoming')} />
             {visible.length === 0 ? (
               <EmptyCard
-                title="Aucune réservation aujourd'hui"
-                subtitle="Les réservations créées apparaîtront ici en temps réel."
+                title={t('dashboard_no_reservations')}
+                subtitle={t('dashboard_no_reservations_sub')}
               />
             ) : (
               visible.map(r => <ReservationRow key={r.id} r={r} />)
@@ -223,26 +245,26 @@ export default function DashboardScreen(): React.JSX.Element {
 
           {/* ── Actions rapides ── */}
           <View style={styles.section}>
-            <SectionHeader title="Actions rapides" />
+            <SectionHeader title={t('dashboard_quick_actions')} />
             <View style={styles.actionGrid}>
               <ActionButton
                 icon="calendar-outline"
-                label="Nouvelle réservation"
+                label={t('dashboard_new_reservation')}
                 onPress={() => { navigation.navigate('Reservations'); }}
               />
               <ActionButton
                 icon="grid-outline"
-                label="Voir le plan"
+                label={t('dashboard_see_floor')}
                 onPress={() => { navigation.navigate('FloorPlan'); }}
               />
               <ActionButton
                 icon="time-outline"
-                label="Liste d'attente"
+                label={t('dashboard_waitlist_link')}
                 onPress={() => { navigation.navigate('Reservations'); }}
               />
               <ActionButton
                 icon="people-outline"
-                label="Clients"
+                label={t('dashboard_guests_link')}
                 onPress={() => { navigation.navigate('Guests'); }}
               />
             </View>

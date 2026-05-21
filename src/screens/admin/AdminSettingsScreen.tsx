@@ -21,6 +21,7 @@ import { useStaffInvite }   from '../../hooks/useStaffInvite';
 import { supabase } from '../../lib/supabase';
 import type { AdminStackParamList } from '../../navigation/AdminNavigator';
 import type { Database } from '../../types/database';
+import { useI18n } from '../../i18n';
 
 type ShiftRow = Database['public']['Tables']['shifts']['Row'];
 type TableRow = Database['public']['Tables']['tables']['Row'];
@@ -221,6 +222,7 @@ function ActionButtons({
   onCancel: () => void;
   saving:   boolean;
 }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <View style={styles.actionRow}>
       <TouchableOpacity
@@ -231,7 +233,7 @@ function ActionButtons({
       >
         {saving
           ? <ActivityIndicator color={colors.textOnDark} size="small" />
-          : <Text style={styles.saveButtonText}>Enregistrer</Text>}
+          : <Text style={styles.saveButtonText}>{t('settings_save')}</Text>}
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.cancelButton}
@@ -239,17 +241,18 @@ function ActionButtons({
         disabled={saving}
         activeOpacity={0.7}
       >
-        <Text style={styles.cancelButtonText}>Annuler</Text>
+        <Text style={styles.cancelButtonText}>{t('settings_cancel')}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 function EditButton({ onPress }: { onPress: () => void }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <TouchableOpacity style={styles.editButton} onPress={onPress} activeOpacity={0.7}>
       <Ionicons name="pencil-outline" size={14} color={colors.cta} />
-      <Text style={styles.editButtonText}>Modifier</Text>
+      <Text style={styles.editButtonText}>{t('settings_edit')}</Text>
     </TouchableOpacity>
   );
 }
@@ -355,6 +358,41 @@ function ChannelRow({ channel }: { channel: Channel }): React.JSX.Element {
   );
 }
 
+function InviteButton({
+  id,
+  status,
+  onInvite,
+}: {
+  id:       string;
+  status:   'idle' | 'loading' | 'success' | 'error';
+  onInvite: (id: string) => void;
+}): React.JSX.Element {
+  const { t } = useI18n();
+  return (
+    <TouchableOpacity
+      style={[
+        styles.inviteButton,
+        status === 'loading' && styles.inviteButtonDisabled,
+        status === 'success' && styles.inviteButtonSuccess,
+      ]}
+      onPress={() => { onInvite(id); }}
+      disabled={status === 'loading' || status === 'success'}
+      activeOpacity={0.8}
+    >
+      {status === 'loading' ? (
+        <ActivityIndicator color={colors.textOnDark} size="small" />
+      ) : status === 'success' ? (
+        <>
+          <Ionicons name="checkmark" size={13} color={colors.statusFree} />
+          <Text style={styles.inviteButtonSuccessText}>{t('settings_invite_sent')}</Text>
+        </>
+      ) : (
+        <Text style={styles.inviteButtonText}>{t('settings_resend_invite')}</Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 function TeamMemberRow({
   id,
   fullName,
@@ -389,27 +427,7 @@ function TeamMemberRow({
       </View>
 
       {canInvite && !isSelf && (
-        <TouchableOpacity
-          style={[
-            styles.inviteButton,
-            status === 'loading' && styles.inviteButtonDisabled,
-            status === 'success' && styles.inviteButtonSuccess,
-          ]}
-          onPress={() => { onInvite(id); }}
-          disabled={status === 'loading' || status === 'success'}
-          activeOpacity={0.8}
-        >
-          {status === 'loading' ? (
-            <ActivityIndicator color={colors.textOnDark} size="small" />
-          ) : status === 'success' ? (
-            <>
-              <Ionicons name="checkmark" size={13} color={colors.statusFree} />
-              <Text style={styles.inviteButtonSuccessText}>Envoyée</Text>
-            </>
-          ) : (
-            <Text style={styles.inviteButtonText}>Renvoyer invitation</Text>
-          )}
-        </TouchableOpacity>
+        <InviteButton id={id} status={status} onInvite={onInvite} />
       )}
 
       {isSelf && (
@@ -424,6 +442,7 @@ function TeamMemberRow({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function AdminSettingsScreen({ navigation }: Props): React.JSX.Element {
+  const { t, locale, setLocale } = useI18n();
   const { loading, error, data, refresh } = useSettingsOverview();
 
   const [localData, setLocalData] = useState<SettingsData | null>(null);
@@ -488,10 +507,10 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
   const tablesByZone = useMemo((): Array<{ zone: string; tables: TableRow[] }> => {
     if (!localData) return [];
     const map = new Map<string, TableRow[]>();
-    for (const t of localData.tableRows) {
-      const arr = map.get(t.zone) ?? [];
-      arr.push(t);
-      map.set(t.zone, arr);
+    for (const row of localData.tableRows) {
+      const arr = map.get(row.zone) ?? [];
+      arr.push(row);
+      map.set(row.zone, arr);
     }
     return Array.from(map.entries())
       .map(([zone, tables]) => ({
@@ -647,7 +666,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement des paramètres…</Text>
+          <Text style={styles.loadingText}>{t('settings_loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -663,12 +682,12 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
               onPress={() => { navigation.goBack(); }}
             >
               <Ionicons name="chevron-back" size={18} color={colors.cta} />
-              <Text style={styles.backText}>Admin</Text>
+              <Text style={styles.backText}>{t('settings_back')}</Text>
             </TouchableOpacity>
-            <Text style={styles.errorTitle}>Impossible de charger les paramètres</Text>
+            <Text style={styles.errorTitle}>{t('settings_error')}</Text>
             <Text style={styles.errorMessage}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={refresh}>
-              <Text style={styles.retryButtonText}>Réessayer</Text>
+              <Text style={styles.retryButtonText}>{t('common_retry')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.signOutButtonSmall}
@@ -677,7 +696,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             >
               {signingOut
                 ? <ActivityIndicator color={colors.cta} size="small" />
-                : <Text style={styles.signOutTextSmall}>Se déconnecter</Text>}
+                : <Text style={styles.signOutTextSmall}>{t('settings_sign_out')}</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -706,13 +725,13 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             activeOpacity={0.7}
           >
             <Ionicons name="chevron-back" size={20} color={colors.cta} />
-            <Text style={styles.backText}>Admin</Text>
+            <Text style={styles.backText}>{t('settings_back')}</Text>
           </TouchableOpacity>
 
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
-              <Text style={styles.headerTitle}>Paramètres</Text>
-              <Text style={styles.headerSub}>Configuration du restaurant</Text>
+              <Text style={styles.headerTitle}>{t('settings_title')}</Text>
+              <Text style={styles.headerSub}>{t('settings_sub')}</Text>
             </View>
             <TouchableOpacity
               style={styles.refreshButton}
@@ -724,7 +743,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           </View>
 
           {/* ── 1. Restaurant ── */}
-          <SectionHeader title="Restaurant" />
+          <SectionHeader title={t('settings_section_restaurant')} />
 
           {editingRest ? (
             <Card>
@@ -766,7 +785,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
               />
               {restFormError !== null && <FormError error={restFormError} />}
               {restSaveError !== null && <FormError error={restSaveError} />}
-              {restSaveSuccess && <FormSuccess message="Modifications enregistrées." />}
+              {restSaveSuccess && <FormSuccess message={t('settings_saved')} />}
               <ActionButtons onSave={handleSaveRest} onCancel={handleCancelRest} saving={savingRest} />
             </Card>
           ) : (
@@ -800,7 +819,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           )}
 
           {/* ── 2. Compte ── */}
-          <SectionHeader title="Compte" />
+          <SectionHeader title={t('settings_section_account')} />
           <Card>
             <InfoRow label="Nom"        value={userProfile.fullName} />
             <Divider />
@@ -818,7 +837,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           {/* ── 3. Équipe ── */}
           {isOwnerAccount && (
             <>
-              <SectionHeader title="Équipe" />
+              <SectionHeader title={t('settings_section_team')} />
               {teamLoading ? (
                 <Card>
                   <ActivityIndicator color={colors.gold} size="small" />
@@ -829,7 +848,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                 </Card>
               ) : teamMembers.length === 0 ? (
                 <Card>
-                  <Text style={styles.emptyText}>Aucun membre trouvé.</Text>
+                  <Text style={styles.emptyText}>{t('settings_no_team')}</Text>
                 </Card>
               ) : (
                 <Card>
@@ -857,11 +876,11 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           )}
 
           {/* ── 4. Services ── */}
-          <SectionHeader title="Services" />
+          <SectionHeader title={t('settings_section_shifts')} />
 
           {shifts.length === 0 ? (
             <Card>
-              <Text style={styles.emptyText}>Aucun service configuré.</Text>
+              <Text style={styles.emptyText}>{t('admin_no_shift')}</Text>
             </Card>
           ) : (
             shifts.map(shift => {
@@ -958,7 +977,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                   </View>
                   <View style={styles.shiftFooter}>
                     <EditButton onPress={() => { handleStartEditShift(shift); }} />
-                    {isSaved && <Text style={styles.savedText}>Enregistré</Text>}
+                    {isSaved && <Text style={styles.savedText}>{t('common_saved')}</Text>}
                   </View>
                 </View>
               );
@@ -966,7 +985,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           )}
 
           {/* ── 5. Tables ── */}
-          <SectionHeader title="Tables" />
+          <SectionHeader title={t('settings_section_tables')} />
 
           <Card>
             <View style={styles.tableSummaryRow}>
@@ -984,7 +1003,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                 activeOpacity={0.7}
               >
                 <Text style={styles.manageTablesText}>
-                  {tablesExpanded ? 'Masquer' : 'Gérer les tables'}
+                  {tablesExpanded ? t('settings_hide') : t('settings_manage_tables')}
                 </Text>
                 <Ionicons
                   name={tablesExpanded ? 'chevron-up' : 'chevron-down'}
@@ -1060,7 +1079,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                                   <Text style={styles.tableMeta}>{table.capacity} pax</Text>
                                 </View>
                                 {isSaved
-                                  ? <Text style={styles.savedText}>Enregistré</Text>
+                                  ? <Text style={styles.savedText}>{t('common_saved')}</Text>
                                   : <EditButton onPress={() => { handleStartEditTable(table); }} />}
                               </View>
                             )}
@@ -1075,7 +1094,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           )}
 
           {/* ── 6. Réservations ── */}
-          <SectionHeader title="Réservations" />
+          <SectionHeader title={t('settings_section_reservations')} />
 
           <Card>
             <View style={styles.ruleRow}>
@@ -1126,7 +1145,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           </Card>
 
           {/* ── 7. Canaux et intégrations ── */}
-          <SectionHeader title="Canaux et intégrations" />
+          <SectionHeader title={t('settings_section_channels')} />
           <Card>
             {CHANNELS.map((ch, idx) => (
               <React.Fragment key={ch.label}>
@@ -1136,8 +1155,34 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             ))}
           </Card>
 
-          {/* ── 8. Session ── */}
-          <SectionHeader title="Session" />
+          {/* ── 8. Langue ── */}
+          <SectionHeader title={t('settings_section_language')} />
+          <Card>
+            <TouchableOpacity
+              style={[styles.langOption, locale === 'fr' && styles.langOptionActive]}
+              onPress={() => { setLocale('fr'); }}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.langLabel, locale === 'fr' && styles.langLabelActive]}>
+                {t('settings_lang_fr')}
+              </Text>
+              {locale === 'fr' && <Ionicons name="checkmark" size={16} color={colors.cta} />}
+            </TouchableOpacity>
+            <Divider />
+            <TouchableOpacity
+              style={[styles.langOption, locale === 'en' && styles.langOptionActive]}
+              onPress={() => { setLocale('en'); }}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.langLabel, locale === 'en' && styles.langLabelActive]}>
+                {t('settings_lang_en')}
+              </Text>
+              {locale === 'en' && <Ionicons name="checkmark" size={16} color={colors.cta} />}
+            </TouchableOpacity>
+          </Card>
+
+          {/* ── 9. Session ── */}
+          <SectionHeader title={t('settings_section_session')} />
           <Card>
             <TouchableOpacity
               style={styles.signOutButton}
@@ -1149,7 +1194,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
               ) : (
                 <>
                   <Ionicons name="log-out-outline" size={16} color={colors.cta} />
-                  <Text style={styles.signOutText}>Se déconnecter</Text>
+                  <Text style={styles.signOutText}>{t('settings_sign_out')}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -1830,5 +1875,22 @@ const styles = StyleSheet.create({
     color:     colors.textMuted,
     textAlign: 'center',
     padding:   spacing.sm,
+  },
+
+  // Language picker
+  langOption: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'space-between',
+    paddingVertical: spacing.md,
+  },
+  langOptionActive: {},
+  langLabel: {
+    ...typography.body,
+    color: colors.textPrimary,
+  },
+  langLabelActive: {
+    ...typography.bodyMedium,
+    color: colors.cta,
   },
 });

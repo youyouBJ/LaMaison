@@ -36,25 +36,9 @@ import {
   isValidEmail,
 } from '../../utils/email';
 import { useFeedbackSurveyLink } from '../../hooks/useFeedbackSurveyLink';
+import { useI18n } from '../../i18n';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
-
-// ─── Service filter chips ─────────────────────────────────────────────────────
-
-const SERVICE_FILTERS: { key: FloorServiceFilter; label: string }[] = [
-  { key: 'all',    label: 'Tous' },
-  { key: 'lunch',  label: 'Déjeuner' },
-  { key: 'dinner', label: 'Dîner' },
-];
-
-// ─── Legend ───────────────────────────────────────────────────────────────────
-
-const LEGEND: { status: string; color: string; label: string }[] = [
-  { status: 'free',        color: floorPlanColors.statusFree,        label: 'Libre' },
-  { status: 'reserved',    color: floorPlanColors.statusReserved,    label: 'Réservée' },
-  { status: 'occupied',    color: floorPlanColors.statusOccupied,    label: 'À table' },
-  { status: 'unavailable', color: floorPlanColors.statusUnavailable, label: 'Indisponible' },
-];
 
 // ─── Action button ────────────────────────────────────────────────────────────
 
@@ -95,10 +79,10 @@ function ActionButton({
 
 // ─── Guest label helper ───────────────────────────────────────────────────────
 
-function guestLabel(res: FloorPlanReservation): string {
+function guestLabel(res: FloorPlanReservation, walkin: string, noName: string): string {
   if (res.guestName) return res.guestName;
-  if (res.source === 'walkin') return 'Client de passage';
-  return 'Client sans nom';
+  if (res.source === 'walkin') return walkin;
+  return noName;
 }
 
 // ─── Detail panel height ──────────────────────────────────────────────────────
@@ -108,6 +92,18 @@ const DETAIL_PANEL_HEIGHT = 360;
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function FloorPlanScreen(): React.JSX.Element {
+  const { t } = useI18n();
+  const SERVICE_FILTERS: { key: FloorServiceFilter; label: string }[] = [
+    { key: 'all',    label: t('floor_filter_all') },
+    { key: 'lunch',  label: t('floor_filter_lunch') },
+    { key: 'dinner', label: t('floor_filter_dinner') },
+  ];
+  const LEGEND: { status: string; color: string; label: string }[] = [
+    { status: 'free',        color: floorPlanColors.statusFree,        label: t('floor_legend_free') },
+    { status: 'reserved',    color: floorPlanColors.statusReserved,    label: t('floor_legend_reserved') },
+    { status: 'occupied',    color: floorPlanColors.statusOccupied,    label: t('floor_legend_occupied') },
+    { status: 'unavailable', color: floorPlanColors.statusUnavailable, label: t('floor_legend_unavailable') },
+  ];
   const {
     loading,
     error,
@@ -167,35 +163,35 @@ export default function FloorPlanScreen(): React.JSX.Element {
   const handleFormSuccess = useCallback((_reservationId: string) => {
     setShowForm(false);
     refresh();
-    showSuccess('Réservation créée avec succès.');
-  }, [refresh, showSuccess]);
+    showSuccess(t('floor_res_created'));
+  }, [refresh, showSuccess, t]);
 
   // ── Service action handlers ───────────────────────────────────────────────
 
   const handleSeat = useCallback(async (reservationId: string) => {
     const ok = await seatReservation(reservationId);
-    if (ok) showSuccess('Réservation mise à table.');
-  }, [seatReservation, showSuccess]);
+    if (ok) showSuccess(t('floor_res_seated'));
+  }, [seatReservation, showSuccess, t]);
 
   const handleComplete = useCallback(async (reservationId: string) => {
     const ok = await completeReservation(reservationId);
-    if (ok) showSuccess('Réservation terminée.');
-  }, [completeReservation, showSuccess]);
+    if (ok) showSuccess(t('floor_res_completed'));
+  }, [completeReservation, showSuccess, t]);
 
   const handleNoShow = useCallback(async (reservationId: string) => {
     const ok = await markNoShow(reservationId);
-    if (ok) showSuccess('No-show enregistré.');
-  }, [markNoShow, showSuccess]);
+    if (ok) showSuccess(t('floor_res_noshow'));
+  }, [markNoShow, showSuccess, t]);
 
   const handleCancel = useCallback(async (reservationId: string) => {
     const ok = await cancelReservation(reservationId);
-    if (ok) showSuccess('Réservation annulée.');
-  }, [cancelReservation, showSuccess]);
+    if (ok) showSuccess(t('floor_res_cancelled'));
+  }, [cancelReservation, showSuccess, t]);
 
   const handleConfirm = useCallback(async (reservationId: string) => {
     const ok = await updateReservationStatus(reservationId, 'confirmed');
-    if (ok) showSuccess('Réservation confirmée.');
-  }, [updateReservationStatus, showSuccess]);
+    if (ok) showSuccess(t('floor_res_confirmed'));
+  }, [updateReservationStatus, showSuccess, t]);
 
   return (
     <>
@@ -203,7 +199,7 @@ export default function FloorPlanScreen(): React.JSX.Element {
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
-        <Text style={styles.title}>Plan de salle</Text>
+        <Text style={styles.title}>{t('floor_title')}</Text>
         <TouchableOpacity
           style={styles.refreshBtn}
           onPress={refresh}
@@ -344,6 +340,7 @@ function TableDetailPanel({
   onNoShow: (id: string) => void;
   onCancel: (id: string) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const [waFeedback, setWaFeedback]       = useState<{ ok: boolean; text: string } | null>(null);
   const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -363,7 +360,7 @@ function TableDetailPanel({
     } else if (res.status === 'completed') {
       void getByReservationId(res.id).then(({ data: result, error: surveyErr }) => {
         if (!result) {
-          setWaFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
+          setWaFeedback({ ok: false, text: surveyErr ?? t('floor_survey_unavailable') });
           setTimeout(() => setWaFeedback(null), 6000);
           return;
         }
@@ -371,12 +368,12 @@ function TableDetailPanel({
         void openWhatsAppMessage(phone, message).then((opened) => {
           setWaFeedback(
             opened
-              ? { ok: true, text: 'WhatsApp ouvert' }
+              ? { ok: true, text: t('floor_wa_opened') }
               : {
                   ok: false,
                   text: normalizePhoneForWhatsApp(phone)
-                    ? "Impossible d'ouvrir WhatsApp."
-                    : 'Numéro invalide.',
+                    ? t('floor_wa_cant_open')
+                    : t('floor_wa_invalid'),
                 },
           );
           setTimeout(() => setWaFeedback(null), 4000);
@@ -389,12 +386,12 @@ function TableDetailPanel({
     void openWhatsAppMessage(phone, message).then((opened) => {
       setWaFeedback(
         opened
-          ? { ok: true, text: 'WhatsApp ouvert' }
+          ? { ok: true, text: t('floor_wa_opened') }
           : {
               ok: false,
               text: normalizePhoneForWhatsApp(phone)
-                ? "Impossible d'ouvrir WhatsApp."
-                : 'Numéro invalide.',
+                ? t('floor_wa_cant_open')
+                : t('floor_wa_invalid'),
             },
       );
       setTimeout(() => setWaFeedback(null), 4000);
@@ -409,7 +406,7 @@ function TableDetailPanel({
     } else {
       void getByReservationId(res.id).then(({ data: result, error: surveyErr }) => {
         if (!result) {
-          setEmailFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
+          setEmailFeedback({ ok: false, text: surveyErr ?? t('floor_survey_unavailable') });
           setTimeout(() => setEmailFeedback(null), 6000);
           return;
         }
@@ -417,12 +414,12 @@ function TableDetailPanel({
         void openEmailMessage(email, subject, body).then((opened) => {
           setEmailFeedback(
             opened
-              ? { ok: true, text: 'Email ouvert' }
+              ? { ok: true, text: t('floor_email_opened') }
               : {
                   ok: false,
                   text: email && isValidEmail(email)
-                    ? "Impossible d'ouvrir l'application Mail."
-                    : 'Email invalide.',
+                    ? t('floor_email_cant_open')
+                    : t('floor_email_invalid'),
                 },
           );
           setTimeout(() => setEmailFeedback(null), 4000);
@@ -434,12 +431,12 @@ function TableDetailPanel({
     void openEmailMessage(email, subject, body).then((opened) => {
       setEmailFeedback(
         opened
-          ? { ok: true, text: 'Email ouvert' }
+          ? { ok: true, text: t('floor_email_opened') }
           : {
               ok: false,
               text: email && isValidEmail(email)
-                ? "Impossible d'ouvrir l'application Mail."
-                : 'Email invalide.',
+                ? t('floor_email_cant_open')
+                : t('floor_email_invalid'),
             },
       );
       setTimeout(() => setEmailFeedback(null), 4000);
@@ -447,10 +444,10 @@ function TableDetailPanel({
   };
 
   const STATUS_LABEL: Record<string, string> = {
-    free:        'Libre',
-    reserved:    'Réservée',
-    occupied:    'À table',
-    unavailable: 'Indisponible',
+    free:        t('floor_status_free'),
+    reserved:    t('floor_status_reserved'),
+    occupied:    t('floor_status_occupied'),
+    unavailable: t('floor_status_unavailable'),
   };
   const STATUS_COLOR: Record<string, string> = {
     free:        colors.statusFree,
@@ -542,7 +539,7 @@ function TableDetailPanel({
 
         {/* Reservation list */}
         {table.reservations.length === 0 ? (
-          <Text style={styles.noRes}>Aucune réservation assignée</Text>
+          <Text style={styles.noRes}>{t('floor_no_reservations')}</Text>
         ) : (
           table.reservations.map((res) => {
             const isUpdating  = updatingReservationId === res.id;
@@ -562,7 +559,7 @@ function TableDetailPanel({
                   <View style={styles.resInfoBlock}>
                     <View style={styles.resNameRow}>
                       <Text style={styles.resGuestName} numberOfLines={1}>
-                        {guestLabel(res)}
+                        {guestLabel(res, t('floor_walkin'), t('floor_guest_no_name'))}
                       </Text>
                       {res.guestVip ? <VipBadge small /> : null}
                     </View>
@@ -596,33 +593,33 @@ function TableDetailPanel({
                 {isUpdating ? (
                   <View style={styles.updatingRow}>
                     <ActivityIndicator size="small" color={colors.gold} />
-                    <Text style={styles.updatingText}>Mise à jour…</Text>
+                    <Text style={styles.updatingText}>{t('floor_update')}</Text>
                   </View>
                 ) : (
                   <View style={styles.actionsRow}>
                     {res.status === 'pending' && (
-                      <ActionButton label="Confirmer" variant="confirm" onPress={() => onConfirm(res.id)} />
+                      <ActionButton label={t('floor_action_confirm')} variant="confirm" onPress={() => onConfirm(res.id)} />
                     )}
                     {(res.status === 'pending' || res.status === 'confirmed') && (
-                      <ActionButton label="À table" variant="seat" onPress={() => onSeat(res.id)} />
+                      <ActionButton label={t('floor_action_seat')} variant="seat" onPress={() => onSeat(res.id)} />
                     )}
                     {res.status === 'seated' && (
-                      <ActionButton label="Terminer" variant="complete" onPress={() => onComplete(res.id)} />
+                      <ActionButton label={t('floor_action_complete')} variant="complete" onPress={() => onComplete(res.id)} />
                     )}
                     {(res.status === 'pending' || res.status === 'confirmed') && (
-                      <ActionButton label="No-show" variant="noshow" onPress={() => onNoShow(res.id)} />
+                      <ActionButton label={t('floor_action_noshow')} variant="noshow" onPress={() => onNoShow(res.id)} />
                     )}
                     {(res.status === 'pending' || res.status === 'confirmed' || res.status === 'seated') && (
-                      <ActionButton label="Annuler" variant="cancel" onPress={() => onCancel(res.id)} />
+                      <ActionButton label={t('floor_action_cancel')} variant="cancel" onPress={() => onCancel(res.id)} />
                     )}
                     {res.guestPhone ? (
                       <ActionButton
                         label={
                           (res.status === 'pending' || res.status === 'confirmed')
-                            ? 'Confirmer WhatsApp'
+                            ? t('floor_confirm_wa')
                             : res.status === 'completed'
-                              ? 'Avis WhatsApp'
-                              : 'WhatsApp'
+                              ? t('floor_review_wa')
+                              : t('floor_wa_short')
                         }
                         variant="whatsapp"
                         onPress={() => handleWhatsApp(res)}
@@ -632,10 +629,10 @@ function TableDetailPanel({
                       <ActionButton
                         label={
                           (res.status === 'pending' || res.status === 'confirmed')
-                            ? 'Confirmer Email'
+                            ? t('floor_confirm_email')
                             : res.status === 'completed'
-                              ? 'Avis Email'
-                              : 'Email'
+                              ? t('floor_review_email')
+                              : t('floor_email_short')
                         }
                         variant="email"
                         onPress={() => handleEmail(res)}

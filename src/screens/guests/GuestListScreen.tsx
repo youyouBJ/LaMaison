@@ -27,30 +27,33 @@ import type { GuestsStackParamList } from '../../navigation/GuestsNavigator';
 import type { Database } from '../../types/database';
 import type { GuestSortOption, GuestFilterState } from '../../types/guests';
 import VipBadge from '../../components/VipBadge';
+import { useI18n } from '../../i18n';
 
 type GuestRow = Database['public']['Tables']['guests']['Row'];
 type Props = NativeStackScreenProps<GuestsStackParamList, 'GuestList'>;
 
-const SORT_OPTIONS: { key: GuestSortOption; label: string }[] = [
-  { key: 'last_visit_desc', label: 'Dernière visite' },
-  { key: 'visit_count_desc', label: 'Nb visites' },
-  { key: 'avg_rating_desc', label: 'Note' },
-  { key: 'name_asc', label: 'A → Z' },
-  { key: 'created_at_desc', label: 'Récents' },
-];
-
-const FILTER_OPTIONS: { key: keyof GuestFilterState; label: string }[] = [
-  { key: 'upcomingReservationOnly', label: 'Réservation à venir' },
-  { key: 'vipOnly', label: 'VIP' },
-  { key: 'withPhoneOnly', label: 'Avec tél.' },
-  { key: 'withEmailOnly', label: 'Avec email' },
-  { key: 'withRatingOnly', label: 'Avec note' },
-  { key: 'reengagementOnly', label: 'Ré-engagement' },
-  { key: 'positiveFeedbackOnly', label: 'Feedback +' },
-  { key: 'negativeFeedbackOnly', label: 'Feedback −' },
-];
-
 export default function GuestListScreen({ navigation }: Props): React.JSX.Element {
+  const { t } = useI18n();
+
+  const SORT_OPTIONS: { key: GuestSortOption; label: string }[] = [
+    { key: 'last_visit_desc',  label: t('guests_sort_last_visit') },
+    { key: 'visit_count_desc', label: t('guests_sort_visits') },
+    { key: 'avg_rating_desc',  label: t('guests_sort_rating') },
+    { key: 'name_asc',         label: t('guests_sort_name') },
+    { key: 'created_at_desc',  label: t('guests_sort_recent') },
+  ];
+
+  const FILTER_OPTIONS: { key: keyof GuestFilterState; label: string }[] = [
+    { key: 'upcomingReservationOnly', label: t('guests_filter_upcoming') },
+    { key: 'vipOnly',                 label: t('guests_filter_vip') },
+    { key: 'withPhoneOnly',           label: t('guests_filter_phone') },
+    { key: 'withEmailOnly',           label: t('guests_filter_email_only') },
+    { key: 'withRatingOnly',          label: t('guests_filter_rating') },
+    { key: 'reengagementOnly',        label: t('guests_filter_reengagement') },
+    { key: 'positiveFeedbackOnly',    label: t('guests_filter_positive') },
+    { key: 'negativeFeedbackOnly',    label: t('guests_filter_negative') },
+  ];
+
   const {
     loading,
     loadingMore,
@@ -84,10 +87,10 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
     return (
       <View style={styles.footerLoader}>
         <ActivityIndicator color={colors.gold} size="small" />
-        <Text style={styles.footerText}>Chargement des clients…</Text>
+        <Text style={styles.footerText}>{t('guests_loading_more')}</Text>
       </View>
     );
-  }, [loadingMore]);
+  }, [loadingMore, t]);
 
   const renderItem = useCallback(
     ({ item }: { item: GuestRow }) => {
@@ -149,7 +152,7 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement des clients…</Text>
+          <Text style={styles.loadingText}>{t('guests_loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -162,7 +165,7 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
           <View style={styles.errorCard}>
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity style={styles.retryBtn} onPress={handleRefresh}>
-              <Text style={styles.retryBtnText}>Réessayer</Text>
+              <Text style={styles.retryBtnText}>{t('guests_retry')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -177,9 +180,9 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
       {/* ── En-tête ── */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerLabel}>CRM</Text>
-          <Text style={styles.headerTitle}>Clients</Text>
-          <Text style={styles.headerSubtitle}>Recherche par téléphone, nom ou email</Text>
+          <Text style={styles.headerLabel}>{t('guests_label')}</Text>
+          <Text style={styles.headerTitle}>{t('guests_title')}</Text>
+          <Text style={styles.headerSubtitle}>{t('guests_subtitle')}</Text>
         </View>
       </View>
 
@@ -188,7 +191,7 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
         <View style={styles.searchBarContent}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Rechercher par nom, téléphone ou email"
+            placeholder={t('guests_search_placeholder')}
             placeholderTextColor={colors.textMuted}
             value={query}
             onChangeText={setQuery}
@@ -201,7 +204,7 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
           ) : null}
           {query.length > 0 ? (
             <TouchableOpacity style={styles.clearBtn} onPress={handleClear}>
-              <Text style={styles.clearBtnText}>Effacer</Text>
+              <Text style={styles.clearBtnText}>{t('common_clear')}</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -210,13 +213,13 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
       {/* ── Filtres ── */}
       <View style={styles.filterSection}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionLabel}>Filtres</Text>
+          <Text style={styles.sectionLabel}>{t('guests_filter_label')}</Text>
           {activeFilterCount > 0 ? (
             <TouchableOpacity
               onPress={resetFilters}
               hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
             >
-              <Text style={styles.resetBtnText}>Tout effacer</Text>
+              <Text style={styles.resetBtnText}>{t('guests_clear_filters')}</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -239,7 +242,7 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
       {/* ── Tri ── */}
       <View style={styles.sortSection}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionLabel}>Trier par</Text>
+          <Text style={styles.sectionLabel}>{t('guests_sort_label')}</Text>
         </View>
         <ScrollView
           horizontal
@@ -291,16 +294,16 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>
               {!hasActiveState
-                ? 'Aucun client pour le moment'
+                ? t('guests_no_guests')
                 : filters.upcomingReservationOnly
-                  ? 'Aucun client avec réservation à venir'
-                  : 'Aucun client trouvé'}
+                  ? t('guests_no_upcoming')
+                  : t('guests_no_results')}
             </Text>
             {hasActiveState ? (
               <Text style={styles.emptySubtitle}>
                 {filters.upcomingReservationOnly && query.length === 0 && activeFilterCount === 1
-                  ? 'Les clients avec une réservation confirmée ou en attente apparaîtront ici.'
-                  : 'Essayez une autre recherche ou réinitialisez les filtres.'}
+                  ? t('guests_no_upcoming_sub')
+                  : t('guests_no_results_sub')}
               </Text>
             ) : null}
           </View>

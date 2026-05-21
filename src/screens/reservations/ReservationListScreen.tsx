@@ -23,16 +23,12 @@ import type { ReservationsStackParamList } from '../../navigation/ReservationsNa
 import type { ReservationWithJoins } from '../../types/reservations';
 import type { ReservationStatus } from '../../types/database';
 import { getReservationStatusLabel } from '../../utils/reservationStatus';
+import { useI18n } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationList'>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 type ReservationServiceFilter = 'all' | 'lunch' | 'dinner';
-
-const SERVICE_OPTIONS: { key: ReservationServiceFilter; label: string }[] = [
-  { key: 'all',    label: 'Tous' },
-  { key: 'lunch',  label: 'Déjeuner' },
-  { key: 'dinner', label: 'Dîner' },
-];
 
 const STATUS_FILTER_OPTIONS: ReservationStatus[] = [
   'pending', 'confirmed', 'seated', 'completed', 'cancelled', 'noshow',
@@ -86,11 +82,18 @@ function matchesService(r: ReservationWithJoins, service: ReservationServiceFilt
 }
 
 export default function ReservationListScreen({ navigation }: Props): React.JSX.Element {
+  const { t } = useI18n();
   const { loading, error, reservations, selectedDate, setSelectedDate, refresh } = useReservations();
   const [searchQuery, setSearchQuery]       = useState('');
   const [isFocused, setIsFocused]           = useState(false);
   const [serviceFilter, setServiceFilter]   = useState<ReservationServiceFilter>('all');
   const [statusFilter, setStatusFilter]     = useState<ReservationStatus | null>(null);
+
+  const SERVICE_OPTIONS: { key: ReservationServiceFilter; label: string }[] = [
+    { key: 'all',    label: t('res_filter_all') },
+    { key: 'lunch',  label: t('res_filter_lunch') },
+    { key: 'dinner', label: t('res_filter_dinner') },
+  ];
 
   useFocusEffect(
     useCallback(() => { refresh(); }, [refresh]),
@@ -124,7 +127,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement des réservations…</Text>
+          <Text style={styles.loadingText}>{t('res_loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -135,10 +138,10 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Impossible de charger les réservations</Text>
+            <Text style={styles.errorTitle}>{t('res_error')}</Text>
             <Text style={styles.errorMessage}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={refresh}>
-              <Text style={styles.retryText}>Réessayer</Text>
+              <Text style={styles.retryText}>{t('common_retry')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -158,7 +161,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
       return `${n} résultat${n !== 1 ? 's' : ''}`;
     }
     const n = filteredReservations.length;
-    if (n === 0) return 'Aucune réservation';
+    if (n === 0) return t('res_no_reservations');
     const s = n > 1 ? 's' : '';
     if (serviceFilter === 'lunch')  return `${n} réservation${s} déjeuner`;
     if (serviceFilter === 'dinner') return `${n} réservation${s} dîner`;
@@ -181,8 +184,8 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
           {/* ── Header ── */}
           <View style={styles.headerRow}>
             <View>
-              <Text style={styles.headerLabel}>Réservations</Text>
-              <Text style={styles.headerTitle}>Planning</Text>
+              <Text style={styles.headerLabel}>{t('res_label')}</Text>
+              <Text style={styles.headerTitle}>{t('res_title')}</Text>
             </View>
             <TouchableOpacity
               style={styles.newButton}
@@ -190,7 +193,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
               activeOpacity={0.8}
             >
               <Ionicons name={'add' as IoniconsName} size={18} color={colors.textOnDark} />
-              <Text style={styles.newButtonText}>Nouvelle</Text>
+              <Text style={styles.newButtonText}>{t('res_new')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -202,7 +205,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
               activeOpacity={0.8}
             >
               <Ionicons name={'time-outline' as IoniconsName} size={16} color={colors.gold} />
-              <Text style={styles.waitlistButtonText}>En attente de table</Text>
+              <Text style={styles.waitlistButtonText}>{t('res_waitlist_btn')}</Text>
             </TouchableOpacity>
             {waitlistWaitingCount > 0 ? (
               <View style={styles.waitlistBadge}>
@@ -218,7 +221,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
 
           {/* ── Filtre service ── */}
           <View style={styles.serviceSection}>
-            <Text style={styles.serviceSectionLabel}>Service</Text>
+            <Text style={styles.serviceSectionLabel}>{t('res_service')}</Text>
             <View style={styles.serviceChips}>
               {SERVICE_OPTIONS.map(({ key, label }) => (
                 <FilterChip
@@ -234,14 +237,14 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
           {/* ── Filtre statut ── */}
           <View style={styles.statusSection}>
             <View style={styles.statusSectionHeader}>
-              <Text style={styles.statusSectionLabel}>Statut</Text>
+              <Text style={styles.statusSectionLabel}>{t('res_status_filter')}</Text>
               {statusFilter !== null && (
                 <TouchableOpacity
                   style={styles.statusResetBtn}
                   onPress={() => { setStatusFilter(null); }}
                   activeOpacity={0.75}
                 >
-                  <Text style={styles.statusResetBtnText}>Tout afficher</Text>
+                  <Text style={styles.statusResetBtnText}>{t('res_show_all')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -253,7 +256,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
               {STATUS_FILTER_OPTIONS.map(s => (
                 <FilterChip
                   key={s}
-                  label={getReservationStatusLabel(s)}
+                  label={t(('status_' + s) as TranslationKey)}
                   active={statusFilter === s}
                   onPress={() => { setStatusFilter(statusFilter === s ? null : s); }}
                 />
@@ -271,7 +274,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
             />
             <TextInput
               style={styles.searchInput}
-              placeholder="Rechercher nom, téléphone, table, heure..."
+              placeholder={t('res_search_placeholder')}
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -283,7 +286,7 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
             />
             {isSearching ? (
               <TouchableOpacity onPress={handleClear} style={styles.clearBtn} activeOpacity={0.7}>
-                <Text style={styles.clearBtnText}>Effacer</Text>
+                <Text style={styles.clearBtnText}>{t('common_clear')}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -294,41 +297,37 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
           {/* ── Aucune réservation sur cette date ── */}
           {!hasReservations ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>Aucune réservation</Text>
-              <Text style={styles.emptySubtitle}>
-                Aucune réservation n'est prévue pour cette date.
-              </Text>
+              <Text style={styles.emptyTitle}>{t('res_no_reservations')}</Text>
+              <Text style={styles.emptySubtitle}>{t('res_no_reservations_sub')}</Text>
             </View>
 
           /* ── Aucune réservation pour ce service ── */
           ) : !hasServiceResults ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>Aucune réservation pour ce service</Text>
+              <Text style={styles.emptyTitle}>{t('res_no_service')}</Text>
               <Text style={styles.emptySubtitle}>
                 {serviceFilter === 'lunch'
-                  ? 'Aucune réservation déjeuner pour cette date.'
-                  : 'Aucune réservation dîner pour cette date.'}
+                  ? t('res_no_service_lunch')
+                  : t('res_no_service_dinner')}
               </Text>
             </View>
 
           /* ── Aucune réservation pour ce statut ── */
           ) : !hasStatusResults ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>Aucune réservation avec ce statut</Text>
+              <Text style={styles.emptyTitle}>{t('res_no_status')}</Text>
               <Text style={styles.emptySubtitle}>
                 {statusFilter !== null
-                  ? `Aucune réservation "${getReservationStatusLabel(statusFilter)}" pour cette date.`
-                  : 'Aucune réservation pour cette date.'}
+                  ? `${t(('status_' + statusFilter) as TranslationKey)}`
+                  : t('res_no_reservations_sub')}
               </Text>
             </View>
 
           /* ── Recherche sans résultat ── */
           ) : isSearching && !hasResults ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>Aucune réservation trouvée</Text>
-              <Text style={styles.emptySubtitle}>
-                Essayez un autre nom, téléphone, horaire ou service.
-              </Text>
+              <Text style={styles.emptyTitle}>{t('res_no_search')}</Text>
+              <Text style={styles.emptySubtitle}>{t('res_no_search_sub')}</Text>
             </View>
 
           /* ── Liste filtrée ── */

@@ -29,15 +29,10 @@ import {
   normalizePhoneForWhatsApp,
   buildWaitlistReadyMessage,
 } from '../../utils/whatsapp';
+import { useI18n } from '../../i18n';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'Waitlist'>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
-
-const SERVICE_OPTIONS: { key: WaitlistServiceFilter; label: string }[] = [
-  { key: 'all',    label: 'Tous' },
-  { key: 'lunch',  label: 'Déjeuner' },
-  { key: 'dinner', label: 'Dîner' },
-];
 
 // ── Entry card ────────────────────────────────────────────────────────────────
 
@@ -68,6 +63,7 @@ function EntryCard({
   onConvertConfirm,
   onConvertCancel,
 }: EntryCardProps): React.JSX.Element {
+  const { t } = useI18n();
   const isLoading         = actionLoadingId === entry.id;
   const showConvertPicker = activeConvertId === entry.id;
 
@@ -79,12 +75,12 @@ function EntryCard({
     void openWhatsAppMessage(phone, message).then((opened) => {
       setWaFeedback(
         opened
-          ? { ok: true, text: 'WhatsApp ouvert' }
+          ? { ok: true, text: t('wl_wa_opened') }
           : {
               ok: false,
               text: normalizePhoneForWhatsApp(phone)
-                ? "Impossible d'ouvrir WhatsApp."
-                : 'Numéro invalide.',
+                ? t('wl_wa_cant_open')
+                : t('wl_wa_invalid'),
             },
       );
       setTimeout(() => setWaFeedback(null), 4000);
@@ -96,8 +92,8 @@ function EntryCard({
   const guestName = entry.guests
     ? `${entry.guests.first_name ?? ''} ${entry.guests.last_name ?? ''}`.trim() ||
       entry.guests.phone ||
-      'Client'
-    : 'Client de passage';
+      t('wl_walkin')
+    : t('wl_walkin');
 
   const timeDisplay = entry.time_slot ? entry.time_slot.substring(0, 5) : null;
   const shiftName   = entry.shifts?.name ?? null;
@@ -155,21 +151,21 @@ function EntryCard({
       ) : showConvertPicker ? (
         /* ── Choix statut réservation ── */
         <View style={styles.convertPicker}>
-          <Text style={styles.convertPickerLabel}>Créer en quel statut ?</Text>
+          <Text style={styles.convertPickerLabel}>{t('wl_convert_title')}</Text>
           <View style={styles.convertPickerRow}>
             <TouchableOpacity
               style={styles.convertPickerBtnConfirmed}
               onPress={() => void onConvertConfirm(entry.id, 'confirmed')}
               activeOpacity={0.75}
             >
-              <Text style={styles.convertPickerBtnConfirmedText}>Confirmée</Text>
+              <Text style={styles.convertPickerBtnConfirmedText}>{t('wl_convert_confirmed')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.convertPickerBtnSeated}
               onPress={() => void onConvertConfirm(entry.id, 'seated')}
               activeOpacity={0.75}
             >
-              <Text style={styles.convertPickerBtnSeatedText}>Installée</Text>
+              <Text style={styles.convertPickerBtnSeatedText}>{t('wl_convert_seated')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.convertPickerBtnCancel}
@@ -185,37 +181,37 @@ function EntryCard({
           {/* waiting : Prévenir / Installer / Parti / Convertir / WhatsApp */}
           {entry.status === 'waiting' ? (
             <>
-              <ActionChip label="Prévenir"  variant="notify"   onPress={() => onNotify(entry.id)} />
-              <ActionChip label="Installer" variant="seat"     onPress={() => onSeat(entry.id)} />
-              <ActionChip label="Parti"     variant="left"     onPress={() => onLeft(entry.id)} />
-              <ActionChip label="→ Résa"    variant="convert"  onPress={() => onConvertRequest(entry.id)} />
+              <ActionChip label={t('wl_action_notify')}   variant="notify"   onPress={() => onNotify(entry.id)} />
+              <ActionChip label={t('wl_action_seat')}     variant="seat"     onPress={() => onSeat(entry.id)} />
+              <ActionChip label={t('wl_action_left')}     variant="left"     onPress={() => onLeft(entry.id)} />
+              <ActionChip label={t('wl_action_convert')}  variant="convert"  onPress={() => onConvertRequest(entry.id)} />
               {entry.guests?.phone ? (
-                <ActionChip label="WhatsApp" variant="whatsapp" onPress={handleWhatsApp} />
+                <ActionChip label={t('wl_action_whatsapp')} variant="whatsapp" onPress={handleWhatsApp} />
               ) : null}
             </>
           ) : null}
           {/* notified : Installer / Parti / Repasser en attente / Convertir / WhatsApp */}
           {entry.status === 'notified' ? (
             <>
-              <ActionChip label="Installer"  variant="seat"     onPress={() => onSeat(entry.id)} />
-              <ActionChip label="Parti"      variant="left"     onPress={() => onLeft(entry.id)} />
-              <ActionChip label="En attente" variant="waiting"  onPress={() => onWaiting(entry.id)} />
-              <ActionChip label="→ Résa"     variant="convert"  onPress={() => onConvertRequest(entry.id)} />
+              <ActionChip label={t('wl_action_seat')}     variant="seat"     onPress={() => onSeat(entry.id)} />
+              <ActionChip label={t('wl_action_left')}     variant="left"     onPress={() => onLeft(entry.id)} />
+              <ActionChip label={t('wl_action_waiting')}  variant="waiting"  onPress={() => onWaiting(entry.id)} />
+              <ActionChip label={t('wl_action_convert')}  variant="convert"  onPress={() => onConvertRequest(entry.id)} />
               {entry.guests?.phone ? (
-                <ActionChip label="WhatsApp" variant="whatsapp" onPress={handleWhatsApp} />
+                <ActionChip label={t('wl_action_whatsapp')} variant="whatsapp" onPress={handleWhatsApp} />
               ) : null}
             </>
           ) : null}
           {/* seated : Parti / Repasser en attente */}
           {entry.status === 'seated' ? (
             <>
-              <ActionChip label="Parti"      variant="left"    onPress={() => onLeft(entry.id)} />
-              <ActionChip label="En attente" variant="waiting" onPress={() => onWaiting(entry.id)} />
+              <ActionChip label={t('wl_action_left')}    variant="left"    onPress={() => onLeft(entry.id)} />
+              <ActionChip label={t('wl_action_waiting')} variant="waiting" onPress={() => onWaiting(entry.id)} />
             </>
           ) : null}
           {/* left : Repasser en attente */}
           {entry.status === 'left' ? (
-            <ActionChip label="Repasser en attente" variant="waiting" onPress={() => onWaiting(entry.id)} />
+            <ActionChip label={t('wl_action_waiting')} variant="waiting" onPress={() => onWaiting(entry.id)} />
           ) : null}
         </View>
       ) : null}
@@ -283,6 +279,14 @@ function StatPill({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function WaitlistScreen({ navigation }: Props): React.JSX.Element {
+  const { t } = useI18n();
+
+  const SERVICE_OPTIONS: { key: WaitlistServiceFilter; label: string }[] = [
+    { key: 'all',    label: t('wl_filter_all') },
+    { key: 'lunch',  label: t('wl_filter_lunch') },
+    { key: 'dinner', label: t('wl_filter_dinner') },
+  ];
+
   const {
     loading,
     error,
@@ -361,7 +365,7 @@ export default function WaitlistScreen({ navigation }: Props): React.JSX.Element
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement de la liste d'attente…</Text>
+          <Text style={styles.loadingText}>{t('wl_loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -372,10 +376,10 @@ export default function WaitlistScreen({ navigation }: Props): React.JSX.Element
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Impossible de charger la liste d'attente</Text>
+            <Text style={styles.errorTitle}>{t('wl_error')}</Text>
             <Text style={styles.errorMessage}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={refresh}>
-              <Text style={styles.retryText}>Réessayer</Text>
+              <Text style={styles.retryText}>{t('common_retry')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -405,9 +409,9 @@ export default function WaitlistScreen({ navigation }: Props): React.JSX.Element
                 activeOpacity={0.7}
               >
                 <Ionicons name={'chevron-back' as IoniconsName} size={16} color={colors.cta} />
-                <Text style={styles.backButtonText}>Réservations</Text>
+                <Text style={styles.backButtonText}>{t('wl_back')}</Text>
               </TouchableOpacity>
-              <Text style={styles.headerTitle}>Liste d'attente</Text>
+              <Text style={styles.headerTitle}>{t('wl_title')}</Text>
             </View>
             <TouchableOpacity
               style={styles.addButton}
@@ -415,7 +419,7 @@ export default function WaitlistScreen({ navigation }: Props): React.JSX.Element
               activeOpacity={0.8}
             >
               <Ionicons name={'add' as IoniconsName} size={18} color={colors.textOnDark} />
-              <Text style={styles.addButtonText}>Ajouter</Text>
+              <Text style={styles.addButtonText}>{t('wl_add')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -424,7 +428,7 @@ export default function WaitlistScreen({ navigation }: Props): React.JSX.Element
 
           {/* ── Filtre service ── */}
           <View style={styles.serviceSection}>
-            <Text style={styles.serviceSectionLabel}>Service</Text>
+            <Text style={styles.serviceSectionLabel}>{t('wl_service')}</Text>
             <View style={styles.serviceChips}>
               {SERVICE_OPTIONS.map(({ key, label }) => (
                 <FilterChip
@@ -439,10 +443,10 @@ export default function WaitlistScreen({ navigation }: Props): React.JSX.Element
 
           {/* ── Compteurs ── */}
           <View style={styles.statsRow}>
-            <StatPill label="En attente" count={waitingCount}  color={colors.gold}             highlight />
-            <StatPill label="Prévenu"    count={notifiedCount} color={colors.cta} />
-            <StatPill label="Installé"   count={seatedCount}   color={colors.statusFree} />
-            <StatPill label="Parti"      count={leftCount}     color={colors.statusUnavailable} />
+            <StatPill label={t('wl_stat_waiting')}  count={waitingCount}  color={colors.gold}             highlight />
+            <StatPill label={t('wl_stat_notified')} count={notifiedCount} color={colors.cta} />
+            <StatPill label={t('wl_stat_seated')}   count={seatedCount}   color={colors.statusFree} />
+            <StatPill label={t('wl_stat_left')}     count={leftCount}     color={colors.statusUnavailable} />
           </View>
 
           {/* ── Erreurs actions ── */}
@@ -456,10 +460,8 @@ export default function WaitlistScreen({ navigation }: Props): React.JSX.Element
           {entries.length === 0 ? (
             <View style={styles.emptyCard}>
               <Ionicons name={'time-outline' as IoniconsName} size={32} color={colors.textMuted} />
-              <Text style={styles.emptyTitle}>Aucune attente</Text>
-              <Text style={styles.emptySubtitle}>
-                Les clients en attente apparaîtront ici.
-              </Text>
+              <Text style={styles.emptyTitle}>{t('wl_no_entries')}</Text>
+              <Text style={styles.emptySubtitle}>{t('wl_no_entries_sub')}</Text>
             </View>
           ) : (
             entries.map((entry) => (

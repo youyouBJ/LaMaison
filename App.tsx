@@ -16,6 +16,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { colors } from './src/theme';
 import RootNavigator from './src/navigation/RootNavigator';
+import { I18nProvider } from './src/i18n';
 
 export default function App(): React.JSX.Element | null {
   const [fontsLoaded] = useFonts({
@@ -35,12 +36,14 @@ export default function App(): React.JSX.Element | null {
   }
 
   return (
-    <GestureHandlerRootView style={styles.root}>
-      <NavigationContainer>
-        <RootNavigator />
-      </NavigationContainer>
-      <StatusBar style="dark" backgroundColor={colors.background} />
-    </GestureHandlerRootView>
+    <I18nProvider>
+      <GestureHandlerRootView style={styles.root}>
+        <NavigationContainer>
+          <RootNavigator />
+        </NavigationContainer>
+        <StatusBar style="dark" backgroundColor={colors.background} />
+      </GestureHandlerRootView>
+    </I18nProvider>
   );
 }
 

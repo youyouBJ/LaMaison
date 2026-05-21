@@ -29,6 +29,8 @@ import { getReservationStatusColors, getReservationStatusLabel } from '../../uti
 import StatCard from '../../components/StatCard';
 import type { AdminStackParamList } from '../../navigation/AdminNavigator';
 import type { ReservationStatus, Database } from '../../types/database';
+import { useI18n } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 type ShiftRow = Database['public']['Tables']['shifts']['Row'];
 
@@ -37,6 +39,15 @@ type Props = {
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const PERIOD_KEY_MAP: Record<DashboardPeriod, TranslationKey> = {
+  today:         'admin_period_today',
+  week:          'admin_period_week',
+  month:         'admin_period_month',
+  current_month: 'admin_period_current_month',
+  year:          'admin_period_year',
+  custom:        'admin_period_custom',
+};
 
 const STATUS_ORDER: ReservationStatus[] = [
   'confirmed', 'pending', 'seated',
@@ -148,6 +159,7 @@ function PeriodSelectorAdmin({
   active: DashboardPeriod;
   onChange: (p: DashboardPeriod) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <View style={styles.periodRow}>
       {PERIOD_OPTIONS.map(opt => {
@@ -160,7 +172,7 @@ function PeriodSelectorAdmin({
             activeOpacity={0.75}
           >
             <Text style={[styles.periodChipText, isActive && styles.periodChipTextActive]}>
-              {opt.label}
+              {t(PERIOD_KEY_MAP[opt.key])}
             </Text>
           </TouchableOpacity>
         );
@@ -429,11 +441,12 @@ function CustomDateInputs({
   onChangeEnd: (v: string) => void;
   error: string | null;
 }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <View style={styles.customDateBlock}>
       <View style={styles.customDateRow}>
         <View style={styles.customDateGroup}>
-          <Text style={styles.customDateLabel}>Date début</Text>
+          <Text style={styles.customDateLabel}>{t('admin_custom_start')}</Text>
           <TextInput
             style={styles.customDateInput}
             placeholder="AAAA-MM-JJ"
@@ -447,7 +460,7 @@ function CustomDateInputs({
           />
         </View>
         <View style={styles.customDateGroup}>
-          <Text style={styles.customDateLabel}>Date fin</Text>
+          <Text style={styles.customDateLabel}>{t('admin_custom_end')}</Text>
           <TextInput
             style={styles.customDateInput}
             placeholder="AAAA-MM-JJ"
@@ -499,6 +512,7 @@ function PeriodGuestsSection({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function SettingsScreen({ navigation }: Props): React.JSX.Element {
+  const { t } = useI18n();
   const { loading, error, data, refresh } = useSettingsOverview();
   const [signingOut, setSigningOut]       = useState(false);
   const [activePeriod, setActivePeriod]   = useState<DashboardPeriod>('month');
@@ -550,7 +564,7 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement…</Text>
+          <Text style={styles.loadingText}>{t('admin_loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -561,10 +575,10 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Impossible de charger</Text>
+            <Text style={styles.errorTitle}>{t('admin_error')}</Text>
             <Text style={styles.errorMessage}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={handleRefreshAll}>
-              <Text style={styles.retryButtonText}>Réessayer</Text>
+              <Text style={styles.retryButtonText}>{t('common_retry')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.signOutButtonSmall}
@@ -573,7 +587,7 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
             >
               {signingOut
                 ? <ActivityIndicator color={colors.cta} size="small" />
-                : <Text style={styles.signOutTextSmall}>Se déconnecter</Text>}
+                : <Text style={styles.signOutTextSmall}>{t('settings_sign_out')}</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -595,9 +609,9 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
         <View style={styles.container}>
 
           {/* ── Header ── */}
-          <Text style={styles.headerLabel}>Admin</Text>
-          <Text style={styles.headerTitle}>Administration</Text>
-          <Text style={styles.headerSub}>Pilotage · {restaurant.name}</Text>
+          <Text style={styles.headerLabel}>{t('admin_label')}</Text>
+          <Text style={styles.headerTitle}>{t('admin_title')}</Text>
+          <Text style={styles.headerSub}>{t('admin_advanced')} · {restaurant.name}</Text>
 
           {/* ── Entrée Paramètres ── */}
           <TouchableOpacity
@@ -609,14 +623,14 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
               <Ionicons name="settings-outline" size={20} color={colors.gold} />
             </View>
             <View style={styles.settingsEntryContent}>
-              <Text style={styles.settingsEntryTitle}>Paramètres</Text>
-              <Text style={styles.settingsEntrySub}>Restaurant, compte et configuration</Text>
+              <Text style={styles.settingsEntryTitle}>{t('admin_settings_entry')}</Text>
+              <Text style={styles.settingsEntrySub}>{t('admin_settings_entry_sub')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
 
           {/* ── Pilotage avancé ── */}
-          <SectionHeader title="Pilotage avancé" />
+          <SectionHeader title={t('admin_advanced')} />
           <PeriodSelectorAdmin active={activePeriod} onChange={setActivePeriod} />
           {activePeriod === 'custom' && (
             <CustomDateInputs
@@ -628,22 +642,22 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
             />
           )}
 
-          <Text style={styles.subSectionLabel}>Réservations</Text>
+          <Text style={styles.subSectionLabel}>{t('admin_sub_reservations')}</Text>
           <PeriodKpiSection data={period.reservations} loading={periodLoading} />
 
-          <Text style={styles.subSectionLabel}>Clients</Text>
+          <Text style={styles.subSectionLabel}>{t('admin_sub_guests')}</Text>
           <PeriodGuestsSection
             periodGuests={period.guests}
             periodLoading={periodLoading}
           />
 
-          <Text style={styles.subSectionLabel}>Répartition statuts</Text>
+          <Text style={styles.subSectionLabel}>{t('admin_sub_status')}</Text>
           <StatusSummarySection data={period.reservations} loading={periodLoading} />
 
-          <Text style={styles.subSectionLabel}>Services de la période</Text>
+          <Text style={styles.subSectionLabel}>{t('admin_sub_services')}</Text>
           <PeriodServicesSection data={period.reservations} loading={periodLoading} />
 
-          <Text style={styles.subSectionLabel}>Satisfaction client</Text>
+          <Text style={styles.subSectionLabel}>{t('admin_sub_satisfaction')}</Text>
           <SatisfactionSection
             feedbackData={period.feedback}
             sevenRooms={ext.sevenRooms}
@@ -652,10 +666,10 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
           />
 
           {/* ── Services ── */}
-          <SectionHeader title="Services" />
+          <SectionHeader title={t('admin_services_title')} />
           {shifts.length === 0 ? (
             <Card>
-              <Text style={styles.emptyText}>Aucun service configuré.</Text>
+              <Text style={styles.emptyText}>{t('admin_no_shift')}</Text>
             </Card>
           ) : (
             shifts.map((shift, idx) => (
@@ -664,7 +678,7 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
           )}
 
           {/* ── Plan de salle ── */}
-          <SectionHeader title="Plan de salle" />
+          <SectionHeader title={t('admin_floor_title')} />
           <View style={styles.kpiRow}>
             <StatCard label="Tables" value={floor.totalTables} accent={colors.gold} />
             <View style={styles.kpiGap} />
@@ -682,7 +696,7 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
           )}
 
           {/* ── Données clients ── */}
-          <SectionHeader title="Données clients" />
+          <SectionHeader title={t('admin_guests_section')} />
           <View style={styles.kpiRow}>
             <StatCard label="Clients"    value={guests.total} />
             <View style={styles.kpiGap} />
@@ -717,7 +731,7 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
           {/* ── Actualiser ── */}
           <TouchableOpacity style={styles.refreshButton} onPress={handleRefreshAll}>
             <Ionicons name="refresh-outline" size={16} color={colors.cta} />
-            <Text style={styles.refreshButtonText}>Actualiser</Text>
+            <Text style={styles.refreshButtonText}>{t('admin_refresh')}</Text>
           </TouchableOpacity>
 
         </View>

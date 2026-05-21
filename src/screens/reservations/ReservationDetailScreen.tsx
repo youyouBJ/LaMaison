@@ -36,42 +36,12 @@ import {
   isValidEmail,
 } from '../../utils/email';
 import { useFeedbackSurveyLink } from '../../hooks/useFeedbackSurveyLink';
+import { useI18n } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 type Props = NativeStackScreenProps<ReservationsStackParamList, 'ReservationDetail'>;
 
 type ActionDef = { status: ReservationStatus; label: string; variant: 'primary' | 'secondary' | 'danger' };
-
-// Actions contextuelles principales (flux normal)
-const STATUS_ACTIONS: Record<ReservationStatus, ActionDef[]> = {
-  pending: [
-    { status: 'confirmed', label: 'Confirmer',      variant: 'primary'   },
-    { status: 'seated',    label: 'Mettre à table', variant: 'secondary' },
-    { status: 'noshow',    label: 'No-show',         variant: 'secondary' },
-    { status: 'cancelled', label: 'Annuler',         variant: 'danger'    },
-  ],
-  confirmed: [
-    { status: 'seated',    label: 'À table',         variant: 'primary'   },
-    { status: 'noshow',    label: 'No-show',          variant: 'secondary' },
-    { status: 'cancelled', label: 'Annuler',          variant: 'danger'    },
-  ],
-  seated: [
-    { status: 'completed', label: 'Terminer',         variant: 'primary'   },
-    { status: 'cancelled', label: 'Annuler',          variant: 'danger'    },
-  ],
-  completed: [],
-  cancelled: [],
-  noshow:    [],
-};
-
-// Labels pour la section correction
-const CORRECTION_LABEL: Record<ReservationStatus, string> = {
-  pending:   'En attente de confirmation',
-  confirmed: 'Confirmée',
-  seated:    'À table',
-  completed: 'Terminée',
-  cancelled: 'Annulée',
-  noshow:    'No-show',
-};
 
 // Couleurs chips correction (fond + texte)
 const CORRECTION_COLORS: Record<ReservationStatus, { bg: string; text: string; border: string }> = {
@@ -87,16 +57,39 @@ const ALL_STATUSES: ReservationStatus[] = [
   'pending', 'confirmed', 'seated', 'completed', 'cancelled', 'noshow',
 ];
 
-function guestName(r: NonNullable<ReturnType<typeof useReservationDetail>['reservation']>): string {
-  if (!r.guests) return r.source === 'walkin' ? 'Client de passage' : 'Client sans nom';
+type ReservationForName = NonNullable<ReturnType<typeof useReservationDetail>['reservation']>;
+function getGuestName(r: ReservationForName, walkin: string, noName: string): string {
+  if (!r.guests) return r.source === 'walkin' ? walkin : noName;
   const parts = [r.guests.first_name, r.guests.last_name].filter((p): p is string => Boolean(p));
-  return parts.length > 0 ? parts.join(' ') : 'Client sans nom';
+  return parts.length > 0 ? parts.join(' ') : noName;
 }
 
 export default function ReservationDetailScreen({ route }: Props): React.JSX.Element {
+  const { t } = useI18n();
   const { reservationId } = route.params;
   const { loading, updating, error, reservation, refresh, updateStatus, confirmByPhone } =
     useReservationDetail(reservationId);
+
+  const STATUS_ACTIONS: Record<ReservationStatus, ActionDef[]> = {
+    pending: [
+      { status: 'confirmed', label: t('action_confirm'),    variant: 'primary'   },
+      { status: 'seated',    label: t('action_seat'),       variant: 'secondary' },
+      { status: 'noshow',    label: t('action_noshow'),     variant: 'secondary' },
+      { status: 'cancelled', label: t('action_cancel_res'), variant: 'danger'    },
+    ],
+    confirmed: [
+      { status: 'seated',    label: t('action_atable'),     variant: 'primary'   },
+      { status: 'noshow',    label: t('action_noshow'),     variant: 'secondary' },
+      { status: 'cancelled', label: t('action_cancel_res'), variant: 'danger'    },
+    ],
+    seated: [
+      { status: 'completed', label: t('action_complete'),   variant: 'primary'   },
+      { status: 'cancelled', label: t('action_cancel_res'), variant: 'danger'    },
+    ],
+    completed: [],
+    cancelled: [],
+    noshow:    [],
+  };
 
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [whatsappFeedback, setWhatsappFeedback] = useState<{ ok: boolean; text: string } | null>(null);
@@ -109,7 +102,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement…</Text>
+          <Text style={styles.loadingText}>{t('resd_loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -120,10 +113,10 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <View style={styles.centered}>
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Réservation introuvable</Text>
-            <Text style={styles.errorMessage}>{error ?? 'Aucune donnée disponible.'}</Text>
+            <Text style={styles.errorTitle}>{t('resd_error')}</Text>
+            <Text style={styles.errorMessage}>{error ?? t('common_error')}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={refresh}>
-              <Text style={styles.retryText}>Réessayer</Text>
+              <Text style={styles.retryText}>{t('common_retry')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -163,12 +156,12 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
       void openWhatsAppMessage(phone, message).then((opened) => {
         setWhatsappFeedback(
           opened
-            ? { ok: true, text: 'WhatsApp ouvert' }
+            ? { ok: true, text: t('resd_wa_opened') }
             : {
                 ok: false,
                 text: normalizePhoneForWhatsApp(phone)
-                  ? "Impossible d'ouvrir WhatsApp."
-                  : 'Numéro invalide.',
+                  ? t('resd_wa_cant_open')
+                  : t('resd_wa_invalid'),
               },
         );
         setTimeout(() => setWhatsappFeedback(null), 4000);
@@ -179,7 +172,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
     // Satisfaction : on récupère/crée le lien d'abord
     void getOrCreateSurveyLink(r).then(({ data: result, error: surveyErr }) => {
       if (!result) {
-        setWhatsappFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
+        setWhatsappFeedback({ ok: false, text: surveyErr ?? t('resd_survey_unavailable') });
         setTimeout(() => setWhatsappFeedback(null), 6000);
         return;
       }
@@ -187,12 +180,12 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
       void openWhatsAppMessage(phone, message).then((opened) => {
         setWhatsappFeedback(
           opened
-            ? { ok: true, text: 'WhatsApp ouvert' }
+            ? { ok: true, text: t('resd_wa_opened') }
             : {
                 ok: false,
                 text: normalizePhoneForWhatsApp(phone)
-                  ? "Impossible d'ouvrir WhatsApp."
-                  : 'Numéro invalide.',
+                  ? t('resd_wa_cant_open')
+                  : t('resd_wa_invalid'),
               },
         );
         setTimeout(() => setWhatsappFeedback(null), 4000);
@@ -209,12 +202,12 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
       void openEmailMessage(email, subject, body).then((opened) => {
         setEmailFeedback(
           opened
-            ? { ok: true, text: 'Email ouvert' }
+            ? { ok: true, text: t('resd_email_opened') }
             : {
                 ok: false,
                 text: email && isValidEmail(email)
-                  ? "Impossible d'ouvrir l'application Mail."
-                  : 'Email invalide.',
+                  ? t('resd_email_cant_open')
+                  : t('resd_email_invalid'),
               },
         );
         setTimeout(() => setEmailFeedback(null), 4000);
@@ -225,7 +218,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
     // Satisfaction : on récupère/crée le lien d'abord
     void getOrCreateSurveyLink(r).then(({ data: result, error: surveyErr }) => {
       if (!result) {
-        setEmailFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
+        setEmailFeedback({ ok: false, text: surveyErr ?? t('resd_survey_unavailable') });
         setTimeout(() => setEmailFeedback(null), 6000);
         return;
       }
@@ -233,12 +226,12 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
       void openEmailMessage(email, subject, body).then((opened) => {
         setEmailFeedback(
           opened
-            ? { ok: true, text: 'Email ouvert' }
+            ? { ok: true, text: t('resd_email_opened') }
             : {
                 ok: false,
                 text: email && isValidEmail(email)
-                  ? "Impossible d'ouvrir l'application Mail."
-                  : 'Email invalide.',
+                  ? t('resd_email_cant_open')
+                  : t('resd_email_invalid'),
               },
         );
         setTimeout(() => setEmailFeedback(null), 4000);
@@ -276,10 +269,10 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
           </View>
 
           {/* ── Client ── */}
-          <SectionCard title="Client">
+          <SectionCard title={t('resd_section_guest')}>
             <View style={styles.guestRow}>
               <View style={styles.guestInfo}>
-                <Text style={styles.guestName}>{guestName(r)}</Text>
+                <Text style={styles.guestName}>{getGuestName(r, t('resd_walkin'), t('resd_guest_no_name'))}</Text>
                 {r.guests?.phone ? (
                   <Text style={styles.guestMeta}>{r.guests.phone}</Text>
                 ) : null}
@@ -293,7 +286,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
 
           {/* ── Contact client ── */}
           {(r.guests?.phone || r.guests?.email) ? (
-            <SectionCard title="Contact client">
+            <SectionCard title={t('resd_section_contact')}>
               {whatsappFeedback ? (
                 <View style={[styles.contactBanner, whatsappFeedback.ok ? styles.contactBannerOk : styles.contactBannerErr]}>
                   <Text style={[styles.contactBannerText, whatsappFeedback.ok ? styles.contactBannerTextOk : styles.contactBannerTextErr]}>
@@ -311,7 +304,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
 
               {r.guests?.phone ? (
                 <View style={styles.contactGroup}>
-                  <PrimaryButton label="Appeler" variant="secondary" onPress={handleCall} />
+                  <PrimaryButton label={t('resd_call')} variant="secondary" onPress={handleCall} />
                 </View>
               ) : null}
 
@@ -320,12 +313,12 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                   <Text style={styles.contactGroupLabel}>WhatsApp</Text>
                   <View style={styles.contactGroupButtons}>
                     <PrimaryButton
-                      label="WhatsApp confirmation"
+                      label={t('resd_wa_confirmation')}
                       variant="whatsapp"
                       onPress={() => handleWhatsApp('confirmation')}
                     />
                     <PrimaryButton
-                      label="WhatsApp enquête"
+                      label={t('resd_wa_survey')}
                       variant="whatsapp"
                       onPress={() => handleWhatsApp('satisfaction')}
                       loading={surveyLinkLoading}
@@ -340,12 +333,12 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                   <Text style={styles.contactGroupLabel}>Email</Text>
                   <View style={styles.contactGroupButtons}>
                     <PrimaryButton
-                      label="Email confirmation"
+                      label={t('resd_email_confirmation')}
                       variant="secondary"
                       onPress={() => handleEmail('confirmation')}
                     />
                     <PrimaryButton
-                      label="Email enquête"
+                      label={t('resd_email_survey')}
                       variant="secondary"
                       onPress={() => handleEmail('satisfaction')}
                       loading={surveyLinkLoading}
@@ -360,32 +353,32 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
           {/* ── Message aucun contact ── */}
           {!r.guests?.phone && !r.guests?.email ? (
             <View style={styles.noContactHint}>
-              <Text style={styles.noContactHintText}>Aucun contact disponible pour ce client.</Text>
+              <Text style={styles.noContactHintText}>{t('resd_no_contact')}</Text>
             </View>
           ) : null}
 
           {/* ── Détails réservation ── */}
-          <SectionCard title="Réservation">
+          <SectionCard title={t('resd_section_detail')}>
             <View style={styles.detailGrid}>
-              <DetailRow label="Couverts" value={`${r.party_size} personne${r.party_size > 1 ? 's' : ''}`} />
-              <DetailRow label="Table" value={formatReservationTables(r.tables, r.reservation_tables)} />
-              <DetailRow label="Statut" value={<StatusBadge status={r.status} />} />
-              <DetailRow label="Origine" value={r.source} />
-              {cleanNotes ? <DetailRow label="Notes" value={cleanNotes} /> : null}
+              <DetailRow label={t('resd_covers')} value={`${r.party_size} personne${r.party_size > 1 ? 's' : ''}`} />
+              <DetailRow label={t('resd_table')} value={formatReservationTables(r.tables, r.reservation_tables)} />
+              <DetailRow label={t('resd_status')} value={<StatusBadge status={r.status} />} />
+              <DetailRow label={t('resd_origin')} value={r.source} />
+              {cleanNotes ? <DetailRow label={t('resd_notes')} value={cleanNotes} /> : null}
             </View>
           </SectionCard>
 
           {/* ── Confirmation téléphonique ── */}
           {needsPhoneConfirmation && (
-            <SectionCard title="Confirmation téléphonique">
+            <SectionCard title={t('resd_section_phone_conf')}>
               {updating && (
                 <View style={styles.updatingRow}>
                   <ActivityIndicator color={colors.gold} size="small" />
-                  <Text style={styles.updatingText}>Mise à jour…</Text>
+                  <Text style={styles.updatingText}>{t('common_update')}</Text>
                 </View>
               )}
               <PrimaryButton
-                label="Confirmé par téléphone"
+                label={t('resd_confirmed_by_phone')}
                 onPress={() => { void confirmByPhone(); }}
                 loading={false}
                 disabled={updating}
@@ -396,11 +389,11 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
 
           {/* ── Actions ── */}
           {actions.length > 0 && (
-            <SectionCard title="Actions">
+            <SectionCard title={t('resd_section_actions')}>
               {updating && (
                 <View style={styles.updatingRow}>
                   <ActivityIndicator color={colors.gold} size="small" />
-                  <Text style={styles.updatingText}>Mise à jour…</Text>
+                  <Text style={styles.updatingText}>{t('common_update')}</Text>
                 </View>
               )}
               <View style={styles.actionsGrid}>
@@ -420,14 +413,14 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
           )}
 
           {/* ── Correction du statut ── */}
-          <SectionCard title="Correction du statut">
+          <SectionCard title={t('resd_section_correction')}>
             {isTerminal && !correctionOpen ? (
               <TouchableOpacity
                 style={styles.correctionToggle}
                 onPress={() => setCorrectionOpen(true)}
                 activeOpacity={0.75}
               >
-                <Text style={styles.correctionToggleText}>Modifier le statut…</Text>
+                <Text style={styles.correctionToggleText}>{t('resd_modify_status')}</Text>
               </TouchableOpacity>
             ) : null}
 
@@ -436,7 +429,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                 {updating && (
                   <View style={styles.updatingRow}>
                     <ActivityIndicator color={colors.gold} size="small" />
-                    <Text style={styles.updatingText}>Mise à jour…</Text>
+                    <Text style={styles.updatingText}>{t('common_update')}</Text>
                   </View>
                 )}
                 <View style={styles.correctionGrid}>
@@ -456,7 +449,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                         activeOpacity={0.75}
                       >
                         <Text style={[styles.correctionChipText, { color: text }, isCurrent && styles.correctionChipTextCurrent]}>
-                          {CORRECTION_LABEL[s]}
+                          {t(('status_' + s) as TranslationKey)}
                           {isCurrent ? ' ✓' : ''}
                         </Text>
                       </TouchableOpacity>
@@ -469,7 +462,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
                     onPress={() => setCorrectionOpen(false)}
                     activeOpacity={0.75}
                   >
-                    <Text style={styles.correctionCloseText}>Fermer</Text>
+                    <Text style={styles.correctionCloseText}>{t('common_close')}</Text>
                   </TouchableOpacity>
                 ) : null}
               </>

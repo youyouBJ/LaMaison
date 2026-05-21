@@ -1,6 +1,6 @@
 # Backlog — La Maison
 
-Dernière mise à jour : 2026-05-20
+Dernière mise à jour : 2026-05-21
 
 ---
 
@@ -58,6 +58,14 @@ Dernière mise à jour : 2026-05-20
 - [x] Badge "À appeler" sur les réservations du jour en attente de confirmation téléphonique
 - [x] Bouton "Appeler" : `tel:` link natif depuis la card de liste
 - [x] Bouton "Confirmé par téléphone" : confirme le statut + trace horodatée dans `notes`
+
+### Langue de l'application
+- [x] Système i18n custom React Context (sans lib externe) — `src/i18n/`
+- [x] Français + Anglais — sélecteur dans Paramètres → Langue
+- [x] Persistance locale par appareil (AsyncStorage `@lamaison/locale`)
+- [x] Toutes les vues principales traduites : Dashboard, Réservations, Détail, Plan, Waitlist, CRM, Admin, Paramètres
+- [ ] **i18n V2** : traduire les libellés de formulaires (AdminSettings), les StatCards KPI (SettingsScreen), les canaux/intégrations, les messages de validation — voir `docs/i18n.md`
+- [ ] **Arabe (AR)** : ajouter `ar.ts` + support RTL — P2
 
 ### CRM Clients
 - [x] Liste 22 000+ clients
@@ -133,7 +141,15 @@ Dernière mise à jour : 2026-05-20
 
 - [ ] **SMS Twilio** : confirmation automatique à la création, rappel J-1
 - [ ] **Email Resend** : confirmation par email
-- [ ] **Notifications push** : rappels pour le staff (table prête, retard…)
+- [ ] **Notifications push iOS/iPad (V2)** — voir `docs/reminders.md#v2--notifications-push-iospad` :
+  - `expo-notifications` + permission iOS (APNs, Expo EAS obligatoire)
+  - Table `device_tokens` + stockage/révocation token par utilisateur
+  - Edge Function `send-push-notification` (via Expo Push API)
+  - Triggered par Database Webhooks Supabase (`reservations`, `waitlist` INSERT/UPDATE)
+  - Scheduled job pg_cron pour les rappels programmés (arrivée prochaine, enquête satisfaction)
+  - Préférences par rôle (`notification_preferences`)
+  - Anti-spam : déduplications + silence nocturne 23h–7h
+  - **Prérequis** : app TestFlight/App Store, certificat APNs valide, Expo EAS build
 - [ ] **Statistiques avancées** : taux de remplissage par service, no-shows, revenus
 - [ ] **Export réservations** : CSV pour comptabilité
 
@@ -147,7 +163,7 @@ Dernière mise à jour : 2026-05-20
 - [ ] **Marketing SMS/email** : campagnes ciblées depuis le CRM
 - [ ] **Analytics** : tableau de bord business (revenus, fréquence, rétention clients)
 - [ ] **Éditeur drag/drop du plan** : ajuster les tables dans l'app sans modifier le code
-- [ ] **Multi-langue** : FR + EN + AR
+- [ ] **Multi-langue AR** : ajouter `ar.ts` + support RTL (FR + EN déjà livré)
 
 ---
 

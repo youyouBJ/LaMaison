@@ -8,6 +8,7 @@ import FloorPlanScreen from '../screens/floor/FloorPlanScreen';
 import ReservationsNavigator from './ReservationsNavigator';
 import GuestsNavigator from './GuestsNavigator';
 import AdminNavigator from './AdminNavigator';
+import { useI18n } from '../i18n';
 
 export type MainTabsParamList = {
   Dashboard: undefined;
@@ -27,6 +28,7 @@ const TAB_BAR_HEIGHT = isTablet ? 72 : 60;
 const TAB_ICON_SIZE = isTablet ? 26 : 24;
 
 export default function MainTabs(): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -51,7 +53,7 @@ export default function MainTabs(): React.JSX.Element {
         name="Dashboard"
         component={DashboardScreen}
         options={{
-          tabBarLabel: 'Accueil',
+          tabBarLabel: t('nav_home'),
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
             <Ionicons
               name={(focused ? 'home' : 'home-outline') as IoniconsName}
@@ -65,7 +67,7 @@ export default function MainTabs(): React.JSX.Element {
         name="FloorPlan"
         component={FloorPlanScreen}
         options={{
-          tabBarLabel: 'Plan',
+          tabBarLabel: t('nav_floorplan'),
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
             <Ionicons
               name={(focused ? 'grid' : 'grid-outline') as IoniconsName}
@@ -79,7 +81,7 @@ export default function MainTabs(): React.JSX.Element {
         name="Reservations"
         component={ReservationsNavigator}
         options={{
-          tabBarLabel: 'Réservations',
+          tabBarLabel: t('nav_reservations'),
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
             <Ionicons
               name={(focused ? 'calendar' : 'calendar-outline') as IoniconsName}
@@ -93,7 +95,7 @@ export default function MainTabs(): React.JSX.Element {
         name="Guests"
         component={GuestsNavigator}
         options={{
-          tabBarLabel: 'Clients',
+          tabBarLabel: t('nav_guests'),
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
             <Ionicons
               name={(focused ? 'people' : 'people-outline') as IoniconsName}
@@ -107,7 +109,7 @@ export default function MainTabs(): React.JSX.Element {
         name="Settings"
         component={AdminNavigator}
         options={{
-          tabBarLabel: 'Admin',
+          tabBarLabel: t('nav_admin'),
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
             <Ionicons
               name={(focused ? 'shield-checkmark' : 'shield-checkmark-outline') as IoniconsName}
