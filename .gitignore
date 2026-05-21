@@ -45,3 +45,10 @@ data/*.xlsx
 # generated native folders
 /ios
 /android
+
+# Generated reports
+reports/*.json
+reports/*.csv
+
+# Supabase local temp
+supabase/.temp/
