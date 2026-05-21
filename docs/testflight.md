@@ -274,4 +274,60 @@ Logo source : `assets/logo-source.png` (1024×768 RGBA, logo doré sur fond tran
 
 ---
 
-*Document créé le 2026-05-21*
+## Dataset test immersif
+
+Le compte testeur TestFlight (`musicybj@gmail.com`, rôle `host`) est lié uniquement à **"La Maison Test"**.
+Un dataset fictif riche est disponible pour tester toutes les fonctionnalités de l'app dans des conditions réalistes.
+
+### Ce que le dataset contient
+
+| Type               | Volume        | Détails |
+|--------------------|---------------|---------|
+| Tables             | ~20           | 5 zones : Salle, Terrasse, Balcon, Bar, Lounge |
+| Clients fictifs    | ~120          | Noms tunisiens, téléphones `+21699XXXXXX`, emails `@lamaison-test.local` |
+| Réservations       | ~180          | -30j → aujourd'hui → +30j, tous statuts |
+| Waitlist           | ~18           | waiting / notified / seated / left |
+| Feedback surveys   | ~30           | Liés à des réservations completed passées |
+| Multi-tables       | oui           | `reservation_tables` (T12 + T19) |
+
+### Cas de test ciblés aujourd'hui
+
+- 2 réservations **pending** → rappels urgents
+- 1 réservation **confirmed** dans ~30 min → "Arrivée prochaine"
+- 2 réservations **seated** → plan de salle
+- 3 réservations **completed** avec email → enquête de satisfaction
+- 1 réservation **cancelled**
+- 3 entrées waitlist **waiting** → liste d'attente du jour
+
+### Isolation — le vrai restaurant n'est pas touché
+
+Le script vérifie explicitement que `restaurant.name = "La Maison Test"` avant toute insertion.
+Si ce n'est pas le cas, il s'arrête immédiatement. Les RLS Supabase (`restaurant_id`) garantissent
+que le testeur ne voit que les données de "La Maison Test".
+
+### Commandes
+
+```bash
+# Aperçu sans modification (obligatoire avant apply)
+npm run test:seed:rich:dry-run
+
+# Application du dataset (idempotent — relancer ne crée pas de doublons)
+npm run test:seed:rich:apply -- --confirm=SEED_RICH_TEST_DATA
+```
+
+> ⚠️  Lancez toujours le dry-run avant l'apply pour confirmer la cible.
+
+### Permissions requises
+
+Le script utilise `service_role` (clé dans `.env.import`).
+Assurez-vous que `supabase/manual/grant_service_role.sql` a été exécuté dans Supabase → SQL Editor.
+
+Pour les feedbacks, ajoutez également :
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.feedback_survey_links TO service_role;
+GRANT SELECT, INSERT ON TABLE public.feedback_surveys TO service_role;
+```
+
+---
+
+*Document créé le 2026-05-21. Mis à jour le 2026-05-21 (dataset test immersif).*

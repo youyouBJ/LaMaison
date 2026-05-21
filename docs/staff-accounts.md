@@ -60,11 +60,16 @@ Grâce aux RLS filtrées par `restaurant_id`, le testeur :
 - **Ne peut pas modifier** les vraies réservations, clients ou tables
 - Accède uniquement au dataset minimal de test
 
-Le dataset de test contient :
+Le dataset test immersif contient (créé via `npm run test:seed:rich:apply`) :
 - 2 services (Déjeuner Test, Dîner Test)
-- 5 tables (Salle ×2, Terrasse ×2, Bar ×1)
-- 3 clients fictifs (Alice Dupont, Bob Martin, Cécile Moreau)
-- 3 réservations (hier/terminée, aujourd'hui/confirmée, demain/en attente)
+- ~20 tables (5 zones : Salle, Terrasse, Balcon, Bar, Lounge)
+- ~120 clients fictifs (noms tunisiens, téléphones `+21699XXXXXX`, emails `@lamaison-test.local`)
+- ~180 réservations (-30j / aujourd'hui / +30j — tous statuts)
+- ~18 entrées waitlist
+- ~30 enquêtes de satisfaction (feedback_surveys)
+- Réservations multi-tables (reservation_tables)
+
+Voir `docs/testflight.md → Dataset test immersif` pour le détail complet.
 
 ---
 
@@ -123,23 +128,28 @@ Pour chaque compte :
 
 ## Restaurant de test
 
-### Dry-run
+### Étape 1 — Créer le restaurant de test (minimal)
 
 ```bash
 npm run test:seed:dry-run
-```
-
-### Apply
-
-```bash
 npm run test:seed:apply -- --confirm=CREATE_TEST_RESTAURANT
 ```
 
-Après l'apply, notez le `restaurant_id test` affiché. Pour tester l'app avec ce restaurant :
-1. Remplacez `RESTAURANT_ID` dans `.env.import` par la valeur affichée
-2. Le compte testeur est lié à ce restaurant_id → il voit uniquement le dataset de test
+### Étape 2 — Enrichir avec le dataset immersif
 
-Pour revenir au restaurant réel, restaurez le vrai `RESTAURANT_ID`.
+```bash
+# Aperçu obligatoire avant apply
+npm run test:seed:rich:dry-run
+
+# Application (idempotent)
+npm run test:seed:rich:apply -- --confirm=SEED_RICH_TEST_DATA
+```
+
+Le dataset immersif permet de tester toutes les fonctionnalités de l'app dans des conditions réalistes :
+dashboard, rappels, réservations, plan de salle, waitlist, CRM, VIP, analytics, satisfaction, paramètres.
+
+Après l'apply, le compte testeur (`musicybj@gmail.com`) voit uniquement les données de "La Maison Test".
+Pour revenir au restaurant réel, aucune action requise — les RLS garantissent l'isolation.
 
 ---
 
