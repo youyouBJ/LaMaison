@@ -27,6 +27,8 @@
 
 ## Variables d'environnement
 
+### Développement local
+
 Le fichier `.env` doit contenir les deux variables suivantes (ne jamais les committer) :
 
 ```
@@ -34,12 +36,66 @@ EXPO_PUBLIC_SUPABASE_URL=https://nosflczsevtrxnyienyn.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<clé anon publique>
 ```
 
-Pour les builds EAS, configurer les mêmes variables dans le dashboard EAS :
-- Aller sur [expo.dev](https://expo.dev) → projet → **Environment Variables**
-- Ajouter `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- Profils concernés : `production`, `preview`
+### Builds EAS (production / preview)
 
-> **Important :** Ne jamais mettre la `service_role` key dans les variables EAS. Elle n'appartient qu'à `.env.import` côté scripts locaux.
+Les variables `EXPO_PUBLIC_*` sont baked-in dans le bundle natif au moment du build par Metro.
+EAS les injecte uniquement si elles sont déclarées dans l'environnement correspondant **et** que
+`eas.json` contient `"environment": "production"` (ou `"preview"`) dans le profil de build.
+
+**Sans ce champ, les variables ne sont pas injectées** → `process.env.EXPO_PUBLIC_*` vaut
+`undefined` dans le bundle → l'app crashe au démarrage avec un écran blanc.
+
+#### Visibilité des variables
+
+| Visibilité | Injectée dans le bundle natif | À utiliser pour |
+|---|---|---|
+| **Plain text** | Oui | Variables non sensibles |
+| **Sensitive** | Oui (masquée dans les logs) | Clés publiques (anon key) |
+| **Secret** | **Non** | Variables serveur uniquement (ex: service_role) |
+
+> Utiliser **Sensitive** pour `EXPO_PUBLIC_SUPABASE_ANON_KEY` (clé publique mais à ne pas exposer
+> dans les logs). Ne jamais mettre la `service_role` key ici — elle n'appartient qu'à
+> `.env.import` côté scripts locaux.
+
+#### Créer les variables via EAS CLI
+
+```bash
+# Profil production
+npx eas-cli env:create --environment production --name EXPO_PUBLIC_SUPABASE_URL \
+  --value "https://nosflczsevtrxnyienyn.supabase.co" --visibility plaintext
+
+npx eas-cli env:create --environment production --name EXPO_PUBLIC_SUPABASE_ANON_KEY \
+  --value "..." --visibility sensitive
+
+# Profil preview (mêmes valeurs si même projet Supabase)
+npx eas-cli env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL \
+  --value "https://nosflczsevtrxnyienyn.supabase.co" --visibility plaintext
+
+npx eas-cli env:create --environment preview --name EXPO_PUBLIC_SUPABASE_ANON_KEY \
+  --value "..." --visibility sensitive
+```
+
+#### Créer les variables via le Dashboard
+
+[expo.dev](https://expo.dev) → projet `lamaison` → **Environment variables** → sélectionner
+l'environnement `production` → **Create variable** → renseigner nom, valeur, visibilité.
+
+Variables à créer :
+
+| Nom | Valeur | Visibilité |
+|---|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` | `https://nosflczsevtrxnyienyn.supabase.co` | Plain text |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | clé anon Supabase | Sensitive |
+
+#### Vérifier que les variables sont bien lues
+
+Après le build, vérifier dans les logs EAS que la ligne suivante **n'apparaît pas** :
+```
+No environment variables with visibility Plain text and Sensitive found for the production environment on EAS.
+```
+
+Si cette ligne apparaît → les variables ne sont pas créées dans EAS ou le profil `eas.json`
+n'a pas `"environment": "production"`.
 
 ---
 
@@ -201,6 +257,12 @@ Logo source : `assets/logo-source.png` (1024×768 RGBA, logo doré sur fond tran
 
 ### Build échoue : "EXPO_PUBLIC_* not found"
 → Configurer les variables sur expo.dev → Environment Variables
+
+### Écran blanc au démarrage (TestFlight)
+→ Cause la plus probable : `EXPO_PUBLIC_SUPABASE_URL` ou `EXPO_PUBLIC_SUPABASE_ANON_KEY` absentes du bundle  
+→ Vérifier que `eas.json` profil `production` contient `"environment": "production"`  
+→ Vérifier que les variables sont créées dans EAS Dashboard avec visibilité **Plain text** ou **Sensitive** (pas **Secret**)  
+→ Relancer `eas build --platform ios --profile production` après correction
 
 ### App crash au démarrage : Supabase unreachable
 → Vérifier les variables d'env dans EAS Dashboard  
