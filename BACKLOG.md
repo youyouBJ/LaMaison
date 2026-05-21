@@ -152,6 +152,7 @@ Dernière mise à jour : 2026-05-21
   - **Prérequis** : app TestFlight/App Store, certificat APNs valide, Expo EAS build
 - [ ] **Statistiques avancées** : taux de remplissage par service, no-shows, revenus
 - [ ] **Export réservations** : CSV pour comptabilité
+- [ ] **Assets App Store HD (V2)** : remplacer `icon.png`, `adaptive-icon.png`, `splash-icon.png` par versions HD vectorielles si logo haute résolution disponible — les assets actuels (1024×768 rasterisés) sont fonctionnels pour TestFlight
 
 ---
 

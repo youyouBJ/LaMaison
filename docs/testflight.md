@@ -174,13 +174,20 @@ Pour l'instant (V1), l'invitation ouvre une page web. Vérifier que cette page e
 
 ---
 
-## Assets requis pour App Store
+## Assets TestFlight — La Maison
 
 L'app utilise les assets suivants (présents dans `assets/`) :
-- `icon.png` — 1024×1024 px requis pour App Store
-- `splash-icon.png` — utilisé comme splash screen
 
-> **Note :** Les assets actuels sont les assets Expo par défaut. Remplacer par les assets La Maison (logo, couleurs) avant soumission en production.
+| Fichier | Dimensions | Fond | Usage |
+|---|---|---|---|
+| `icon.png` | 1024×1024 | Crème `#F5F0E8` (opaque) | Icône iOS App Store / TestFlight |
+| `adaptive-icon.png` | 1024×1024 | Transparent + `#F5F0E8` via app.json | Icône Android (adaptive) |
+| `splash-icon.png` | 1024×1024 | Transparent + `#F5F0E8` via app.json | Splash screen au démarrage |
+
+Logo source : `assets/logo-source.png` (1024×768 RGBA, logo doré sur fond transparent).
+
+> **Statut :** Icône et splash La Maison configurés — l'icône Expo par défaut n'est plus utilisée.  
+> **V2 / App Store final :** Si un logo vectoriel HD est disponible, remplacer les assets par une version haute résolution avant la soumission officielle App Store.
 
 ---
 
