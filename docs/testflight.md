@@ -43,17 +43,26 @@ Pour les builds EAS, configurer les mêmes variables dans le dashboard EAS :
 
 ---
 
-## Compléter eas.json avant le premier build
+## Compléter eas.json avant la soumission App Store
 
-Ouvrir `eas.json` et renseigner dans la section `submit.production.ios` :
+Les champs `ascAppId` et `appleTeamId` **ne sont pas encore renseignés** dans `eas.json`.
+EAS refuse les chaînes vides — ils seront ajoutés après création de l'app dans App Store Connect.
+
+**Quand ajouter ces champs :**  
+Après avoir créé l'app dans App Store Connect avec le bundle ID `com.lamaison.restaurant`.
+
+**Comment les ajouter :**  
+Ouvrir `eas.json` et ajouter dans `submit.production.ios` :
 
 ```json
 "ascAppId": "VOTRE_APP_STORE_CONNECT_APP_ID",
 "appleTeamId": "VOTRE_TEAM_ID"
 ```
 
-- `ascAppId` : visible dans App Store Connect → App → App Information → Apple ID
-- `appleTeamId` : visible dans developer.apple.com → Membership Details
+- `ascAppId` : App Store Connect → App → App Information → Apple ID (numéro à 10 chiffres)
+- `appleTeamId` : [developer.apple.com](https://developer.apple.com) → Account → Membership Details → Team ID
+
+> Ces champs sont nécessaires uniquement pour `eas submit`. Le build EAS fonctionne sans eux.
 
 ---
 
