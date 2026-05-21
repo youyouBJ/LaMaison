@@ -120,7 +120,7 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
 
           <View style={styles.cardStats}>
             {item.visit_count > 0 ? (
-              <Text style={styles.statChip}>{item.visit_count} visite{item.visit_count > 1 ? 's' : ''}</Text>
+              <Text style={styles.statChip}>{t('guests_visit_count', { n: item.visit_count, s: item.visit_count > 1 ? 's' : '' })}</Text>
             ) : null}
             {item.avg_rating !== null ? (
               <Text style={styles.statChip}>{formatRating(item.avg_rating)} / 5</Text>
@@ -266,8 +266,8 @@ export default function GuestListScreen({ navigation }: Props): React.JSX.Elemen
           {loading
             ? '…'
             : hasMore
-              ? `${guests.length}+ clients chargés`
-              : `${guests.length} client${guests.length !== 1 ? 's' : ''}`}
+              ? t('guests_count_loaded', { n: guests.length })
+              : t('guests_count', { n: guests.length, s: guests.length !== 1 ? 's' : '' })}
         </Text>
       </View>
 

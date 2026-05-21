@@ -84,7 +84,7 @@ function ReservationRow({ r }: { r: DashboardReservation }): React.JSX.Element {
           )}
         </View>
         <Text style={styles.reservationMeta}>
-          {r.party_size} couvert{r.party_size > 1 ? 's' : ''} · {getTableLabel(r, t('dashboard_table_unassigned'))}
+          {t('guest_cover_count', { n: r.party_size, s: r.party_size > 1 ? 's' : '' })} · {getTableLabel(r, t('dashboard_table_unassigned'))}
         </Text>
         <StatusBadge status={r.status} />
       </View>

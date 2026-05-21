@@ -26,6 +26,7 @@ import DateSelector from '../../components/DateSelector';
 import CalendarPicker from '../../components/CalendarPicker';
 import TimeSlotSelector from '../../components/TimeSlotSelector';
 import TablePlanSelector from '../../components/TablePlanSelector';
+import { useI18n } from '../../i18n';
 import type { ReservationsStackParamList } from '../../navigation/ReservationsNavigator';
 import type { GuestRow, TableRow } from '../../hooks/useCreateReservation';
 
@@ -87,6 +88,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
     setError,
   } = useCreateReservation();
 
+  const { t } = useI18n();
   const [form, setForm]                       = useState<FormState>(INITIAL_FORM);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showPlanSelector, setShowPlanSelector] = useState(false);
@@ -182,8 +184,8 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
     setValidationError(null);
     setError(null);
 
-    if (!form.selectedShiftId) { setValidationError('Choisissez un service.'); return; }
-    if (!form.selectedTimeSlot) { setValidationError('Choisissez un créneau.'); return; }
+    if (!form.selectedShiftId) { setValidationError(t('new_res_err_no_service')); return; }
+    if (!form.selectedTimeSlot) { setValidationError(t('new_res_err_no_slot')); return; }
 
     try {
       const firstName = form.guestFirstName.trim() || undefined;
@@ -213,7 +215,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
       });
       navigation.replace('ReservationDetail', { reservationId: id });
     } catch (e) {
-      setValidationError(e instanceof Error ? e.message : 'Erreur inconnue.');
+      setValidationError(e instanceof Error ? e.message : t('new_res_err_unknown'));
     }
   };
 
@@ -222,7 +224,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement…</Text>
+          <Text style={styles.loadingText}>{t('common_loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -244,11 +246,11 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.container}>
-            <Text style={styles.subtitle}>Saisie téléphone</Text>
+            <Text style={styles.subtitle}>{t('new_res_subtitle')}</Text>
 
             {/* ── Date ── */}
             <DateSelector
-              label="Date"
+              label={t('new_res_date')}
               value={form.date}
               onChange={setDate}
               showQuickActions
@@ -260,9 +262,9 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
             />
 
             {/* ── Service ── */}
-            <SectionCard title="Service">
+            <SectionCard title={t('new_res_service')}>
               {availableShifts.length === 0 ? (
-                <Text style={styles.infoText}>Aucun service disponible ce jour.</Text>
+                <Text style={styles.infoText}>{t('new_res_no_service')}</Text>
               ) : (
                 <View style={styles.shiftRow}>
                   {availableShifts.map((s) => (
@@ -282,7 +284,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
 
             {/* ── Créneau & Couverts ── */}
             {form.selectedShiftId ? (
-              <SectionCard title="Créneau & Couverts">
+              <SectionCard title={t('new_res_slot_covers')}>
                 <TimeSlotSelector
                   slots={timeSlots}
                   value={form.selectedTimeSlot || undefined}
@@ -290,7 +292,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                 />
 
                 <View style={styles.stepperRow}>
-                  <Text style={styles.stepperLabel}>Couverts</Text>
+                  <Text style={styles.stepperLabel}>{t('new_res_covers')}</Text>
                   <View style={styles.stepper}>
                     <TouchableOpacity
                       style={styles.stepBtn}
@@ -311,14 +313,14 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
             ) : null}
 
             {/* ── Type de client ── */}
-            <SectionCard title="Type de client">
+            <SectionCard title={t('new_res_client_type')}>
               <View style={styles.shiftRow}>
                 <TouchableOpacity
                   style={[styles.shiftChip, !form.isWalkIn && styles.shiftChipActive]}
                   onPress={() => handleClientType(false)}
                 >
                   <Text style={[styles.shiftText, !form.isWalkIn && styles.shiftTextActive]}>
-                    Client identifié
+                    {t('new_res_identified')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -326,32 +328,32 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                   onPress={() => handleClientType(true)}
                 >
                   <Text style={[styles.shiftText, form.isWalkIn && styles.shiftTextActive]}>
-                    Client de passage
+                    {t('new_res_walkin')}
                   </Text>
                 </TouchableOpacity>
               </View>
               {form.isWalkIn && (
                 <Text style={styles.walkInHint}>
-                  Pour les clients de dernière minute sans fiche client.
+                  {t('new_res_walkin_hint')}
                 </Text>
               )}
             </SectionCard>
 
             {/* ── Client ── */}
-            {!form.isWalkIn && <SectionCard title="Client">
+            {!form.isWalkIn && <SectionCard title={t('resd_section_guest')}>
               {form.selectedGuest ? (
                 <View>
                   <View style={styles.selectedGuestCard}>
                     <View style={styles.selectedGuestInfo}>
                       <Text style={styles.selectedGuestName}>
                         {[form.selectedGuest.first_name, form.selectedGuest.last_name]
-                          .filter(Boolean).join(' ') || 'Client'}
+                          .filter(Boolean).join(' ') || t('new_res_guest_name')}
                       </Text>
                       <Text style={styles.selectedGuestPhone}>{form.selectedGuest.phone}</Text>
                       {form.selectedGuest.vip && <VipBadge small />}
                     </View>
                     <TouchableOpacity onPress={clearGuest}>
-                      <Text style={styles.changeClient}>Changer</Text>
+                      <Text style={styles.changeClient}>{t('new_res_change')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -361,7 +363,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                   <View style={styles.searchRow}>
                     <TextInput
                       style={styles.searchInput}
-                      placeholder="Rechercher par nom, téléphone ou email"
+                      placeholder={t('guests_search_placeholder')}
                       placeholderTextColor={colors.textMuted}
                       value={form.guestSearchQuery}
                       onChangeText={(t) => {
@@ -384,7 +386,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                           onPress={() => selectGuest(g)}
                         >
                           <Text style={styles.resultName}>
-                            {[g.first_name, g.last_name].filter(Boolean).join(' ') || 'Client'}
+                            {[g.first_name, g.last_name].filter(Boolean).join(' ') || t('new_res_guest_name')}
                           </Text>
                           <Text style={styles.resultPhone}>{g.phone}</Text>
                           {g.vip && <VipBadge small />}
@@ -392,49 +394,49 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                       ))}
                     </View>
                   ) : !searchLoading && form.guestSearchQuery.trim().length >= 2 ? (
-                    <Text style={styles.noResultsHint}>Aucun client trouvé</Text>
+                    <Text style={styles.noResultsHint}>{t('guests_no_results')}</Text>
                   ) : null}
 
                   {/* Nouveau client */}
-                  <Text style={styles.newClientLabel}>Nouveau client</Text>
-                  <Text style={styles.guestHint}>Client optionnel — à compléter plus tard si besoin.</Text>
+                  <Text style={styles.newClientLabel}>{t('new_res_new_client')}</Text>
+                  <Text style={styles.guestHint}>{t('new_res_guest_hint')}</Text>
                   <View style={styles.formRow}>
                     <TextInput
                       style={[styles.input, styles.inputHalf]}
-                      placeholder="Prénom"
+                      placeholder={t('new_res_first_name')}
                       placeholderTextColor={colors.textMuted}
                       value={form.guestFirstName}
-                      onChangeText={(t) => setForm((prev) => ({ ...prev, guestFirstName: t }))}
+                      onChangeText={(val) => setForm((prev) => ({ ...prev, guestFirstName: val }))}
                       autoCapitalize="words"
                     />
                     <TextInput
                       style={[styles.input, styles.inputHalf]}
-                      placeholder="Nom"
+                      placeholder={t('new_res_last_name')}
                       placeholderTextColor={colors.textMuted}
                       value={form.guestLastName}
-                      onChangeText={(t) => setForm((prev) => ({ ...prev, guestLastName: t }))}
+                      onChangeText={(val) => setForm((prev) => ({ ...prev, guestLastName: val }))}
                       autoCapitalize="words"
                     />
                   </View>
                   <TextInput
                     style={styles.input}
-                    placeholder="Téléphone (optionnel)"
+                    placeholder={t('new_res_phone')}
                     placeholderTextColor={colors.textMuted}
                     value={form.guestPhone}
-                    onChangeText={(t) => setForm((prev) => ({ ...prev, guestPhone: t }))}
+                    onChangeText={(val) => setForm((prev) => ({ ...prev, guestPhone: val }))}
                     keyboardType="phone-pad"
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="Email (optionnel)"
+                    placeholder={t('new_res_email')}
                     placeholderTextColor={colors.textMuted}
                     value={form.guestEmail}
-                    onChangeText={(t) => setForm((prev) => ({ ...prev, guestEmail: t }))}
+                    onChangeText={(val) => setForm((prev) => ({ ...prev, guestEmail: val }))}
                     keyboardType="email-address"
                     autoCapitalize="none"
                   />
                   <View style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>Client VIP</Text>
+                    <Text style={styles.switchLabel}>{t('new_res_vip')}</Text>
                     <Switch
                       value={form.guestVip}
                       onValueChange={(v) => setForm((prev) => ({ ...prev, guestVip: v }))}
@@ -447,9 +449,9 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
             </SectionCard>}
 
             {/* ── Occasion ── */}
-            <SectionCard title="Occasion">
+            <SectionCard title={t('new_res_occasion')}>
               <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Anniversaire</Text>
+                <Text style={styles.switchLabel}>{t('new_res_birthday')}</Text>
                 <Switch
                   value={form.isBirthday}
                   onValueChange={(v) => setForm((prev) => ({ ...prev, isBirthday: v }))}
@@ -458,7 +460,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                 />
               </View>
               <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Événement</Text>
+                <Text style={styles.switchLabel}>{t('new_res_event')}</Text>
                 <Switch
                   value={form.isEvent}
                   onValueChange={(v) => setForm((prev) => ({ ...prev, isEvent: v }))}
@@ -469,21 +471,19 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
             </SectionCard>
 
             {/* ── Table (optionnel) ── */}
-            <SectionCard title="Table">
-              <Text style={styles.tableHint}>
-                Optionnel — sélection multiple possible, peut être assignée plus tard depuis le plan.
-              </Text>
+            <SectionCard title={t('resd_table')}>
+              <Text style={styles.tableHint}>{t('new_res_table_hint')}</Text>
 
               {/* Tables sélectionnées depuis le plan */}
               {form.selectedTableIds.length > 0 && (
                 <View style={styles.selectedTablesList}>
                   {form.selectedTableIds.map((id) => {
-                    const t = tables.find((tb) => tb.id === id);
-                    if (!t) return null;
+                    const tbl = tables.find((tb) => tb.id === id);
+                    if (!tbl) return null;
                     return (
                       <View key={id} style={styles.selectedTableChip}>
                         <Text style={styles.selectedTableChipText}>
-                          Table {t.label} · {t.zone.replace(/_/g, ' ')}
+                          Table {tbl.label} · {tbl.zone.replace(/_/g, ' ')}
                         </Text>
                       </View>
                     );
@@ -498,7 +498,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                 accessibilityRole="button"
               >
                 <Text style={styles.planBtnText}>
-                  {form.selectedTableIds.length > 0 ? 'Modifier la sélection' : 'Choisir sur le plan'}
+                  {form.selectedTableIds.length > 0 ? t('new_res_edit_plan') : t('new_res_choose_plan')}
                 </Text>
               </TouchableOpacity>
 
@@ -507,23 +507,23 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                 <TouchableOpacity
                   onPress={() => setForm((prev) => ({ ...prev, selectedTableIds: [] }))}
                 >
-                  <Text style={styles.clearTablesLink}>Effacer la sélection</Text>
+                  <Text style={styles.clearTablesLink}>{t('new_res_clear_tables')}</Text>
                 </TouchableOpacity>
               )}
               {tablesByZone.map(({ zone, items }) => (
                 <View key={zone} style={styles.tableZoneGroup}>
                   <Text style={styles.tableZoneLabel}>{zone}</Text>
                   <View style={styles.tableChipRow}>
-                    {items.map((t) => {
-                      const isSelected = form.selectedTableIds.includes(t.id);
+                    {items.map((tbl) => {
+                      const isSelected = form.selectedTableIds.includes(tbl.id);
                       return (
                         <TouchableOpacity
-                          key={t.id}
+                          key={tbl.id}
                           style={[styles.tableChip, isSelected && styles.tableChipActive]}
-                          onPress={() => toggleTable(t.id)}
+                          onPress={() => toggleTable(tbl.id)}
                         >
                           <Text style={[styles.tableChipText, isSelected && styles.tableChipTextActive]}>
-                            {t.label}
+                            {tbl.label}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -534,7 +534,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
             </SectionCard>
 
             {/* ── Statut & Notes ── */}
-            <SectionCard title="Statut & Notes">
+            <SectionCard title={t('new_res_status_notes')}>
               <View style={styles.statusRow}>
                 {(['confirmed', 'pending'] as const).map((s) => (
                   <TouchableOpacity
@@ -543,17 +543,17 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
                     onPress={() => setForm((prev) => ({ ...prev, status: s }))}
                   >
                     <Text style={[styles.statusOptionText, form.status === s && styles.statusOptionTextActive]}>
-                      {s === 'confirmed' ? 'Confirmée' : 'En attente de confirmation'}
+                      {s === 'confirmed' ? t('status_confirmed') : t('status_pending')}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="Notes (optionnel)"
+                placeholder={t('new_res_notes')}
                 placeholderTextColor={colors.textMuted}
                 value={form.notes}
-                onChangeText={(t) => setForm((prev) => ({ ...prev, notes: t }))}
+                onChangeText={(val) => setForm((prev) => ({ ...prev, notes: val }))}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
@@ -569,7 +569,7 @@ export default function NewReservationScreen({ navigation }: Props): React.JSX.E
 
             {/* ── Submit ── */}
             <PrimaryButton
-              label="Créer la réservation"
+              label={t('new_res_submit')}
               onPress={() => { void handleSubmit(); }}
               loading={submitting}
               disabled={submitting}

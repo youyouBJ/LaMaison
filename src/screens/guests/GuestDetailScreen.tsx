@@ -40,6 +40,7 @@ import {
   isValidEmail,
   buildGuestConfirmationEmail,
 } from '../../utils/email';
+import { useI18n } from '../../i18n';
 import type { GuestsStackParamList } from '../../navigation/GuestsNavigator';
 import type { ReservationWithDetail } from '../../hooks/useGuestDetail';
 
@@ -106,12 +107,13 @@ function FieldInput({
 }
 
 function ReservationRow({ item }: { item: ReservationWithDetail }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <View style={styles.resRow}>
       <View style={styles.resLeft}>
         <Text style={styles.resDate}>{formatDateShort(item.date)}</Text>
         <Text style={styles.resTime}>{formatTimeSlot(item.time_slot)}</Text>
-        <Text style={styles.resCovers}>{item.party_size} couvert{item.party_size > 1 ? 's' : ''}</Text>
+        <Text style={styles.resCovers}>{t('guest_cover_count', { n: item.party_size, s: item.party_size > 1 ? 's' : '' })}</Text>
         {item.tables ? (
           <Text style={styles.resTable}>{item.tables.label}</Text>
         ) : null}
@@ -127,6 +129,7 @@ function ReservationRow({ item }: { item: ReservationWithDetail }): React.JSX.El
 // ─── Écran principal ──────────────────────────────────────────────────────────
 
 export default function GuestDetailScreen({ route, navigation }: Props): React.JSX.Element {
+  const { t }       = useI18n();
   const { guestId } = route.params;
   const {
     loading, saving, deleting, error, guest, reservations,
@@ -212,12 +215,12 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
       if (waTimer.current) clearTimeout(waTimer.current);
       setWaFeedback(
         opened
-          ? { ok: true, text: 'WhatsApp ouvert' }
+          ? { ok: true, text: t('floor_wa_opened') }
           : {
               ok: false,
               text: normalizePhoneForWhatsApp(phone)
-                ? "Impossible d'ouvrir WhatsApp."
-                : 'Numéro invalide.',
+                ? t('floor_wa_cant_open')
+                : t('floor_wa_invalid'),
             },
       );
       waTimer.current = setTimeout(() => setWaFeedback(null), 4000);
@@ -231,12 +234,12 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
       if (emailTimer.current) clearTimeout(emailTimer.current);
       setEmailFeedback(
         opened
-          ? { ok: true, text: 'Email ouvert' }
+          ? { ok: true, text: t('floor_email_opened') }
           : {
               ok: false,
               text: email && isValidEmail(email)
-                ? "Impossible d'ouvrir l'application Mail."
-                : 'Email invalide.',
+                ? t('floor_email_cant_open')
+                : t('floor_email_invalid'),
             },
       );
       emailTimer.current = setTimeout(() => setEmailFeedback(null), 4000);
@@ -261,22 +264,17 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
         let message: string;
         if (hasLinked) {
           const parts: string[] = [];
-          if (reservationCount > 0) parts.push(`${reservationCount} réservation${reservationCount > 1 ? 's' : ''}`);
-          if (waitlistCount    > 0) parts.push(`${waitlistCount} entrée${waitlistCount > 1 ? 's' : ''} en liste d'attente`);
-          message =
-            `Ce client est lié à ${parts.join(' et ')}. ` +
-            'La suppression peut être bloquée par la base de données. ' +
-            'Voulez-vous continuer ?';
+          if (reservationCount > 0) parts.push(t('guest_delete_res', { n: reservationCount, s: reservationCount > 1 ? 's' : '' }));
+          if (waitlistCount    > 0) parts.push(waitlistCount === 1 ? t('guest_delete_wl_one') : t('guest_delete_wl_many', { n: waitlistCount }));
+          message = t('guest_delete_linked_msg', { linked: parts.join(' et ') });
         } else {
-          message =
-            'Cette action est définitive. ' +
-            'Les réservations associées resteront dans l\'historique, mais le client ne sera plus lié.';
+          message = t('guest_delete_msg');
         }
 
-        Alert.alert('Supprimer ce client ?', message, [
-          { text: 'Annuler', style: 'cancel' },
+        Alert.alert(t('guest_delete_title'), message, [
+          { text: t('common_cancel'), style: 'cancel' },
           {
-            text: 'Supprimer',
+            text: t('common_delete'),
             style: 'destructive',
             onPress: () => {
               void (async () => {
@@ -298,7 +296,7 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Chargement…</Text>
+          <Text style={styles.loadingText}>{t('common_loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -309,9 +307,9 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <View style={styles.centered}>
-          <Text style={styles.emptyText}>Client introuvable.</Text>
+          <Text style={styles.emptyText}>{t('guest_not_found')}</Text>
           <TouchableOpacity style={styles.refreshBtn} onPress={handleRefresh}>
-            <Text style={styles.refreshBtnText}>Actualiser</Text>
+            <Text style={styles.refreshBtnText}>{t('common_refresh')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -347,37 +345,37 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
             </View>
 
             {/* ── Informations ── */}
-            <SectionCard title="Informations">
+            <SectionCard title={t('guest_info_section')}>
               <FieldInput
-                label="Prénom"
+                label={t('guest_first_name')}
                 value={form.first_name}
                 onChangeText={setField('first_name')}
-                placeholder="Prénom"
+                placeholder={t('guest_first_name')}
                 autoCapitalize="words"
                 editable={!saving}
               />
               <FieldInput
-                label="Nom"
+                label={t('guest_last_name')}
                 value={form.last_name}
                 onChangeText={setField('last_name')}
-                placeholder="Nom"
+                placeholder={t('guest_last_name')}
                 autoCapitalize="words"
                 editable={!saving}
               />
               <FieldInput
-                label="Téléphone"
+                label={t('guest_phone_field')}
                 value={form.phone}
                 onChangeText={setField('phone')}
-                placeholder="Téléphone"
+                placeholder={t('guest_phone_field')}
                 keyboardType="phone-pad"
                 autoCapitalize="none"
                 editable={!saving}
               />
               <FieldInput
-                label="Email"
+                label={t('guest_email_field')}
                 value={form.email}
                 onChangeText={setField('email')}
-                placeholder="Email (optionnel)"
+                placeholder={t('guest_email_opt')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 editable={!saving}
@@ -386,7 +384,7 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
 
             {/* ── Contact ── */}
             {(hasPhone || hasEmail) ? (
-              <SectionCard title="Contact">
+              <SectionCard title={t('guest_contact_section')}>
                 {waFeedback ? (
                   <View style={[styles.waBanner, waFeedback.ok ? styles.waBannerOk : styles.waBannerErr]}>
                     <Text style={[styles.waBannerText, waFeedback.ok ? styles.waBannerTextOk : styles.waBannerTextErr]}>
@@ -404,21 +402,21 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
 
                 {hasPhone ? (
                   <View style={styles.contactGroup}>
-                    <Text style={styles.contactGroupLabel}>Téléphone</Text>
+                    <Text style={styles.contactGroupLabel}>{t('guest_phone_label')}</Text>
                     <View style={styles.contactStack}>
                       <TouchableOpacity
                         style={styles.contactBtn}
                         onPress={handleCall}
                         activeOpacity={0.75}
                       >
-                        <Text style={styles.contactBtnText}>Appeler</Text>
+                        <Text style={styles.contactBtnText}>{t('resd_call')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.contactBtnWa}
                         onPress={handleWhatsApp}
                         activeOpacity={0.75}
                       >
-                        <Text style={styles.contactBtnWaText}>WhatsApp confirmation</Text>
+                        <Text style={styles.contactBtnWaText}>{t('guest_wa_confirm')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -426,14 +424,14 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
 
                 {hasEmail ? (
                   <View style={styles.contactGroup}>
-                    <Text style={styles.contactGroupLabel}>Email</Text>
+                    <Text style={styles.contactGroupLabel}>{t('guest_email_field')}</Text>
                     <View style={styles.contactStack}>
                       <TouchableOpacity
                         style={styles.contactBtnEmail}
                         onPress={handleEmail}
                         activeOpacity={0.75}
                       >
-                        <Text style={styles.contactBtnEmailText}>Email confirmation</Text>
+                        <Text style={styles.contactBtnEmailText}>{t('guest_email_confirm')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -442,13 +440,13 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
             ) : null}
 
             {/* ── Statut client ── */}
-            <SectionCard title="Statut client">
+            <SectionCard title={t('guest_status_section')}>
               <View style={styles.toggleRow}>
                 <View style={styles.toggleInfo}>
                   <Text style={[styles.toggleLabel, isVip && styles.toggleLabelActive]}>
-                    Client VIP
+                    {t('guest_vip_label')}
                   </Text>
-                  <Text style={styles.toggleSub}>Marquer ce client comme VIP dans le CRM.</Text>
+                  <Text style={styles.toggleSub}>{t('guest_vip_sub')}</Text>
                 </View>
                 {vipUpdating ? (
                   <ActivityIndicator size="small" color={colors.gold} />
@@ -465,33 +463,33 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
             </SectionCard>
 
             {/* ── Notes internes ── */}
-            <SectionCard title="Notes internes">
+            <SectionCard title={t('guest_notes_section')}>
               <FieldInput
                 label=""
                 value={form.notes}
                 onChangeText={setField('notes')}
-                placeholder="Notes internes (optionnel)"
+                placeholder={t('guest_notes_hint')}
                 multiline
                 editable={!saving}
               />
             </SectionCard>
 
             {/* ── Statistiques ── */}
-            <SectionCard title="Statistiques">
-              <InfoRow label="Visites"         value={String(guest?.visit_count ?? 0)} />
-              <InfoRow label="Annulations"     value={String(guest?.cancels ?? 0)} />
-              <InfoRow label="No-shows"        value={String(guest?.no_shows ?? 0)} />
-              <InfoRow label="Dépense moy."    value={formatCurrencyTND(guest?.avg_spend)} />
-              <InfoRow label="Rating moy."     value={formatRating(guest?.avg_rating)} />
-              <InfoRow label="Dernière visite" value={formatDateShort(guest?.last_visit)} />
+            <SectionCard title={t('guest_stats_section')}>
+              <InfoRow label={t('guest_stat_visits')}     value={String(guest?.visit_count ?? 0)} />
+              <InfoRow label={t('guest_stat_cancels')}    value={String(guest?.cancels ?? 0)} />
+              <InfoRow label={t('guest_stat_noshows')}    value={String(guest?.no_shows ?? 0)} />
+              <InfoRow label={t('guest_stat_spend')}      value={formatCurrencyTND(guest?.avg_spend)} />
+              <InfoRow label={t('guest_stat_rating')}     value={formatRating(guest?.avg_rating)} />
+              <InfoRow label={t('guest_stat_last_visit')} value={formatDateShort(guest?.last_visit)} />
             </SectionCard>
 
             {/* ── Tags ── */}
-            <SectionCard title="Tags">
+            <SectionCard title={t('guest_tags_section')}>
               {(() => {
                 const displayTags = getDisplayableGuestTags(guest?.tags);
                 if (displayTags.length === 0) {
-                  return <Text style={styles.tagsEmpty}>Aucun tag utile</Text>;
+                  return <Text style={styles.tagsEmpty}>{t('guest_no_tags')}</Text>;
                 }
                 return (
                   <View style={styles.tagsRow}>
@@ -506,11 +504,11 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
             </SectionCard>
 
             {/* ── Données importées ── */}
-            <SectionCard title="Données importées">
+            <SectionCard title={t('guest_imported_section')}>
               <View style={styles.importedRow}>
                 <View style={styles.importedInfo}>
-                  <Text style={styles.importedLabel}>Opt-in marketing</Text>
-                  <Text style={styles.importedSub}>Consentement importé depuis SevenRooms.</Text>
+                  <Text style={styles.importedLabel}>{t('guest_marketing_label')}</Text>
+                  <Text style={styles.importedSub}>{t('guest_marketing_sub')}</Text>
                 </View>
                 <Switch
                   value={form.marketing_opt_in}
@@ -523,9 +521,9 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
             </SectionCard>
 
             {/* ── Historique réservations ── */}
-            <SectionCard title="Historique réservations">
+            <SectionCard title={t('guest_history_section')}>
               {reservations.length === 0 ? (
-                <Text style={styles.historyEmpty}>Aucune réservation enregistrée.</Text>
+                <Text style={styles.historyEmpty}>{t('guest_no_history')}</Text>
               ) : (
                 reservations.map((item) => (
                   <ReservationRow key={item.id} item={item} />
@@ -534,7 +532,7 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
             </SectionCard>
 
             {/* ── Gestion du compte ── */}
-            <SectionCard title="Gestion du compte">
+            <SectionCard title={t('guest_account_section')}>
               <TouchableOpacity
                 style={[
                   styles.deleteBtn,
@@ -547,7 +545,7 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
                 {deletePending || deleting ? (
                   <ActivityIndicator size="small" color={colors.cta} />
                 ) : (
-                  <Text style={styles.deleteBtnText}>Supprimer le client</Text>
+                  <Text style={styles.deleteBtnText}>{t('guest_delete_btn')}</Text>
                 )}
               </TouchableOpacity>
             </SectionCard>
@@ -562,13 +560,13 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
             {/* ── Bannière succès ── */}
             {saveSuccess ? (
               <View style={styles.successBanner}>
-                <Text style={styles.successBannerText}>Modifications enregistrées.</Text>
+                <Text style={styles.successBannerText}>{t('guest_saved')}</Text>
               </View>
             ) : null}
 
             {/* ── Actions ── */}
             <PrimaryButton
-              label="Enregistrer"
+              label={t('common_save')}
               onPress={handleSavePress}
               loading={saving}
               disabled={saving}
@@ -580,7 +578,7 @@ export default function GuestDetailScreen({ route, navigation }: Props): React.J
               disabled={saving}
               activeOpacity={0.75}
             >
-              <Text style={styles.refreshActionText}>Actualiser</Text>
+              <Text style={styles.refreshActionText}>{t('common_refresh')}</Text>
             </TouchableOpacity>
 
           </View>

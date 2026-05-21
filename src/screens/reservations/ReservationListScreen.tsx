@@ -158,14 +158,14 @@ export default function ReservationListScreen({ navigation }: Props): React.JSX.
   const countLabel = (() => {
     if (isSearching) {
       const n = filteredReservations.length;
-      return `${n} résultat${n !== 1 ? 's' : ''}`;
+      return t('res_count_results', { n, s: n !== 1 ? 's' : '' });
     }
     const n = filteredReservations.length;
     if (n === 0) return t('res_no_reservations');
     const s = n > 1 ? 's' : '';
-    if (serviceFilter === 'lunch')  return `${n} réservation${s} déjeuner`;
-    if (serviceFilter === 'dinner') return `${n} réservation${s} dîner`;
-    return `${n} réservation${s}`;
+    if (serviceFilter === 'lunch')  return t('res_count_lunch', { n, s });
+    if (serviceFilter === 'dinner') return t('res_count_dinner', { n, s });
+    return t('res_count_all', { n, s });
   })();
 
   return (

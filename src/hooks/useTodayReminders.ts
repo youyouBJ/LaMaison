@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { getTodayDateString, formatTimeSlot, getCurrentTimeInTunis } from '../utils/date';
 import { reservationNeedsPhoneConfirmation } from '../utils/reservationConfirmation';
+import { useI18n } from '../i18n';
+import type { TranslateFn } from '../i18n';
 import type { DashboardReservation } from './useTodayDashboard';
 import type { WaitlistEntryWithGuest } from '../types/waitlist';
 
@@ -51,18 +53,18 @@ function timeToMinutes(hhmm: string): number {
   return h * 60 + m;
 }
 
-function getGuestFullName(r: DashboardReservation): string {
-  if (!r.guests) return 'Client sans nom';
+function getGuestFullName(r: DashboardReservation, noName: string): string {
+  if (!r.guests) return noName;
   const parts = [r.guests.first_name, r.guests.last_name]
     .filter((p): p is string => Boolean(p));
-  return parts.length > 0 ? parts.join(' ') : 'Client sans nom';
+  return parts.length > 0 ? parts.join(' ') : noName;
 }
 
-function getWaitlistGuestName(e: WaitlistEntryWithGuest): string {
-  if (!e.guests) return 'Anonyme';
+function getWaitlistGuestName(e: WaitlistEntryWithGuest, anonymous: string): string {
+  if (!e.guests) return anonymous;
   const parts = [e.guests.first_name, e.guests.last_name]
     .filter((p): p is string => Boolean(p));
-  return parts.length > 0 ? parts.join(' ') : 'Anonyme';
+  return parts.length > 0 ? parts.join(' ') : anonymous;
 }
 
 // ─── Reminder computation ─────────────────────────────────────────────────────
@@ -72,11 +74,14 @@ const PRIORITY_ORDER: Record<ReminderPriority, number> = { urgent: 0, todo: 1, i
 function computeReminders(
   reservations: DashboardReservation[],
   waitlistEntries: WaitlistEntryWithGuest[],
+  t: TranslateFn,
 ): Reminder[] {
   const reminders: Reminder[] = [];
   const today = getTodayDateString();
   const currentTime = getCurrentTimeInTunis();
   const currentMinutes = timeToMinutes(currentTime);
+  const noName = t('dashboard_guest_no_name');
+  const anonymous = t('reminder_anonymous');
 
   let noshowCount = 0;
   let cancelledCount = 0;
@@ -84,9 +89,9 @@ function computeReminders(
   for (const r of reservations) {
     if (r.date !== today) continue;
 
-    const name = getGuestFullName(r);
+    const name = getGuestFullName(r, noName);
     const time = formatTimeSlot(r.time_slot);
-    const covers = `${r.party_size} couvert${r.party_size > 1 ? 's' : ''}`;
+    const covers = t('guest_cover_count', { n: r.party_size, s: r.party_size > 1 ? 's' : '' });
     const phone = r.guests?.phone ?? null;
     const guestId = r.guest_id ?? undefined;
 
@@ -95,13 +100,13 @@ function computeReminders(
         id: `pending_${r.id}`,
         type: 'pending_confirmation',
         priority: 'urgent',
-        title: 'À confirmer',
+        title: t('reminder_to_confirm'),
         description: `${name} — ${covers} à ${time}`,
         timeLabel: time,
         reservationId: r.id,
         guestId,
         guestPhone: phone ?? undefined,
-        actionLabel: 'Voir la réservation',
+        actionLabel: t('reminder_see_reservation'),
         actionType: 'open_reservation',
       });
     } else if (r.status === 'confirmed' && reservationNeedsPhoneConfirmation(r)) {
@@ -110,13 +115,13 @@ function computeReminders(
         id: `to_call_${r.id}`,
         type: 'to_call',
         priority: 'todo',
-        title: 'À appeler',
+        title: t('dashboard_stat_to_call'),
         description: `${name} — ${covers} à ${time}`,
         timeLabel: time,
         reservationId: r.id,
         guestId,
         guestPhone: phone ?? undefined,
-        actionLabel: 'Voir la réservation',
+        actionLabel: t('reminder_see_reservation'),
         actionType: 'open_reservation',
       });
     } else if (r.status === 'confirmed') {
@@ -128,12 +133,12 @@ function computeReminders(
           id: `arriving_${r.id}`,
           type: 'arriving_soon',
           priority: 'info',
-          title: 'Arrivée prochaine',
+          title: t('reminder_arriving_soon'),
           description: `${name} — ${covers} à ${time}`,
           timeLabel: time,
           reservationId: r.id,
           guestId,
-          actionLabel: 'Voir la réservation',
+          actionLabel: t('reminder_see_reservation'),
           actionType: 'open_reservation',
         });
       }
@@ -144,14 +149,14 @@ function computeReminders(
           id: `survey_${r.id}`,
           type: 'survey_to_send',
           priority: 'todo',
-          title: 'Envoyer enquête de satisfaction',
+          title: t('reminder_survey_send'),
           description: `${name} — ${covers} à ${time}`,
           timeLabel: time,
           reservationId: r.id,
           guestId,
           guestPhone: phone ?? undefined,
           guestEmail: email ?? undefined,
-          actionLabel: 'Ouvrir pour envoyer',
+          actionLabel: t('reminder_open_to_send'),
           actionType: 'open_reservation',
         });
       }
@@ -165,19 +170,19 @@ function computeReminders(
   // Waitlist entries with status = waiting
   for (const e of waitlistEntries) {
     if (e.status !== 'waiting') continue;
-    const name = getWaitlistGuestName(e);
-    const covers = `${e.party_size} couvert${e.party_size > 1 ? 's' : ''}`;
-    const timeLabel = e.time_slot ? formatTimeSlot(e.time_slot) : 'En attente';
+    const name = getWaitlistGuestName(e, anonymous);
+    const covers = t('guest_cover_count', { n: e.party_size, s: e.party_size > 1 ? 's' : '' });
+    const timeLabel = e.time_slot ? formatTimeSlot(e.time_slot) : t('reminder_waiting_time');
     reminders.push({
       id: `waitlist_${e.id}`,
       type: 'waitlist_waiting',
       priority: 'urgent',
-      title: 'En attente de table',
+      title: t('res_waitlist_btn'),
       description: `${name} — ${covers}`,
       timeLabel,
       waitlistId: e.id,
       guestId: e.guest_id ?? undefined,
-      actionLabel: "Voir la liste d'attente",
+      actionLabel: t('reminder_see_waitlist'),
       actionType: 'open_waitlist',
     });
   }
@@ -188,8 +193,8 @@ function computeReminders(
       id: 'noshow_today',
       type: 'noshow_today',
       priority: 'info',
-      title: `${noshowCount} no-show${noshowCount > 1 ? 's' : ''} aujourd'hui`,
-      description: "Réservation(s) non honorée(s)",
+      title: `${noshowCount} ${t('reminder_noshow_today', { s: noshowCount > 1 ? 's' : '' })}`,
+      description: t('reminder_noshow_desc'),
       timeLabel: '',
     });
   }
@@ -198,8 +203,8 @@ function computeReminders(
       id: 'cancelled_today',
       type: 'cancelled_today',
       priority: 'info',
-      title: `${cancelledCount} annulation${cancelledCount > 1 ? 's' : ''} aujourd'hui`,
-      description: "Réservation(s) annulée(s)",
+      title: `${cancelledCount} ${t('reminder_cancelled_today', { s: cancelledCount > 1 ? 's' : '' })}`,
+      description: t('reminder_cancelled_desc'),
       timeLabel: '',
     });
   }
@@ -214,6 +219,7 @@ export function useTodayReminders(
   reservations: DashboardReservation[],
   restaurantId: string | null,
 ) {
+  const { t } = useI18n();
   const [loading, setLoading]                   = useState(false);
   const [error, setError]                       = useState<string | null>(null);
   const [waitlistEntries, setWaitlistEntries]   = useState<WaitlistEntryWithGuest[]>([]);
@@ -249,8 +255,8 @@ export function useTodayReminders(
   }, [restaurantId, fetchWaitlist]);
 
   const reminders = useMemo(
-    () => computeReminders(reservations, waitlistEntries),
-    [reservations, waitlistEntries],
+    () => computeReminders(reservations, waitlistEntries, t),
+    [reservations, waitlistEntries, t],
   );
 
   const urgentCount = useMemo(

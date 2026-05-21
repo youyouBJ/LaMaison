@@ -22,6 +22,7 @@ import { supabase } from '../../lib/supabase';
 import type { AdminStackParamList } from '../../navigation/AdminNavigator';
 import type { Database } from '../../types/database';
 import { useI18n } from '../../i18n';
+import type { TranslationKey, TranslateFn } from '../../i18n';
 
 type ShiftRow = Database['public']['Tables']['shifts']['Row'];
 type TableRow = Database['public']['Tables']['tables']['Row'];
@@ -57,38 +58,35 @@ type TableDraft = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ROLE_LABELS: Record<string, string> = {
-  admin:   'Admin',
-  manager: 'Manager',
-  host:    'Hôte',
-  waiter:  'Serveur',
-};
-
-const DAY_LABELS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+function getRoleLabel(role: string, t: TranslateFn): string {
+  if (role === 'host')   return t('admin_role_host');
+  if (role === 'waiter') return t('admin_role_waiter');
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
 
 type ChannelStatus = 'active' | 'configured' | 'inactive' | 'soon';
 
 type Channel = {
-  icon:   React.ComponentProps<typeof Ionicons>['name'];
-  label:  string;
-  detail: string;
-  status: ChannelStatus;
+  icon:      React.ComponentProps<typeof Ionicons>['name'];
+  labelKey:  TranslationKey;
+  detailKey: TranslationKey;
+  status:    ChannelStatus;
 };
 
 const CHANNELS: Channel[] = [
-  { icon: 'logo-whatsapp',      label: 'WhatsApp manuel',     detail: "Envoi depuis l'app",        status: 'active'     },
-  { icon: 'mail-outline',       label: 'Email manuel',         detail: "Envoi depuis l'app",        status: 'active'     },
-  { icon: 'star-outline',       label: 'Enquête satisfaction', detail: 'Lien public configuré',     status: 'configured' },
-  { icon: 'chatbubble-outline', label: 'SMS',                  detail: 'Non activé',                status: 'inactive'   },
-  { icon: 'logo-whatsapp',      label: 'WhatsApp API',         detail: 'Automatisation à venir',    status: 'soon'       },
-  { icon: 'mail',               label: 'Resend email',         detail: 'Envoi automatique à venir', status: 'soon'       },
+  { icon: 'logo-whatsapp',      labelKey: 'admin_channel_wa_manual',    detailKey: 'admin_channel_app_detail',    status: 'active'     },
+  { icon: 'mail-outline',       labelKey: 'admin_channel_email_manual', detailKey: 'admin_channel_app_detail',    status: 'active'     },
+  { icon: 'star-outline',       labelKey: 'admin_channel_survey',       detailKey: 'admin_channel_survey_detail', status: 'configured' },
+  { icon: 'chatbubble-outline', labelKey: 'admin_channel_sms',          detailKey: 'admin_channel_sms_detail',    status: 'inactive'   },
+  { icon: 'logo-whatsapp',      labelKey: 'admin_channel_wa_api',       detailKey: 'admin_channel_wa_api_detail', status: 'soon'       },
+  { icon: 'mail',               labelKey: 'admin_channel_resend',       detailKey: 'admin_channel_resend_detail', status: 'soon'       },
 ];
 
-const CHANNEL_STATUS_CONFIG: Record<ChannelStatus, { label: string; color: string; bg: string }> = {
-  active:     { label: 'Actif',     color: colors.statusFree,  bg: colors.statusFreeLight },
-  configured: { label: 'Configuré', color: colors.gold,        bg: colors.goldLight       },
-  inactive:   { label: 'Inactif',   color: colors.textMuted,   bg: colors.borderLight     },
-  soon:       { label: 'À venir',   color: colors.textMuted,   bg: colors.borderLight     },
+const CHANNEL_STATUS_CONFIG: Record<ChannelStatus, { labelKey: TranslationKey; color: string; bg: string }> = {
+  active:     { labelKey: 'admin_channel_active',     color: colors.statusFree,  bg: colors.statusFreeLight },
+  configured: { labelKey: 'admin_channel_configured', color: colors.gold,        bg: colors.goldLight       },
+  inactive:   { labelKey: 'admin_channel_inactive',   color: colors.textMuted,   bg: colors.borderLight     },
+  soon:       { labelKey: 'admin_channel_soon',       color: colors.textMuted,   bg: colors.borderLight     },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -101,39 +99,39 @@ function isValidTime(t: string): boolean {
   return h >= 0 && h <= 23 && m >= 0 && m <= 59;
 }
 
-function validateRestaurant(d: RestDraft): string | null {
-  if (d.name.trim() === '') return 'Le nom du restaurant est requis.';
+function validateRestaurant(d: RestDraft, t: TranslateFn): string | null {
+  if (d.name.trim() === '') return t('admin_val_rest_name');
   if (d.email.trim() !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim()))
-    return 'Format email invalide.';
+    return t('admin_val_rest_email');
   return null;
 }
 
-function validateShift(d: ShiftDraft): string | null {
-  if (d.name.trim() === '') return 'Le nom du service est requis.';
-  if (d.days.length === 0) return 'Sélectionnez au moins un jour.';
-  if (!isValidTime(d.start)) return 'Heure de début invalide (HH:mm).';
-  if (!isValidTime(d.end)) return 'Heure de fin invalide (HH:mm).';
-  if (d.end <= d.start) return "L'heure de fin doit être après l'heure de début.";
+function validateShift(d: ShiftDraft, t: TranslateFn): string | null {
+  if (d.name.trim() === '') return t('admin_val_shift_name');
+  if (d.days.length === 0) return t('admin_val_shift_days');
+  if (!isValidTime(d.start)) return t('admin_val_shift_start');
+  if (!isValidTime(d.end)) return t('admin_val_shift_end');
+  if (d.end <= d.start) return t('admin_val_shift_end_after');
   const slot = parseInt(d.slot, 10);
-  if (isNaN(slot) || slot <= 0) return 'La durée du slot doit être un nombre positif.';
+  if (isNaN(slot) || slot <= 0) return t('admin_val_shift_slot');
   const max = parseInt(d.maxCovers, 10);
-  if (isNaN(max) || max <= 0) return 'Les couverts max doivent être un nombre positif.';
+  if (isNaN(max) || max <= 0) return t('admin_val_shift_covers');
   return null;
 }
 
-function validateTable(d: TableDraft): string | null {
-  if (d.label.trim() === '') return 'Le numéro / nom de la table est requis.';
-  if (d.zone.trim() === '') return 'La zone est requise.';
+function validateTable(d: TableDraft, t: TranslateFn): string | null {
+  if (d.label.trim() === '') return t('admin_val_table_label');
+  if (d.zone.trim() === '') return t('admin_val_table_zone');
   const cap = parseInt(d.capacity, 10);
-  if (isNaN(cap) || cap < 1) return 'La capacité doit être au moins 1.';
+  if (isNaN(cap) || cap < 1) return t('admin_val_table_capacity');
   return null;
 }
 
-function formatDays(days: number[]): string {
+function formatDays(days: number[], t: TranslateFn): string {
   if (days.length === 0) return '–';
-  if (days.length === 7) return 'Tous les jours';
+  if (days.length === 7) return t('common_every_day');
   const sorted = [...days].sort((a, b) => a - b);
-  const labels = sorted.map(d => DAY_LABELS[d] ?? `J${d}`);
+  const labels = sorted.map(d => t(`common_day_${d}` as TranslationKey));
   let consecutive = true;
   for (let i = 1; i < sorted.length; i++) {
     if (sorted[i] !== sorted[i - 1] + 1) { consecutive = false; break; }
@@ -266,11 +264,12 @@ function ZoneChipPicker({
   zones:    string[];
   onSelect: (zone: string) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <View style={styles.editInputGroup}>
-      <Text style={styles.editInputLabel}>Zone</Text>
+      <Text style={styles.editInputLabel}>{t('admin_field_zone')}</Text>
       {zones.length === 0 ? (
-        <Text style={styles.formError}>Aucune zone disponible.</Text>
+        <Text style={styles.formError}>{t('admin_no_zones')}</Text>
       ) : (
         <View style={styles.zonePickerRow}>
           {zones.map(zone => {
@@ -301,13 +300,14 @@ function DayChipRow({
   days:     number[];
   onChange: (days: number[]) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const toggle = (d: number): void => {
     const next = days.includes(d) ? days.filter(x => x !== d) : [...days, d];
     onChange(next);
   };
   return (
     <View style={styles.dayRow}>
-      {DAY_LABELS.map((label, idx) => {
+      {([0, 1, 2, 3, 4, 5, 6] as const).map(idx => {
         const active = days.includes(idx);
         return (
           <TouchableOpacity
@@ -316,7 +316,9 @@ function DayChipRow({
             onPress={() => { toggle(idx); }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{label}</Text>
+            <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>
+              {t(`common_day_${idx}` as TranslationKey)}
+            </Text>
           </TouchableOpacity>
         );
       })}
@@ -325,22 +327,25 @@ function DayChipRow({
 }
 
 function SoonBadge(): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <View style={styles.soonBadge}>
-      <Text style={styles.soonBadgeText}>À venir</Text>
+      <Text style={styles.soonBadgeText}>{t('admin_channel_soon')}</Text>
     </View>
   );
 }
 
 function FixedBadge(): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <View style={styles.fixedBadge}>
-      <Text style={styles.fixedBadgeText}>Fixe</Text>
+      <Text style={styles.fixedBadgeText}>{t('admin_badge_fixed')}</Text>
     </View>
   );
 }
 
 function ChannelRow({ channel }: { channel: Channel }): React.JSX.Element {
+  const { t } = useI18n();
   const cfg = CHANNEL_STATUS_CONFIG[channel.status];
   return (
     <View style={styles.channelRow}>
@@ -348,11 +353,11 @@ function ChannelRow({ channel }: { channel: Channel }): React.JSX.Element {
         <Ionicons name={channel.icon} size={18} color={colors.sand} />
       </View>
       <View style={styles.channelContent}>
-        <Text style={styles.channelLabel}>{channel.label}</Text>
-        <Text style={styles.channelDetail}>{channel.detail}</Text>
+        <Text style={styles.channelLabel}>{t(channel.labelKey)}</Text>
+        <Text style={styles.channelDetail}>{t(channel.detailKey)}</Text>
       </View>
       <View style={[styles.channelBadge, { backgroundColor: cfg.bg }]}>
-        <Text style={[styles.channelBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
+        <Text style={[styles.channelBadgeText, { color: cfg.color }]}>{t(cfg.labelKey)}</Text>
       </View>
     </View>
   );
@@ -412,7 +417,8 @@ function TeamMemberRow({
   errorMsg:  string | null;
   onInvite:  (id: string) => void;
 }): React.JSX.Element {
-  const roleLabel = ROLE_LABELS[role] ?? role;
+  const { t } = useI18n();
+  const roleLabel = getRoleLabel(role, t);
 
   return (
     <View style={styles.teamMemberRow}>
@@ -432,7 +438,7 @@ function TeamMemberRow({
 
       {isSelf && (
         <View style={styles.selfBadge}>
-          <Text style={styles.selfBadgeText}>Vous</Text>
+          <Text style={styles.selfBadgeText}>{t('admin_self_badge')}</Text>
         </View>
       )}
     </View>
@@ -537,10 +543,10 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
       }
     } catch (e) {
       if (__DEV__) console.error('[AdminSettings] signOut threw:', e);
-      setSignOutError('Erreur lors de la déconnexion.');
+      setSignOutError(t('admin_signout_error'));
       setSigningOut(false);
     }
-  }, []);
+  }, [t]);
 
   const handleStartEditRest = useCallback((): void => {
     if (!localData) return;
@@ -562,14 +568,14 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
   }, []);
 
   const handleSaveRest = useCallback((): void => {
-    const err = validateRestaurant(restDraft);
+    const err = validateRestaurant(restDraft, t);
     if (err) { setRestFormError(err); return; }
     void updateRestaurant(restDraft, updated => {
       setLocalData(prev => (prev ? { ...prev, restaurant: updated } : prev));
       setEditingRest(false);
       setRestFormError(null);
     });
-  }, [restDraft, updateRestaurant]);
+  }, [restDraft, t, updateRestaurant]);
 
   const handleStartEditShift = useCallback((shift: ShiftRow): void => {
     setShiftDraft({
@@ -591,7 +597,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
 
   const handleSaveShift = useCallback((): void => {
     if (!editingShiftId) return;
-    const err = validateShift(shiftDraft);
+    const err = validateShift(shiftDraft, t);
     if (err) { setShiftFormError(err); return; }
     void updateShift(
       editingShiftId,
@@ -611,7 +617,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
         setShiftFormError(null);
       },
     );
-  }, [editingShiftId, shiftDraft, updateShift]);
+  }, [editingShiftId, shiftDraft, t, updateShift]);
 
   const handleToggleTables = useCallback((): void => {
     setTablesExpanded(prev => {
@@ -640,7 +646,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
 
   const handleSaveTable = useCallback((): void => {
     if (!editingTableId) return;
-    const err = validateTable(tableDraft);
+    const err = validateTable(tableDraft, t);
     if (err) { setTableFormError(err); return; }
     void updateTable(
       editingTableId,
@@ -651,13 +657,13 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
       },
       updated => {
         setLocalData(prev =>
-          prev ? { ...prev, tableRows: prev.tableRows.map(t => t.id === updated.id ? updated : t) } : prev
+          prev ? { ...prev, tableRows: prev.tableRows.map(row => row.id === updated.id ? updated : row) } : prev
         );
         setEditingTableId(null);
         setTableFormError(null);
       },
     );
-  }, [editingTableId, tableDraft, updateTable]);
+  }, [editingTableId, t, tableDraft, updateTable]);
 
   // ── Loading / Error states ────────────────────────────────────────────────────
 
@@ -748,20 +754,20 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           {editingRest ? (
             <Card>
               <EditInput
-                label="Nom *"
+                label={t('admin_field_name')}
                 value={restDraft.name}
                 onChangeText={v => { setRestDraft(p => ({ ...p, name: v })); }}
                 placeholder="La Maison"
                 autoCapitalize="words"
               />
               <EditInput
-                label="Adresse"
+                label={t('admin_field_address')}
                 value={restDraft.address}
                 onChangeText={v => { setRestDraft(p => ({ ...p, address: v })); }}
                 placeholder="Adresse du restaurant"
               />
               <EditInput
-                label="Téléphone"
+                label={t('admin_field_phone')}
                 value={restDraft.phone}
                 onChangeText={v => { setRestDraft(p => ({ ...p, phone: v })); }}
                 placeholder="+216 XX XXX XXX"
@@ -769,7 +775,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                 autoCapitalize="none"
               />
               <EditInput
-                label="Email"
+                label={t('admin_field_email')}
                 value={restDraft.email}
                 onChangeText={v => { setRestDraft(p => ({ ...p, email: v })); }}
                 placeholder="contact@restaurant.com"
@@ -777,7 +783,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                 autoCapitalize="none"
               />
               <EditInput
-                label="Fuseau horaire"
+                label={t('admin_field_timezone')}
                 value={restDraft.timezone}
                 onChangeText={v => { setRestDraft(p => ({ ...p, timezone: v })); }}
                 placeholder="Africa/Tunis"
@@ -790,27 +796,27 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             </Card>
           ) : (
             <Card>
-              <InfoRow label="Nom" value={restaurant.name} />
+              <InfoRow label={t('admin_info_name')} value={restaurant.name} />
               {restaurant.address ? (
                 <>
                   <Divider />
-                  <InfoRow label="Adresse" value={restaurant.address} />
+                  <InfoRow label={t('admin_info_address')} value={restaurant.address} />
                 </>
               ) : null}
               {restaurant.phone ? (
                 <>
                   <Divider />
-                  <InfoRow label="Téléphone" value={restaurant.phone} />
+                  <InfoRow label={t('admin_info_phone')} value={restaurant.phone} />
                 </>
               ) : null}
               {restaurant.email ? (
                 <>
                   <Divider />
-                  <InfoRow label="Email" value={restaurant.email} />
+                  <InfoRow label={t('admin_info_email')} value={restaurant.email} />
                 </>
               ) : null}
               <Divider />
-              <InfoRow label="Fuseau" value={restaurant.timezone} />
+              <InfoRow label={t('admin_info_timezone')} value={restaurant.timezone} />
               <Divider />
               <View style={styles.editButtonRow}>
                 <EditButton onPress={handleStartEditRest} />
@@ -821,15 +827,15 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           {/* ── 2. Compte ── */}
           <SectionHeader title={t('settings_section_account')} />
           <Card>
-            <InfoRow label="Nom"        value={userProfile.fullName} />
+            <InfoRow label={t('admin_info_name')}       value={userProfile.fullName} />
             <Divider />
-            <InfoRow label="Rôle"       value={ROLE_LABELS[userProfile.role] ?? userProfile.role} />
+            <InfoRow label={t('admin_info_role')}       value={getRoleLabel(userProfile.role, t)} />
             <Divider />
-            <InfoRow label="Restaurant" value={userProfile.restaurantName} />
+            <InfoRow label={t('admin_info_restaurant')} value={userProfile.restaurantName} />
             {userProfile.email ? (
               <>
                 <Divider />
-                <InfoRow label="Email" value={userProfile.email} />
+                <InfoRow label={t('admin_info_email')} value={userProfile.email} />
               </>
             ) : null}
           </Card>
@@ -893,7 +899,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                   <Card key={shift.id}>
                     <Text style={styles.editCardTitle}>{shift.name}</Text>
                     <EditInput
-                      label="Nom du service"
+                      label={t('admin_field_shift_name')}
                       value={shiftDraft.name}
                       onChangeText={v => { setShiftDraft(p => ({ ...p, name: v })); }}
                       placeholder="Déjeuner"
@@ -901,7 +907,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                     />
 
                     <View style={styles.editInputGroup}>
-                      <Text style={styles.editInputLabel}>Jours</Text>
+                      <Text style={styles.editInputLabel}>{t('admin_field_days')}</Text>
                       <DayChipRow
                         days={shiftDraft.days}
                         onChange={days => { setShiftDraft(p => ({ ...p, days })); }}
@@ -911,7 +917,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                     <View style={styles.twoColRow}>
                       <View style={styles.twoColItem}>
                         <EditInput
-                          label="Début (HH:mm)"
+                          label={t('admin_field_start')}
                           value={shiftDraft.start}
                           onChangeText={v => { setShiftDraft(p => ({ ...p, start: v })); }}
                           placeholder="12:00"
@@ -921,7 +927,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                       </View>
                       <View style={styles.twoColItem}>
                         <EditInput
-                          label="Fin (HH:mm)"
+                          label={t('admin_field_end')}
                           value={shiftDraft.end}
                           onChangeText={v => { setShiftDraft(p => ({ ...p, end: v })); }}
                           placeholder="14:30"
@@ -934,7 +940,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                     <View style={styles.twoColRow}>
                       <View style={styles.twoColItem}>
                         <EditInput
-                          label="Slot (min)"
+                          label={t('admin_field_slot')}
                           value={shiftDraft.slot}
                           onChangeText={v => { setShiftDraft(p => ({ ...p, slot: v })); }}
                           placeholder="15"
@@ -943,7 +949,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                       </View>
                       <View style={styles.twoColItem}>
                         <EditInput
-                          label="Couverts max"
+                          label={t('admin_field_max_covers')}
                           value={shiftDraft.maxCovers}
                           onChangeText={v => { setShiftDraft(p => ({ ...p, maxCovers: v })); }}
                           placeholder="20"
@@ -964,16 +970,16 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                   <View style={styles.shiftHeader}>
                     <Text style={styles.shiftName}>{shift.name}</Text>
                     <View style={styles.shiftBadge}>
-                      <Text style={styles.shiftBadgeText}>{formatDays(shift.days_of_week)}</Text>
+                      <Text style={styles.shiftBadgeText}>{formatDays(shift.days_of_week, t)}</Text>
                     </View>
                   </View>
                   <Text style={styles.shiftHours}>{fmtTime(shift.start_time)}–{fmtTime(shift.end_time)}</Text>
                   <View style={styles.shiftMeta}>
                     <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-                    <Text style={styles.shiftMetaText}>Slot {shift.slot_duration} min</Text>
+                    <Text style={styles.shiftMetaText}>{t('admin_slot_duration', { n: shift.slot_duration })}</Text>
                     <View style={styles.shiftMetaDot} />
                     <Ionicons name="people-outline" size={12} color={colors.textMuted} />
-                    <Text style={styles.shiftMetaText}>{shift.max_covers_per_slot} couverts max</Text>
+                    <Text style={styles.shiftMetaText}>{t('admin_covers_max', { n: shift.max_covers_per_slot, s: shift.max_covers_per_slot > 1 ? 's' : '' })}</Text>
                   </View>
                   <View style={styles.shiftFooter}>
                     <EditButton onPress={() => { handleStartEditShift(shift); }} />
@@ -990,11 +996,14 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           <Card>
             <View style={styles.tableSummaryRow}>
               <View style={styles.tableSummaryInfo}>
-                <Text style={styles.tableSummaryTitle}>Capacités, zones et libellés</Text>
+                <Text style={styles.tableSummaryTitle}>{t('admin_table_summary')}</Text>
                 <Text style={styles.tableSummaryMeta}>
-                  {localData.tableRows.length} table{localData.tableRows.length > 1 ? 's' : ''}
-                  {'  ·  '}
-                  {tablesByZone.length} zone{tablesByZone.length > 1 ? 's' : ''}
+                  {t('admin_table_meta', {
+                    tables: localData.tableRows.length,
+                    ts:     localData.tableRows.length > 1 ? 's' : '',
+                    zones:  tablesByZone.length,
+                    zs:     tablesByZone.length > 1 ? 's' : '',
+                  })}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1018,14 +1027,12 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
             <>
               <View style={styles.planNotice}>
                 <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
-                <Text style={styles.planNoticeText}>
-                  Position, forme et suppression des tables se gèrent dans le plan de salle. Seuls le nom, la zone et la capacité sont modifiables ici.
-                </Text>
+                <Text style={styles.planNoticeText}>{t('admin_table_notice')}</Text>
               </View>
 
               {tablesByZone.length === 0 ? (
                 <Card>
-                  <Text style={styles.emptyText}>Aucune table configurée.</Text>
+                  <Text style={styles.emptyText}>{t('admin_no_tables')}</Text>
                 </Card>
               ) : (
                 tablesByZone.map(({ zone, tables }) => (
@@ -1046,7 +1053,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                                 <View style={styles.twoColRow}>
                                   <View style={styles.twoColItem}>
                                     <EditInput
-                                      label="Numéro / Nom"
+                                      label={t('admin_field_table_label')}
                                       value={tableDraft.label}
                                       onChangeText={v => { setTableDraft(p => ({ ...p, label: v })); }}
                                       placeholder="T1"
@@ -1055,7 +1062,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
                                   </View>
                                   <View style={styles.twoColItem}>
                                     <EditInput
-                                      label="Capacité"
+                                      label={t('admin_field_capacity')}
                                       value={tableDraft.capacity}
                                       onChangeText={v => { setTableDraft(p => ({ ...p, capacity: v })); }}
                                       placeholder="4"
@@ -1099,48 +1106,46 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           <Card>
             <View style={styles.ruleRow}>
               <View style={styles.ruleContent}>
-                <Text style={styles.ruleLabel}>Statut à la création</Text>
-                <Text style={styles.ruleValue}>En attente de confirmation</Text>
+                <Text style={styles.ruleLabel}>{t('admin_res_rule_status')}</Text>
+                <Text style={styles.ruleValue}>{t('admin_res_rule_status_val')}</Text>
               </View>
               <FixedBadge />
             </View>
             <Divider />
             <View style={styles.ruleRow}>
               <View style={styles.ruleContent}>
-                <Text style={styles.ruleLabel}>Intervalle de créneaux</Text>
-                <Text style={styles.ruleValue}>15 min (selon le service)</Text>
+                <Text style={styles.ruleLabel}>{t('admin_res_rule_slot')}</Text>
+                <Text style={styles.ruleValue}>{t('admin_res_rule_slot_val')}</Text>
               </View>
               <FixedBadge />
             </View>
             <Divider />
             <View style={styles.ruleRow}>
               <View style={styles.ruleContent}>
-                <Text style={styles.ruleLabel}>Walk-ins</Text>
-                <Text style={styles.ruleValue}>Autorisés</Text>
+                <Text style={styles.ruleLabel}>{t('admin_res_rule_walkin')}</Text>
+                <Text style={styles.ruleValue}>{t('admin_res_rule_walkin_val')}</Text>
               </View>
               <FixedBadge />
             </View>
             <Divider />
             <View style={styles.ruleRow}>
               <View style={styles.ruleContent}>
-                <Text style={styles.ruleLabel}>Durée par couvert</Text>
-                <Text style={styles.ruleValue}>Règles par service</Text>
+                <Text style={styles.ruleLabel}>{t('admin_res_rule_duration')}</Text>
+                <Text style={styles.ruleValue}>{t('admin_res_rule_duration_val')}</Text>
               </View>
               <SoonBadge />
             </View>
             <Divider />
             <View style={styles.ruleRow}>
               <View style={styles.ruleContent}>
-                <Text style={styles.ruleLabel}>Capacité max</Text>
-                <Text style={styles.ruleValue}>Couverts max par service</Text>
+                <Text style={styles.ruleLabel}>{t('admin_res_rule_capacity')}</Text>
+                <Text style={styles.ruleValue}>{t('admin_res_rule_capacity_val')}</Text>
               </View>
               <SoonBadge />
             </View>
             <Divider />
             <View style={styles.ruleNotice}>
-              <Text style={styles.ruleNoticeText}>
-                Les règles "À venir" seront configurables dans une prochaine version.
-              </Text>
+              <Text style={styles.ruleNoticeText}>{t('admin_res_rule_soon_notice')}</Text>
             </View>
           </Card>
 
@@ -1148,7 +1153,7 @@ export default function AdminSettingsScreen({ navigation }: Props): React.JSX.El
           <SectionHeader title={t('settings_section_channels')} />
           <Card>
             {CHANNELS.map((ch, idx) => (
-              <React.Fragment key={ch.label}>
+              <React.Fragment key={ch.labelKey}>
                 {idx > 0 && <Divider />}
                 <ChannelRow channel={ch} />
               </React.Fragment>

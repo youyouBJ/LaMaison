@@ -22,20 +22,21 @@ import {
   isValidEmail,
 } from '../utils/email';
 import { useFeedbackSurveyLink } from '../hooks/useFeedbackSurveyLink';
+import { useI18n } from '../i18n';
 
 type Props = {
   reservation: ReservationWithJoins;
   onPress: () => void;
 };
 
-function guestDisplayName(r: ReservationWithJoins): string {
-  if (!r.guests) return r.source === 'walkin' ? 'Client de passage' : 'Client sans nom';
-  const parts = [r.guests.first_name, r.guests.last_name].filter((p): p is string => Boolean(p));
-  return parts.length > 0 ? parts.join(' ') : 'Client sans nom';
-}
-
 export default function ReservationCard({ reservation: r, onPress }: Props): React.JSX.Element {
-  const isVip       = r.guests?.vip === true;
+  const { t }  = useI18n();
+  const isVip  = r.guests?.vip === true;
+  const displayName = (() => {
+    if (!r.guests) return r.source === 'walkin' ? t('resd_walkin') : t('resd_guest_no_name');
+    const parts = [r.guests.first_name, r.guests.last_name].filter((p): p is string => Boolean(p));
+    return parts.length > 0 ? parts.join(' ') : t('resd_guest_no_name');
+  })();
   const isBirthday  = isBirthdayReservation(r.notes);
   const isEvent     = isEventReservation(r.notes);
   const needsCall   = reservationNeedsPhoneConfirmation(r);
@@ -65,7 +66,7 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
     if (r.status === 'completed') {
       void getOrCreateSurveyLink(r).then(({ data: result, error: surveyErr }) => {
         if (!result) {
-          setWaFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
+          setWaFeedback({ ok: false, text: surveyErr ?? t('resd_survey_unavailable') });
           setTimeout(() => setWaFeedback(null), 6000);
           return;
         }
@@ -73,12 +74,12 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
         void openWhatsAppMessage(phone, message).then((opened) => {
           setWaFeedback(
             opened
-              ? { ok: true, text: 'WhatsApp ouvert' }
+              ? { ok: true, text: t('floor_wa_opened') }
               : {
                   ok: false,
                   text: normalizePhoneForWhatsApp(phone)
-                    ? "Impossible d'ouvrir WhatsApp."
-                    : 'Numéro invalide.',
+                    ? t('floor_wa_cant_open')
+                    : t('floor_wa_invalid'),
                 },
           );
           setTimeout(() => setWaFeedback(null), 4000);
@@ -95,12 +96,12 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
     void openWhatsAppMessage(phone, message).then((opened) => {
       setWaFeedback(
         opened
-          ? { ok: true, text: 'WhatsApp ouvert' }
+          ? { ok: true, text: t('floor_wa_opened') }
           : {
               ok: false,
               text: normalizePhoneForWhatsApp(phone)
-                ? "Impossible d'ouvrir WhatsApp."
-                : 'Numéro invalide.',
+                ? t('floor_wa_cant_open')
+                : t('floor_wa_invalid'),
             },
       );
       setTimeout(() => setWaFeedback(null), 4000);
@@ -116,7 +117,7 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
     if (r.status === 'completed') {
       void getOrCreateSurveyLink(r).then(({ data: result, error: surveyErr }) => {
         if (!result) {
-          setEmailFeedback({ ok: false, text: surveyErr ?? "Lien d'enquête indisponible." });
+          setEmailFeedback({ ok: false, text: surveyErr ?? t('resd_survey_unavailable') });
           setTimeout(() => setEmailFeedback(null), 6000);
           return;
         }
@@ -124,12 +125,12 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
         void openEmailMessage(email, subject, body).then((opened) => {
           setEmailFeedback(
             opened
-              ? { ok: true, text: 'Email ouvert' }
+              ? { ok: true, text: t('floor_email_opened') }
               : {
                   ok: false,
                   text: email && isValidEmail(email)
-                    ? "Impossible d'ouvrir l'application Mail."
-                    : 'Email invalide.',
+                    ? t('floor_email_cant_open')
+                    : t('floor_email_invalid'),
                 },
           );
           setTimeout(() => setEmailFeedback(null), 4000);
@@ -141,12 +142,12 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
     void openEmailMessage(email, subject, body).then((opened) => {
       setEmailFeedback(
         opened
-          ? { ok: true, text: 'Email ouvert' }
+          ? { ok: true, text: t('floor_email_opened') }
           : {
               ok: false,
               text: email && isValidEmail(email)
-                ? "Impossible d'ouvrir l'application Mail."
-                : 'Email invalide.',
+                ? t('floor_email_cant_open')
+                : t('floor_email_invalid'),
             },
       );
       setTimeout(() => setEmailFeedback(null), 4000);
@@ -160,15 +161,15 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
       </View>
       <View style={styles.info}>
         <View style={styles.nameRow}>
-          <Text style={styles.name} numberOfLines={1}>{guestDisplayName(r)}</Text>
+          <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
           {needsCall && (
             <View style={styles.callBadge}>
-              <Text style={styles.callBadgeText}>À appeler</Text>
+              <Text style={styles.callBadgeText}>{t('dashboard_stat_to_call')}</Text>
             </View>
           )}
         </View>
         <Text style={styles.meta} numberOfLines={1}>
-          {r.party_size} couvert{r.party_size > 1 ? 's' : ''}
+          {t('guest_cover_count', { n: r.party_size, s: r.party_size > 1 ? 's' : '' })}
           {phone ? ` · ${phone}` : ''}
           {(r.tables ?? r.reservation_tables?.length) ? ` · ${formatReservationTables(r.tables, r.reservation_tables)}` : ''}
         </Text>
@@ -186,7 +187,7 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
                 disabled={surveyLoading && r.status === 'completed'}
               >
                 <Text style={styles.waButtonText}>
-                  {(r.status === 'pending' || r.status === 'confirmed') ? 'Confirmer' : r.status === 'completed' ? 'Avis' : 'WhatsApp'}
+                  {(r.status === 'pending' || r.status === 'confirmed') ? t('action_confirm') : r.status === 'completed' ? t('card_review') : t('floor_wa_short')}
                 </Text>
               </TouchableOpacity>
             ) : null}
@@ -198,13 +199,13 @@ export default function ReservationCard({ reservation: r, onPress }: Props): Rea
                 disabled={surveyLoading && r.status === 'completed'}
               >
                 <Text style={styles.emailButtonText}>
-                  {r.status === 'completed' ? 'Avis email' : 'Email'}
+                  {r.status === 'completed' ? t('card_review_email') : t('floor_email_short')}
                 </Text>
               </TouchableOpacity>
             ) : null}
             {phone ? (
               <TouchableOpacity style={styles.callButton} onPress={handleCall} activeOpacity={0.75}>
-                <Text style={styles.callButtonText}>Appeler</Text>
+                <Text style={styles.callButtonText}>{t('resd_call')}</Text>
               </TouchableOpacity>
             ) : null}
           </View>

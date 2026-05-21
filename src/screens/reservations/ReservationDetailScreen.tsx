@@ -360,7 +360,7 @@ export default function ReservationDetailScreen({ route }: Props): React.JSX.Ele
           {/* ── Détails réservation ── */}
           <SectionCard title={t('resd_section_detail')}>
             <View style={styles.detailGrid}>
-              <DetailRow label={t('resd_covers')} value={`${r.party_size} personne${r.party_size > 1 ? 's' : ''}`} />
+              <DetailRow label={t('resd_covers')} value={t('guest_cover_count', { n: r.party_size, s: r.party_size > 1 ? 's' : '' })} />
               <DetailRow label={t('resd_table')} value={formatReservationTables(r.tables, r.reservation_tables)} />
               <DetailRow label={t('resd_status')} value={<StatusBadge status={r.status} />} />
               <DetailRow label={t('resd_origin')} value={r.source} />

@@ -30,7 +30,7 @@ import StatCard from '../../components/StatCard';
 import type { AdminStackParamList } from '../../navigation/AdminNavigator';
 import type { ReservationStatus, Database } from '../../types/database';
 import { useI18n } from '../../i18n';
-import type { TranslationKey } from '../../i18n';
+import type { TranslationKey, TranslateFn } from '../../i18n';
 
 type ShiftRow = Database['public']['Tables']['shifts']['Row'];
 
@@ -54,8 +54,6 @@ const STATUS_ORDER: ReservationStatus[] = [
   'completed', 'cancelled', 'noshow',
 ];
 
-const DAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtRating(v: number | null): string {
@@ -68,11 +66,11 @@ function fmtPct(v: number | null): string {
   return `${v} %`;
 }
 
-function formatDays(days: number[]): string {
+function formatDays(days: number[], t: TranslateFn): string {
   if (days.length === 0) return '–';
-  if (days.length === 7) return 'Tous les jours';
+  if (days.length === 7) return t('common_every_day');
   const sorted = [...days].sort((a, b) => a - b);
-  const labels = sorted.map(d => DAY_SHORT[d] ?? `J${d}`);
+  const labels = sorted.map(d => t((`common_day_${d}` as TranslationKey)));
   let consecutive = true;
   for (let i = 1; i < sorted.length; i++) {
     if (sorted[i] !== sorted[i - 1] + 1) { consecutive = false; break; }
@@ -111,7 +109,8 @@ function Divider(): React.JSX.Element {
 }
 
 function ShiftCard({ shift }: { shift: ShiftRow }): React.JSX.Element {
-  const days  = formatDays(shift.days_of_week);
+  const { t } = useI18n();
+  const days  = formatDays(shift.days_of_week, t);
   const start = formatTime(shift.start_time);
   const end   = formatTime(shift.end_time);
   return (
@@ -126,12 +125,12 @@ function ShiftCard({ shift }: { shift: ShiftRow }): React.JSX.Element {
       <View style={styles.shiftMeta}>
         <View style={styles.shiftMetaItem}>
           <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-          <Text style={styles.shiftMetaText}>Slot {shift.slot_duration} min</Text>
+          <Text style={styles.shiftMetaText}>{t('admin_slot_duration', { n: shift.slot_duration })}</Text>
         </View>
         <View style={styles.shiftMetaDot} />
         <View style={styles.shiftMetaItem}>
           <Ionicons name="people-outline" size={12} color={colors.textMuted} />
-          <Text style={styles.shiftMetaText}>{shift.max_covers_per_slot} couverts max</Text>
+          <Text style={styles.shiftMetaText}>{t('admin_covers_max', { n: shift.max_covers_per_slot, s: shift.max_covers_per_slot > 1 ? 's' : '' })}</Text>
         </View>
       </View>
     </View>
@@ -139,6 +138,7 @@ function ShiftCard({ shift }: { shift: ShiftRow }): React.JSX.Element {
 }
 
 function ZoneRow({ zone }: { zone: ZoneSummary }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <View style={styles.zoneRow}>
       <View style={styles.zoneIcon}>
@@ -146,7 +146,7 @@ function ZoneRow({ zone }: { zone: ZoneSummary }): React.JSX.Element {
       </View>
       <Text style={styles.zoneName} numberOfLines={1}>{zone.name}</Text>
       <Text style={styles.zoneCount}>
-        {zone.tableCount} table{zone.tableCount > 1 ? 's' : ''}
+        {t('admin_table_count', { n: zone.tableCount, s: zone.tableCount > 1 ? 's' : '' })}
       </Text>
     </View>
   );
@@ -188,6 +188,7 @@ function PeriodKpiSection({
   data: PeriodReservationStats;
   loading: boolean;
 }): React.JSX.Element {
+  const { t } = useI18n();
   if (loading) {
     return (
       <View style={styles.extLoadingCard}>
@@ -198,37 +199,37 @@ function PeriodKpiSection({
   if (data.total === 0) {
     return (
       <Card>
-        <Text style={styles.emptyText}>Aucune réservation sur cette période.</Text>
+        <Text style={styles.emptyText}>{t('admin_no_reservations_period')}</Text>
       </Card>
     );
   }
   return (
     <>
       <View style={styles.kpiRow}>
-        <StatCard label="Réservations"   value={data.total} />
+        <StatCard label={t('dashboard_stat_reservations')} value={data.total} />
         <View style={styles.kpiGap} />
-        <StatCard label="Couverts actifs" value={data.covers} />
+        <StatCard label={t('dashboard_stat_covers')}       value={data.covers} />
       </View>
       <View style={styles.kpiRow}>
-        <StatCard label="Confirmées" value={data.confirmed} accent={colors.gold} />
+        <StatCard label={t('status_confirmed')} value={data.confirmed} accent={colors.gold} />
         <View style={styles.kpiGap} />
-        <StatCard label="Terminées"  value={data.completed} />
+        <StatCard label={t('status_completed')} value={data.completed} />
       </View>
       <View style={styles.kpiRow}>
-        <StatCard label="En attente" value={data.pending} />
+        <StatCard label={t('dashboard_stat_pending')} value={data.pending} />
         <View style={styles.kpiGap} />
-        <StatCard label="À table"    value={data.seated} accent={colors.cta} />
+        <StatCard label={t('dashboard_stat_seated')} value={data.seated} accent={colors.cta} />
       </View>
       <View style={styles.kpiRow}>
         <StatCard
-          label="Annulées"
+          label={t('status_cancelled')}
           value={data.cancelled}
           valueText={data.cancellationRate > 0 ? `${data.cancelled} (${data.cancellationRate} %)` : `${data.cancelled}`}
           accent={data.cancelled > 0 ? colors.cta : colors.textMuted}
         />
         <View style={styles.kpiGap} />
         <StatCard
-          label="No-show"
+          label={t('status_noshow')}
           value={data.noshow}
           valueText={data.noshowRate > 0 ? `${data.noshow} (${data.noshowRate} %)` : `${data.noshow}`}
           accent={data.noshow > 0 ? colors.cta : colors.textMuted}
@@ -236,21 +237,21 @@ function PeriodKpiSection({
       </View>
       {data.uniqueGuests > 0 && (
         <View style={styles.kpiRow}>
-          <StatCard label="Walk-ins"        value={data.walkIns} />
+          <StatCard label={t('admin_walkins')}       value={data.walkIns} />
           <View style={styles.kpiGap} />
-          <StatCard label="Clients uniques" value={data.uniqueGuests} />
+          <StatCard label={t('admin_unique_guests')} value={data.uniqueGuests} />
         </View>
       )}
       {(data.birthdays > 0 || data.events > 0) && (
         <View style={styles.kpiRow}>
           <StatCard
-            label="Anniversaires"
+            label={t('admin_birthdays')}
             value={data.birthdays}
             accent={data.birthdays > 0 ? colors.gold : colors.textMuted}
           />
           <View style={styles.kpiGap} />
           <StatCard
-            label="Événements"
+            label={t('admin_events')}
             value={data.events}
             accent={data.events > 0 ? colors.gold : colors.textMuted}
           />
@@ -267,6 +268,7 @@ function PeriodServicesSection({
   data: PeriodReservationStats;
   loading: boolean;
 }): React.JSX.Element {
+  const { t } = useI18n();
   if (loading) {
     return (
       <View style={styles.extLoadingCard}>
@@ -277,14 +279,14 @@ function PeriodServicesSection({
   return (
     <>
       <View style={styles.kpiRow}>
-        <StatCard label="Déjeuner"      value={data.lunchCount}  accent={colors.gold} />
+        <StatCard label={t('admin_lunch')}        value={data.lunchCount}  accent={colors.gold} />
         <View style={styles.kpiGap} />
-        <StatCard label="Couverts déj." value={data.lunchCovers} />
+        <StatCard label={t('admin_lunch_covers')} value={data.lunchCovers} />
       </View>
       <View style={styles.kpiRow}>
-        <StatCard label="Dîner"         value={data.dinnerCount}  accent={colors.gold} />
+        <StatCard label={t('admin_dinner_label')}  value={data.dinnerCount}  accent={colors.gold} />
         <View style={styles.kpiGap} />
-        <StatCard label="Couverts dîn." value={data.dinnerCovers} />
+        <StatCard label={t('admin_dinner_covers')} value={data.dinnerCovers} />
       </View>
     </>
   );
@@ -349,6 +351,7 @@ function SatisfactionSection({
   periodLoading: boolean;
   extLoading: boolean;
 }): React.JSX.Element {
+  const { t } = useI18n();
   if (periodLoading || extLoading) {
     return (
       <View style={styles.extLoadingCard}>
@@ -365,29 +368,29 @@ function SatisfactionSection({
       {hasFeedback && feedbackData !== null ? (
         <>
           <View style={styles.kpiRow}>
-            <StatCard label="Avis reçus"    value={feedbackData.total}  accent={colors.gold} />
+            <StatCard label={t('admin_feedback_total')} value={feedbackData.total}  accent={colors.gold} />
             <View style={styles.kpiGap} />
             <StatCard
-              label="Note moyenne"
+              label={t('admin_avg_rating')}
               value={0}
               valueText={`${fmtRating(feedbackData.avgOverall)} / 5`}
               accent={colors.gold}
             />
           </View>
           <View style={styles.kpiRow}>
-            <StatCard label="Cuisine"  value={0} valueText={fmtRating(feedbackData.avgFood)} />
+            <StatCard label={t('admin_cuisine')} value={0} valueText={fmtRating(feedbackData.avgFood)} />
             <View style={styles.kpiGap} />
-            <StatCard label="Boissons" value={0} valueText={fmtRating(feedbackData.avgDrinks)} />
+            <StatCard label={t('admin_drinks')}  value={0} valueText={fmtRating(feedbackData.avgDrinks)} />
           </View>
           <View style={styles.kpiRow}>
-            <StatCard label="Service"  value={0} valueText={fmtRating(feedbackData.avgService)} />
+            <StatCard label={t('res_service')}    value={0} valueText={fmtRating(feedbackData.avgService)} />
             <View style={styles.kpiGap} />
-            <StatCard label="Ambiance" value={0} valueText={fmtRating(feedbackData.avgAmbience)} />
+            <StatCard label={t('admin_ambience')} value={0} valueText={fmtRating(feedbackData.avgAmbience)} />
           </View>
           {feedbackData.recommendedRate !== null && (
             <View style={styles.kpiRow}>
               <StatCard
-                label="Recommandation"
+                label={t('admin_recommendation')}
                 value={0}
                 valueText={fmtPct(feedbackData.recommendedRate)}
                 accent={colors.statusFree}
@@ -396,7 +399,7 @@ function SatisfactionSection({
           )}
           {feedbackData.lastComment ? (
             <View style={styles.commentCard}>
-              <Text style={styles.commentLabel}>Dernier commentaire</Text>
+              <Text style={styles.commentLabel}>{t('admin_last_comment')}</Text>
               <Text style={styles.commentText} numberOfLines={4}>{feedbackData.lastComment}</Text>
             </View>
           ) : null}
@@ -405,21 +408,21 @@ function SatisfactionSection({
         <Card>
           <Text style={styles.emptyText}>
             {feedbackData === null
-              ? 'Module satisfaction non configuré.'
-              : 'Aucune enquête reçue sur cette période.'}
+              ? t('admin_satisfaction_none')
+              : t('admin_no_survey_period')}
           </Text>
         </Card>
       )}
 
       {hasSR && (
         <View style={styles.srHistoryCard}>
-          <Text style={styles.srHistoryTitle}>Historique satisfaction</Text>
+          <Text style={styles.srHistoryTitle}>{t('admin_history_title')}</Text>
           <View style={styles.srHistoryRow}>
-            <Text style={styles.srHistoryLabel}>Note importée</Text>
+            <Text style={styles.srHistoryLabel}>{t('admin_sr_imported_rating')}</Text>
             <Text style={styles.srHistoryValue}>{fmtRating(sevenRooms.avgRating)} / 5</Text>
           </View>
           <View style={styles.srHistoryRow}>
-            <Text style={styles.srHistoryLabel}>Clients notés</Text>
+            <Text style={styles.srHistoryLabel}>{t('admin_sr_rated_guests')}</Text>
             <Text style={styles.srHistoryValue}>{sevenRooms.count}</Text>
           </View>
         </View>
@@ -488,6 +491,7 @@ function PeriodGuestsSection({
   periodGuests: PeriodGuestStats;
   periodLoading: boolean;
 }): React.JSX.Element {
+  const { t } = useI18n();
   if (periodLoading) {
     return (
       <View style={styles.extLoadingCard}>
@@ -498,12 +502,12 @@ function PeriodGuestsSection({
   return (
     <>
       <View style={styles.kpiRow}>
-        <StatCard label="Clients uniques" value={periodGuests.uniqueReserving} />
+        <StatCard label={t('admin_unique_guests')} value={periodGuests.uniqueReserving} />
         <View style={styles.kpiGap} />
-        <StatCard label="Walk-ins"        value={periodGuests.walkIns} />
+        <StatCard label={t('admin_walkins')}        value={periodGuests.walkIns} />
       </View>
       <View style={styles.kpiRow}>
-        <StatCard label="VIP période" value={periodGuests.vipReserving} accent={colors.gold} />
+        <StatCard label={t('admin_vip_period')} value={periodGuests.vipReserving} accent={colors.gold} />
       </View>
     </>
   );
@@ -528,10 +532,10 @@ export default function SettingsScreen({ navigation }: Props): React.JSX.Element
   const hookCustomEnd     = activePeriod === 'custom' && customDatesValid ? customEnd   : undefined;
 
   const customError: string | null = activePeriod !== 'custom' ? null
-    : customStart.length > 0 && customStartParsed === null ? 'Date de début invalide (format AAAA-MM-JJ).'
-    : customEnd.length > 0   && customEndParsed   === null ? 'Date de fin invalide (format AAAA-MM-JJ).'
+    : customStart.length > 0 && customStartParsed === null ? t('admin_custom_err_start')
+    : customEnd.length > 0   && customEndParsed   === null ? t('admin_custom_err_end')
     : customStartParsed !== null && customEndParsed !== null && customStart > customEnd
-      ? 'La date de fin doit être après la date de début.'
+      ? t('admin_custom_err_order')
       : null;
 
   const { loading: periodLoading, stats: period, refresh: periodRefresh } = usePeriodStats(

@@ -155,7 +155,7 @@ function SectionHeader({
         )}
         {urgentCount > 0 && (
           <View style={styles.urgentBadge}>
-            <Text style={styles.urgentBadgeText}>{urgentCount} urgent{urgentCount > 1 ? 's' : ''}</Text>
+            <Text style={styles.urgentBadgeText}>{urgentCount} {t('reminder_urgent_label')}{urgentCount > 1 ? 's' : ''}</Text>
           </View>
         )}
       </View>

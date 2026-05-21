@@ -16,6 +16,7 @@ import {
 import type { FloorTableWithState, FloorTableStatus } from '../types/floor';
 import type { TableRow } from '../hooks/useCreateReservation';
 import { colors, typography, spacing, radius } from '../theme';
+import { useI18n } from '../i18n';
 
 interface Props {
   dbTables: TableRow[];
@@ -30,6 +31,7 @@ export default function TablePlanSelector({
   onConfirm,
   onCancel,
 }: Props): React.JSX.Element {
+  const { t } = useI18n();
   const [localSelectedIds, setLocalSelectedIds] = useState<string[]>(selectedIds);
   const [canvasLayout, setCanvasLayout]         = useState<{ w: number; h: number } | null>(null);
 
@@ -78,8 +80,8 @@ export default function TablePlanSelector({
 
   const selectedLabels = useMemo(() => {
     return localSelectedIds.map((id) => {
-      const t = dbTables.find((dt) => dt.id === id);
-      return t ? `Table ${t.label}` : id;
+      const tbl = dbTables.find((dt) => dt.id === id);
+      return tbl ? `Table ${tbl.label}` : id;
     });
   }, [localSelectedIds, dbTables]);
 
@@ -94,30 +96,26 @@ export default function TablePlanSelector({
           style={styles.headerAction}
           onPress={onCancel}
           accessibilityRole="button"
-          accessibilityLabel="Annuler"
         >
-          <Text style={styles.cancelText}>Annuler</Text>
+          <Text style={styles.cancelText}>{t('common_cancel')}</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>Choisir les tables</Text>
+        <Text style={styles.title}>{t('plan_title')}</Text>
 
         <TouchableOpacity
           style={styles.headerAction}
           onPress={() => onConfirm(localSelectedIds)}
           disabled={!canConfirm}
           accessibilityRole="button"
-          accessibilityLabel="Valider la sélection"
         >
           <Text style={[styles.confirmText, !canConfirm && styles.confirmTextDisabled]}>
-            Valider
+            {t('common_confirm')}
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* ── Subtitle ───────────────────────────────────────────────────────── */}
-      <Text style={styles.subtitle}>
-        Sélectionnez une ou plusieurs tables pour cette réservation.
-      </Text>
+      <Text style={styles.subtitle}>{t('plan_subtitle')}</Text>
 
       {/* ── Selection summary ──────────────────────────────────────────────── */}
       {localSelectedIds.length > 0 ? (
@@ -128,9 +126,8 @@ export default function TablePlanSelector({
           <TouchableOpacity
             onPress={() => setLocalSelectedIds([])}
             accessibilityRole="button"
-            accessibilityLabel="Effacer la sélection"
           >
-            <Text style={styles.clearText}>Effacer</Text>
+            <Text style={styles.clearText}>{t('common_clear')}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
