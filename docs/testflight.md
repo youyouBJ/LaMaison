@@ -283,12 +283,12 @@ Un dataset fictif riche est disponible pour tester toutes les fonctionnalités d
 
 | Type               | Volume        | Détails |
 |--------------------|---------------|---------|
-| Tables             | ~20           | 5 zones : Salle, Terrasse, Balcon, Bar, Lounge |
+| Tables             | existantes    | Plan de salle non modifié (T1-T5 réutilisées) |
 | Clients fictifs    | ~120          | Noms tunisiens, téléphones `+21699XXXXXX`, emails `@lamaison-test.local` |
 | Réservations       | ~180          | -30j → aujourd'hui → +30j, tous statuts |
 | Waitlist           | ~18           | waiting / notified / seated / left |
 | Feedback surveys   | ~30           | Liés à des réservations completed passées |
-| Multi-tables       | oui           | `reservation_tables` (T12 + T19) |
+| Multi-tables       | oui           | `reservation_tables` (tables à plus haute capacité) |
 
 ### Cas de test ciblés aujourd'hui
 
@@ -298,6 +298,18 @@ Un dataset fictif riche est disponible pour tester toutes les fonctionnalités d
 - 3 réservations **completed** avec email → enquête de satisfaction
 - 1 réservation **cancelled**
 - 3 entrées waitlist **waiting** → liste d'attente du jour
+
+### Plan de salle — non modifié
+
+Le script rich seed réutilise les tables existantes (T1–T5) sans en créer de nouvelles.
+Le plan de salle et les positions des tables sont préservés.
+
+Si des tables T6–T20 ont été créées par une version antérieure du script, utilisez :
+
+```bash
+npm run test:cleanup:rich-tables:dry-run
+npm run test:cleanup:rich-tables:apply -- --confirm=CLEANUP_RICH_TEST_TABLES
+```
 
 ### Isolation — le vrai restaurant n'est pas touché
 

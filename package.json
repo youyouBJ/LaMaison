@@ -23,6 +23,8 @@
     "test:seed:apply": "tsx scripts/seed-test-restaurant.ts --apply",
     "test:seed:rich:dry-run": "tsx scripts/seed-rich-test-restaurant.ts --dry-run",
     "test:seed:rich:apply": "tsx scripts/seed-rich-test-restaurant.ts --apply --confirm=SEED_RICH_TEST_DATA",
+    "test:cleanup:rich-tables:dry-run": "tsx scripts/cleanup-rich-test-tables.ts --dry-run",
+    "test:cleanup:rich-tables:apply": "tsx scripts/cleanup-rich-test-tables.ts --apply --confirm=CLEANUP_RICH_TEST_TABLES",
     "auth:set-test-password": "tsx scripts/set-test-user-password.ts"
   },
   "dependencies": {

@@ -62,13 +62,14 @@ Grâce aux RLS filtrées par `restaurant_id`, le testeur :
 
 Le dataset test immersif contient (créé via `npm run test:seed:rich:apply`) :
 - 2 services (Déjeuner Test, Dîner Test)
-- ~20 tables (5 zones : Salle, Terrasse, Balcon, Bar, Lounge)
+- Tables existantes réutilisées (plan de salle non modifié — T1-T5)
 - ~120 clients fictifs (noms tunisiens, téléphones `+21699XXXXXX`, emails `@lamaison-test.local`)
 - ~180 réservations (-30j / aujourd'hui / +30j — tous statuts)
 - ~18 entrées waitlist
 - ~30 enquêtes de satisfaction (feedback_surveys)
-- Réservations multi-tables (reservation_tables)
+- Réservations multi-tables sur les tables existantes (reservation_tables)
 
+Le plan de salle et les tables ne sont jamais modifiés par ce script.
 Voir `docs/testflight.md → Dataset test immersif` pour le détail complet.
 
 ---

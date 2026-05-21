@@ -41,7 +41,6 @@ import type {
   ReservationStatus,
   ReservationSource,
   WaitlistStatus,
-  TableShape,
   GuestSource,
 } from '../src/types/database';
 
@@ -114,15 +113,6 @@ function isPermissionError(msg: string): boolean {
 
 // ─── Types internes ───────────────────────────────────────────────────────────
 
-type TableDefinition = {
-  label:      string;
-  zone:       string;
-  capacity:   number;
-  position_x: number;
-  position_y: number;
-  shape:      TableShape;
-};
-
 type GuestDefinition = {
   first_name:     string;
   last_name:      string;
@@ -184,7 +174,7 @@ type FeedbackSurveyInsertData = {
 };
 
 type ShiftRow    = { id: string; name: string };
-type TableRow    = { id: string; label: string };
+type TableRow    = { id: string; label: string; capacity: number };
 type GuestRow    = { id: string; phone: string; email: string | null; vip: boolean };
 type ResRow      = { id: string; guest_id: string | null; date: string; time_slot: string; status: string };
 type WaitRow     = { id: string; guest_id: string | null; date: string };
@@ -198,43 +188,9 @@ function dateOffset(days: number): string {
   return d.toISOString().split('T')[0] as string;
 }
 
-function pad(label: string, width: number): string {
-  return label.padEnd(width);
-}
-
 function pick<T>(arr: readonly T[], idx: number): T {
   return arr[((idx % arr.length) + arr.length) % arr.length] as T;
 }
-
-// ─── Données : Tables ─────────────────────────────────────────────────────────
-
-const ALL_TABLES: readonly TableDefinition[] = [
-  // Salle (6 tables)
-  { label: 'T1',  zone: 'Salle',    capacity: 2, position_x: 10, position_y: 10, shape: 'round'     },
-  { label: 'T2',  zone: 'Salle',    capacity: 4, position_x: 30, position_y: 10, shape: 'square'    },
-  { label: 'T6',  zone: 'Salle',    capacity: 2, position_x: 50, position_y: 10, shape: 'round'     },
-  { label: 'T7',  zone: 'Salle',    capacity: 4, position_x: 70, position_y: 10, shape: 'square'    },
-  { label: 'T8',  zone: 'Salle',    capacity: 6, position_x: 10, position_y: 30, shape: 'rectangle' },
-  { label: 'T9',  zone: 'Salle',    capacity: 4, position_x: 50, position_y: 30, shape: 'round'     },
-  // Terrasse (5 tables)
-  { label: 'T3',  zone: 'Terrasse', capacity: 4, position_x: 10, position_y: 55, shape: 'round'     },
-  { label: 'T4',  zone: 'Terrasse', capacity: 6, position_x: 30, position_y: 55, shape: 'rectangle' },
-  { label: 'T10', zone: 'Terrasse', capacity: 4, position_x: 50, position_y: 55, shape: 'round'     },
-  { label: 'T11', zone: 'Terrasse', capacity: 2, position_x: 70, position_y: 55, shape: 'square'    },
-  { label: 'T12', zone: 'Terrasse', capacity: 8, position_x: 10, position_y: 75, shape: 'rectangle' },
-  // Balcon (3 tables)
-  { label: 'T13', zone: 'Balcon',   capacity: 2, position_x: 10, position_y: 88, shape: 'round'     },
-  { label: 'T14', zone: 'Balcon',   capacity: 4, position_x: 30, position_y: 88, shape: 'square'    },
-  { label: 'T15', zone: 'Balcon',   capacity: 6, position_x: 50, position_y: 88, shape: 'round'     },
-  // Bar (3 tables)
-  { label: 'T5',  zone: 'Bar',      capacity: 2, position_x: 65, position_y: 10, shape: 'round'     },
-  { label: 'T16', zone: 'Bar',      capacity: 2, position_x: 65, position_y: 25, shape: 'round'     },
-  { label: 'T17', zone: 'Bar',      capacity: 2, position_x: 80, position_y: 10, shape: 'round'     },
-  // Lounge (3 tables)
-  { label: 'T18', zone: 'Lounge',   capacity: 4, position_x: 80, position_y: 55, shape: 'square'    },
-  { label: 'T19', zone: 'Lounge',   capacity: 6, position_x: 80, position_y: 70, shape: 'rectangle' },
-  { label: 'T20', zone: 'Lounge',   capacity: 4, position_x: 80, position_y: 85, shape: 'round'     },
-];
 
 // ─── Données : Clients ────────────────────────────────────────────────────────
 
@@ -389,30 +345,31 @@ function generateReservations(
     partySize: number;
     status:    ReservationStatus;
     guestIdx:  number;
-    tableLabel: string;
+    tableIdx:  number; // index circulaire dans tableLabels
     notes:     string;
     shiftType: 'lunch' | 'dinner';
   };
 
   const todayCases: TodayCase[] = [
-    { timeSlot: '12:30',          partySize: 2,  status: 'pending',   guestIdx: 0,  tableLabel: 'T1',  notes: `${SEED_MARKER} En attente déjeuner`,          shiftType: 'lunch'  },
-    { timeSlot: '13:00',          partySize: 4,  status: 'pending',   guestIdx: 5,  tableLabel: 'T2',  notes: `${SEED_MARKER} En attente déjeuner 2`,         shiftType: 'lunch'  },
-    { timeSlot: '13:30',          partySize: 2,  status: 'completed', guestIdx: 10, tableLabel: 'T6',  notes: `${SEED_MARKER} Terminé déjeuner`,               shiftType: 'lunch'  },
-    { timeSlot: '14:00',          partySize: 6,  status: 'seated',    guestIdx: 15, tableLabel: 'T8',  notes: `${SEED_MARKER} Installé déjeuner`,              shiftType: 'lunch'  },
-    { timeSlot: '12:30',          partySize: 2,  status: 'completed', guestIdx: 22, tableLabel: 'T9',  notes: `${SEED_MARKER} Terminé avec email 1`,           shiftType: 'lunch'  },
-    { timeSlot: '13:30',          partySize: 4,  status: 'completed', guestIdx: 27, tableLabel: 'T3',  notes: `${SEED_MARKER} Terminé avec email 2`,           shiftType: 'lunch'  },
-    { timeSlot: '19:00',          partySize: 4,  status: 'confirmed', guestIdx: 30, tableLabel: 'T4',  notes: `${SEED_MARKER} Confirmé dîner`,                  shiftType: 'dinner' },
-    { timeSlot: arrivingSoonSlot, partySize: 3,  status: 'confirmed', guestIdx: 35, tableLabel: 'T10', notes: `${SEED_MARKER} Arrivée prochaine`,              shiftType: 'dinner' },
-    { timeSlot: '20:00',          partySize: 8,  status: 'confirmed', guestIdx: 40, tableLabel: 'T12', notes: `${SEED_MARKER} Grand groupe VIP multi-tables`,  shiftType: 'dinner' },
-    { timeSlot: '20:30',          partySize: 2,  status: 'cancelled', guestIdx: 45, tableLabel: 'T11', notes: `${SEED_MARKER} Annulé`,                         shiftType: 'dinner' },
+    { timeSlot: '12:30',          partySize: 2, status: 'pending',   guestIdx: 0,  tableIdx: 0, notes: `${SEED_MARKER} En attente déjeuner`,         shiftType: 'lunch'  },
+    { timeSlot: '13:00',          partySize: 4, status: 'pending',   guestIdx: 5,  tableIdx: 1, notes: `${SEED_MARKER} En attente déjeuner 2`,        shiftType: 'lunch'  },
+    { timeSlot: '13:30',          partySize: 2, status: 'completed', guestIdx: 10, tableIdx: 2, notes: `${SEED_MARKER} Terminé déjeuner`,              shiftType: 'lunch'  },
+    { timeSlot: '14:00',          partySize: 4, status: 'seated',    guestIdx: 15, tableIdx: 3, notes: `${SEED_MARKER} Installé déjeuner`,             shiftType: 'lunch'  },
+    { timeSlot: '12:30',          partySize: 2, status: 'completed', guestIdx: 22, tableIdx: 4, notes: `${SEED_MARKER} Terminé avec email 1`,          shiftType: 'lunch'  },
+    { timeSlot: '13:30',          partySize: 4, status: 'completed', guestIdx: 27, tableIdx: 2, notes: `${SEED_MARKER} Terminé avec email 2`,          shiftType: 'lunch'  },
+    { timeSlot: '19:00',          partySize: 4, status: 'confirmed', guestIdx: 30, tableIdx: 3, notes: `${SEED_MARKER} Confirmé dîner`,                shiftType: 'dinner' },
+    { timeSlot: arrivingSoonSlot, partySize: 3, status: 'confirmed', guestIdx: 35, tableIdx: 0, notes: `${SEED_MARKER} Arrivée prochaine`,             shiftType: 'dinner' },
+    { timeSlot: '20:00',          partySize: 4, status: 'confirmed', guestIdx: 40, tableIdx: 1, notes: `${SEED_MARKER} Grand groupe VIP multi-tables`, shiftType: 'dinner' },
+    { timeSlot: '20:30',          partySize: 2, status: 'cancelled', guestIdx: 45, tableIdx: 4, notes: `${SEED_MARKER} Annulé`,                        shiftType: 'dinner' },
   ];
 
   for (const tc of todayCases) {
-    const gIdx = tc.guestIdx % guests.length;
+    const gIdx       = tc.guestIdx % guests.length;
+    const tableLabel = pick(tableLabels, tc.tableIdx);
     reservations.push({
       restaurant_id: restaurantId,
       guest_id:      guests[gIdx]?.id ?? null,
-      table_id:      tableIds.get(tc.tableLabel) ?? null,
+      table_id:      tableIds.get(tableLabel) ?? null,
       shift_id:      tc.shiftType === 'lunch' ? lunchShiftId : dinnerShiftId,
       date:          todayStr,
       time_slot:     tc.timeSlot,
@@ -583,7 +540,7 @@ async function runDryRun(): Promise<void> {
   for (let d = 1; d <= 30; d++) { futureCount += d % 3 === 0 ? 2 : 3; }
 
   console.log('  Dataset prévu :');
-  console.log(`    🗺️   Tables      : ${ALL_TABLES.length} (T1–T20, 5 zones)`);
+  console.log(`    🗺️   Tables      : réutilisation des tables existantes (plan de salle non modifié)`);
   console.log(`    👥  Clients     : ${guestDefs.length} fictifs (téléphones +21699XXXXXX, emails @lamaison-test.local)`);
   console.log(`    📋  Réservations: ~${pastCount + todayCount + futureCount}`);
   console.log(`                      · ${pastCount} passées (-30j → -1j)`);
@@ -675,115 +632,38 @@ async function seedShifts(restaurantId: string): Promise<{ lunch: string | null;
   return { lunch: lunchShift?.id ?? null, dinner: dinnerShift?.id ?? null };
 }
 
-// ─── Apply : plan de salle ────────────────────────────────────────────────────
+// ─── Apply : tables (lecture seule — plan non modifié) ───────────────────────
 
-async function seedFloorPlan(restaurantId: string): Promise<string | null> {
-  console.log('\n🗺️   Plan de salle…');
+type LoadedTables = {
+  tableIds:     Map<string, string>;
+  tableList:    TableRow[];
+};
 
-  const { data: existingPlan, error } = await supabase
-    .from('floor_plans')
-    .select('id, name')
-    .eq('restaurant_id', restaurantId)
-    .eq('is_active', true)
-    .maybeSingle()
-    .returns<{ id: string; name: string } | null>();
+async function loadExistingTables(restaurantId: string): Promise<LoadedTables> {
+  console.log('\n🪑  Tables existantes…');
 
-  if (error) {
-    console.warn(`  ⚠️   Impossible de vérifier le plan : ${error.message}`);
-    if (isPermissionError(error.message)) console.warn(PERM_HINT);
-    return null;
-  }
-
-  if (existingPlan) {
-    console.log(`  ℹ️   Plan existant : "${existingPlan.name}" — réutilisé`);
-    return existingPlan.id;
-  }
-
-  const { data: newPlan, error: createErr } = await supabase
-    .from('floor_plans')
-    .insert({ restaurant_id: restaurantId, name: 'Plan Test', is_active: true, layout: {} })
-    .select('id')
-    .single()
-    .returns<{ id: string }>();
-
-  if (createErr || !newPlan) {
-    console.error(`  ❌  Impossible de créer le plan : ${createErr?.message ?? 'réponse vide'}`);
-    if (createErr && isPermissionError(createErr.message)) console.error(PERM_HINT);
-    return null;
-  }
-
-  console.log(`  ✅  Plan "Plan Test" créé`);
-  return newPlan.id;
-}
-
-// ─── Apply : tables ───────────────────────────────────────────────────────────
-
-async function seedTables(restaurantId: string, floorPlanId: string | null): Promise<Map<string, string>> {
-  console.log('\n🪑  Tables…');
-
-  // Récupérer toutes les tables existantes en une requête
-  const { data: existing, error } = await supabase
+  const { data, error } = await supabase
     .from('tables')
-    .select('id, label')
+    .select('id, label, capacity')
     .eq('restaurant_id', restaurantId)
     .returns<TableRow[]>();
 
   if (error) {
     console.error(`  ❌  Impossible de récupérer les tables : ${error.message}`);
     if (isPermissionError(error.message)) console.error(PERM_HINT);
-    return new Map();
+    return { tableIds: new Map(), tableList: [] };
   }
 
-  const tableIds = new Map<string, string>();
-  const existingLabels = new Set<string>();
-
-  for (const t of existing ?? []) {
+  const tableList = data ?? [];
+  const tableIds  = new Map<string, string>();
+  for (const t of tableList) {
     tableIds.set(t.label, t.id);
-    existingLabels.add(t.label);
   }
 
-  const toCreate = ALL_TABLES.filter(t => !existingLabels.has(t.label));
+  console.log(`  ℹ️   ${tableList.length} table(s) trouvée(s) : ${tableList.map(t => t.label).join(', ')}`);
+  console.log('  ℹ️   Plan de salle non modifié');
 
-  console.log(`  ℹ️   Existantes : ${existingLabels.size} tables`);
-  console.log(`  ➕   À créer    : ${toCreate.length} tables`);
-
-  if (toCreate.length === 0) {
-    console.log('  ✅  Toutes les tables sont déjà présentes');
-    return tableIds;
-  }
-
-  // Batch insert par lots de 10
-  for (let i = 0; i < toCreate.length; i += 10) {
-    const batch = toCreate.slice(i, i + 10).map(t => ({
-      restaurant_id: restaurantId,
-      floor_plan_id: floorPlanId,
-      label:         t.label,
-      capacity:      t.capacity,
-      position_x:    t.position_x,
-      position_y:    t.position_y,
-      shape:         t.shape,
-      zone:          t.zone,
-      status:        'free' as const,
-    }));
-
-    const { data: created, error: insertErr } = await supabase
-      .from('tables')
-      .insert(batch)
-      .select('id, label')
-      .returns<TableRow[]>();
-
-    if (insertErr) {
-      console.error(`  ❌  Erreur insertion tables batch ${i} : ${insertErr.message}`);
-      if (isPermissionError(insertErr.message)) console.error(PERM_HINT);
-    } else {
-      for (const t of created ?? []) {
-        tableIds.set(t.label, t.id);
-        console.log(`  ✅  ${pad(t.label, 4)} — créée`);
-      }
-    }
-  }
-
-  return tableIds;
+  return { tableIds, tableList };
 }
 
 // ─── Apply : clients ──────────────────────────────────────────────────────────
@@ -870,6 +750,7 @@ async function seedReservations(
   restaurantId:  string,
   guests:        GuestState[],
   tableIds:      Map<string, string>,
+  tableList:     TableRow[],
   lunchShiftId:  string | null,
   dinnerShiftId: string | null,
 ): Promise<Array<{ id: string; guestId: string | null; status: string }>> {
@@ -938,8 +819,8 @@ async function seedReservations(
 
   console.log(`  ✅  ${allReservations.length} réservations disponibles au total`);
 
-  // ── Multi-tables : 8-covers confirmée d'aujourd'hui ──────────────────────
-  await seedMultiTableReservations(restaurantId, allReservations, tableIds);
+  // ── Multi-tables : grand groupe confirmé d'aujourd'hui ───────────────────
+  await seedMultiTableReservations(restaurantId, allReservations, tableList);
 
   return allReservations;
 }
@@ -947,11 +828,26 @@ async function seedReservations(
 // ─── Apply : reservation_tables ───────────────────────────────────────────────
 
 async function seedMultiTableReservations(
-  restaurantId:    string,
-  reservations:    Array<{ id: string; guestId: string | null; status: string }>,
-  tableIds:        Map<string, string>,
+  restaurantId: string,
+  reservations: Array<{ id: string; guestId: string | null; status: string }>,
+  tableList:    TableRow[],
 ): Promise<void> {
   console.log('\n🔗  Réservations multi-tables…');
+
+  if (tableList.length < 2) {
+    console.log('  ℹ️   Moins de 2 tables disponibles — multi-tables ignoré');
+    return;
+  }
+
+  // Prendre les 2 tables avec la plus grande capacité
+  const sorted = [...tableList].sort((a, b) => b.capacity - a.capacity);
+  const tableA = sorted[0];
+  const tableB = sorted[1];
+
+  if (!tableA || !tableB) {
+    console.log('  ℹ️   Tables insuffisantes pour multi-tables');
+    return;
+  }
 
   // Chercher les réservations grand groupe SEED-RICH du jour
   const today = dateOffset(0);
@@ -973,16 +869,7 @@ async function seedMultiTableReservations(
     return;
   }
 
-  const t12Id = tableIds.get('T12') ?? null;
-  const t19Id = tableIds.get('T19') ?? null;
-
-  if (!t12Id || !t19Id) {
-    console.log('  ⚠️   T12 ou T19 introuvable — multi-tables ignoré');
-    return;
-  }
-
   for (const res of bigGroups) {
-    // Vérifier si les entrées reservation_tables existent déjà
     const { data: existing, error: selErr } = await supabase
       .from('reservation_tables')
       .select('id')
@@ -1000,8 +887,8 @@ async function seedMultiTableReservations(
     }
 
     const entries = [
-      { reservation_id: res.id, table_id: t12Id, restaurant_id: restaurantId },
-      { reservation_id: res.id, table_id: t19Id, restaurant_id: restaurantId },
+      { reservation_id: res.id, table_id: tableA.id, restaurant_id: restaurantId },
+      { reservation_id: res.id, table_id: tableB.id, restaurant_id: restaurantId },
     ];
 
     const { error: insertErr } = await supabase
@@ -1015,7 +902,7 @@ async function seedMultiTableReservations(
         console.warn(`  ⚠️   Erreur reservation_tables : ${insertErr.message}`);
       }
     } else {
-      console.log(`  ✅  Réservation ${res.id.slice(0, 8)} → T12 + T19 (lounge overflow)`);
+      console.log(`  ✅  Réservation ${res.id.slice(0, 8)} → ${tableA.label} + ${tableB.label}`);
     }
   }
 }
@@ -1247,18 +1134,15 @@ async function runApply(): Promise<void> {
   // ── 2. Services ───────────────────────────────────────────────────────────
   const { lunch: lunchShiftId, dinner: dinnerShiftId } = await seedShifts(restaurantId);
 
-  // ── 3. Plan de salle ──────────────────────────────────────────────────────
-  const floorPlanId = await seedFloorPlan(restaurantId);
+  // ── 3. Tables existantes (lecture seule — plan non modifié) ───────────────
+  const { tableIds, tableList } = await loadExistingTables(restaurantId);
 
-  // ── 4. Tables ─────────────────────────────────────────────────────────────
-  const tableIds = await seedTables(restaurantId, floorPlanId);
-
-  // ── 5. Clients ────────────────────────────────────────────────────────────
+  // ── 4. Clients ────────────────────────────────────────────────────────────
   const guests = await seedGuests(restaurantId);
 
-  // ── 6. Réservations + multi-tables ────────────────────────────────────────
+  // ── 5. Réservations + multi-tables ────────────────────────────────────────
   const allReservations = await seedReservations(
-    restaurantId, guests, tableIds, lunchShiftId, dinnerShiftId
+    restaurantId, guests, tableIds, tableList, lunchShiftId, dinnerShiftId
   );
 
   // ── 7. Waitlist ───────────────────────────────────────────────────────────
@@ -1278,13 +1162,13 @@ async function runApply(): Promise<void> {
   console.log('\n' + '═'.repeat(68));
   console.log(`  ✅  Dataset immersif prêt pour "${TEST_RESTAURANT_NAME}"`);
   console.log('─'.repeat(68));
-  console.log(`  🗺️   Tables      : ${tableIds.size} / ${ALL_TABLES.length} attendues`);
+  console.log(`  🗺️   Tables      : ${tableIds.size} existante(s) réutilisée(s) (plan non modifié)`);
   console.log(`  👥  Clients     : ${guests.length}`);
   console.log(`  📋  Réservations: ${allReservations.length} total`);
   console.log(`       completed: ${completedCount}  confirmed: ${confirmedCount}  pending: ${pendingCount}`);
   console.log(`       seated:    ${seatedCount}  cancelled: ${cancelledCount}  noshow: ${noshowCount}`);
   console.log(`  ⏳  Waitlist    : ${WAITLIST_CASES.length} définies`);
-  console.log(`  🔗  Multi-tables: T12 + T19`);
+  console.log(`  🔗  Multi-tables: tables à plus haute capacité`);
   console.log('\n  💡  Relancez cette commande sans risque — idempotent.');
   console.log('      Aucune donnée du restaurant réel n\'a été touchée.');
   console.log('═'.repeat(68) + '\n');
