@@ -20,7 +20,8 @@
     "staff:prepare:dry-run": "tsx scripts/prepare-staff-accounts.ts",
     "staff:prepare:apply": "tsx scripts/prepare-staff-accounts.ts --apply",
     "test:seed:dry-run": "tsx scripts/seed-test-restaurant.ts",
-    "test:seed:apply": "tsx scripts/seed-test-restaurant.ts --apply"
+    "test:seed:apply": "tsx scripts/seed-test-restaurant.ts --apply",
+    "auth:set-test-password": "tsx scripts/set-test-user-password.ts"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
